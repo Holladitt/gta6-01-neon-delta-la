@@ -1,79 +1,79 @@
-// The screenshot scenes behind ?shot=start|play|end. Each one plays the real rules forward from a
-// fresh world for a fixed number of steps, steered by a simple autopilot (look ahead each way the
-// paddle could move, keep clear of blocks, chase the lowest coin when that is safe), so the frame
-// is what a short game really looks like and the same seed always gives the same frame.
-import { FIELD, PLAYER, STEP } from './config.js';
-import { EVENT_OVER, KIND_BLOCK } from './world.js';
-import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+// Screenshot scenes behind ?shot=chase|steal|sunset|title. Each stages a real
+// game state — live actors, HUD, wanted stars, minimap, mission text — then
+// paints it twice and sets window.__shotReady, so a headless screenshot is a
+// genuine render of the game, never a mockup. The same seed always stages
+// the same frame.
+import { SCREEN_BUSTED, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+import { startMission } from './missions.js';
+import { makeVehicle } from './vehicles.js';
 
-const START_SECONDS = 5;
-const PLAY_SECONDS = 26;
-const END_LIMIT_SECONDS = 600;
-/**
- * How far ahead, in seconds, the autopilot checks each way it could move: the play scene's pilot
- * looks well ahead and keeps all its lives; the end scene's looks only a moment ahead, so it is
- * caught out once the blocks speed up, as a hurried player is.
- */
-const HORIZON_PLAY = 0.7;
-const HORIZON_END = 0.25;
-const SAMPLE = 1 / 30;
-const DIRECTIONS = [0, -1, 1];
-/** Extra room, each side, it keeps between the paddle and a block. */
-const MARGIN = 10;
-
-/** Seconds until moving in `direction` (-1, 0, 1) runs the paddle into a block; Infinity when it never does. */
-function timeToHit(state, direction, horizon) {
-  const player = state.player;
-  for (let t = SAMPLE; t <= horizon; t += SAMPLE) {
-    const x = Math.min(FIELD.width - player.width, Math.max(0, player.x + direction * PLAYER.speed * t));
-    for (let index = 0; index < state.items.length; index += 1) {
-      const item = state.items[index];
-      if (!item.active || item.kind !== KIND_BLOCK) continue;
-      const y = item.y + item.speed * t;
-      if (y + item.height > player.y && y < player.y + player.height && item.x < x + player.width + MARGIN && item.x + item.width > x - MARGIN) return t;
-    }
+// Staged police for screenshots: fill inactive police slots with cruisers at
+// the given spots, so the frame shows a real pursuit, not an empty road.
+function stagePolice(state, spots) {
+  let i = 0;
+  for (const pol of state.police) {
+    if (i >= spots.length) break;
+    const v = makeVehicle('police', spots[i][0], spots[i][1], spots[i][2] || 0, '#e8ecf5');
+    Object.assign(pol, v, { active: true, driver: 'police', path: [], pathIndex: 0, repath: 2, role: i === 0 ? 'chase' : 'flank', stuck: 0, bustHold: 0, sight: 1 });
+    i += 1;
   }
-  return Infinity;
 }
 
-/** Of the safe ways to move, the one toward the lowest coin (or the centre); else the one that is hit last. */
-function autopilot(state, horizon) {
-  const player = state.player;
-  let coin = null;
-  for (let index = 0; index < state.items.length; index += 1) {
-    const item = state.items[index];
-    if (item.active && item.kind !== KIND_BLOCK && (coin === null || item.y > coin.y)) coin = item;
-  }
-  const target = coin === null ? FIELD.width / 2 : coin.x + coin.width / 2;
-  const centre = player.x + player.width / 2;
-  const wanted = target > centre + 8 ? 1 : target < centre - 8 ? -1 : 0;
-  let best = wanted;
-  let bestTime = timeToHit(state, wanted, horizon);
-  for (let index = 0; index < DIRECTIONS.length && bestTime !== Infinity; index += 1) {
-    const time = timeToHit(state, DIRECTIONS[index], horizon);
-    if (time > bestTime) {
-      bestTime = time;
-      best = DIRECTIONS[index];
-    }
-  }
-  return best;
-}
-
-/**
- * Set `world` to the named scene (start, play or end; any other name is start) and return the
- * screen to draw over it and the best score to show.
- */
 export function stageShot(name, world) {
+  const state = world.state;
   world.reset();
-  if (name !== 'play' && name !== 'end') {
-    for (let index = 0; index < START_SECONDS / STEP; index += 1) world.step(STEP, 0, true);
-    return { screen: SCREEN_TITLE, best: 0 };
+  state.time = 12;
+  if (name === 'title') {
+    return { screen: SCREEN_TITLE, save: { money: 3820 } };
   }
-  const limit = name === 'end' ? END_LIMIT_SECONDS : PLAY_SECONDS;
-  const horizon = name === 'end' ? HORIZON_END : HORIZON_PLAY;
-  for (let index = 0; index < limit / STEP; index += 1) {
-    if (world.step(STEP, autopilot(world.state, horizon), false) & EVENT_OVER) break;
+  if (name === 'steal') {
+    // Downtown, on foot, pistol out, a teal sedan to steal just ahead, waypoint shown.
+    state.player.x = 700; state.player.y = 730; state.player.angle = -Math.PI / 2;
+    state.player.money = 3820; state.player.ammo = [8, 30, 6]; state.player.reserve = [72, 120, 36];
+    state.wanted = 1; state.wantedPhase = 'pursuit';
+    state.camera.x = 700; state.camera.y = 650; state.camera.zoom = 0.8;
+    startMission(state, 0);
+    // The reset-spawned sedan sits under the waypoint marker; shift it east
+    // onto the street and paint it teal so the steal target reads in the shot.
+    const target = state.vehicles.find((v) => v.active && v.kind === 'sedan' && Math.abs(v.x - 700) < 5 && Math.abs(v.y - 650) < 5);
+    if (target) { target.x = 760; target.y = 650; target.color = '#2ee6d6'; target.roof = '#0f766e'; }
+    state.dialogue = { who: 'MARA', text: 'See the teal sedan? Take it. Press F next to it.', t: 99 };
+    state.banner = { title: 'HOLLYWOOD HILLS', sub: 'Sunset Foothills', t: 99 };
+    return { screen: SCREEN_PLAY, save: null };
   }
-  const over = world.state.lives === 0;
-  return { screen: over ? SCREEN_OVER : SCREEN_PLAY, best: world.state.score };
+  if (name === 'sunset') {
+    // Coral Strip at sunset: red sedan fleeing east on the street, police behind, 3 stars, heli.
+    const car = state.vehicles.find((v) => v.active && v.kind === 'sedan' && v.color === '#ff4d6d');
+    state.player.x = 2100; state.player.y = 650; state.player.angle = 0; state.player.speed = 420;
+    state.player.money = 14250; state.player.ammo = [12, 30, 6]; state.player.reserve = [72, 120, 36];
+    state.wanted = 3; state.wantedPhase = 'pursuit';
+    state.dayNight = 'dusk';
+    startMission(state, 4);
+    state.missionStep = 0;
+    state.dialogue = { who: 'MARA', text: 'Lose the police, then cross Sunset Bridge. One clean run.', t: 99 };
+    state.banner = { title: 'CORAL STRIP', sub: 'Beachfront Hotels', t: 99 };
+    if (car) { car.driver = 'player'; state.player.vehicle = car; state.player.onFoot = false; car.x = 2100; car.y = 650; car.angle = 0; car.vx = 420; car.vy = 0; car.speed = 420; }
+    world.addWanted(0);
+    state.wanted = 3;
+    state.heli.active = true; state.heli.x = 2100; state.heli.y = 520;
+    stagePolice(state, [[1900, 650, 0], [1780, 650, 0]]);
+    state.camera.x = 2050; state.camera.y = 650; state.camera.zoom = 0.62;
+    return { screen: SCREEN_PLAY, save: null };
+  }
+  // Default: 'chase' — beach chase on the avenue, helicopter overhead.
+  state.player.x = 1900; state.player.y = 1200; state.player.angle = -Math.PI / 2; state.player.speed = 380;
+  state.player.money = 4820; state.player.ammo = [12, 30, 6];
+  state.wanted = 3; state.wantedPhase = 'pursuit';
+  startMission(state, 4);
+  state.missionStep = 0;
+  const car = state.vehicles.find((v) => v.active && v.kind === 'sedan');
+  if (car) { car.driver = 'player'; state.player.vehicle = car; state.player.onFoot = false; car.x = 1900; car.y = 1200; car.angle = -Math.PI / 2; car.vx = 0; car.vy = -380; car.speed = 380; }
+  state.heli.active = true; state.heli.x = 1900; state.heli.y = 1000;
+  stagePolice(state, [[1900, 1420, -Math.PI / 2], [1760, 1300, -Math.PI / 2]]);
+  state.dialogue = { who: 'MARA', text: 'Shake them: break line of sight, swap cars, or change clothes.', t: 99 };
+  state.banner = { title: 'CORAL STRIP', sub: 'Beachfront Hotels', t: 99 };
+  state.camera.x = 1900; state.camera.y = 1200; state.camera.zoom = 0.62;
+  return { screen: SCREEN_PLAY, save: null };
 }
+
+export { SCREEN_BUSTED, SCREEN_PAUSED };
