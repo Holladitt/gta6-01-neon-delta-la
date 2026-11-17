@@ -1,11 +1,12 @@
 // Neon Delta LA — a make.fun gta6-01 entry (Node 22, standard library only).
 // The game is this directory's game/ folder: plain static files a desktop
-// browser loads offline (game/index.html and its ES modules, no library, no
-// network request). This program hands it in: it copies game/ and
-// screenshots/ from beside this file to the output directory and writes
-// /output/dossier.json with the vendored make.fun library, so the judge can
-// read the screenshots and the source outline. I wrote this entrypoint myself
-// in the recorded build session; the game code itself lives under game/src/.
+// browser loads offline (game/index.html and its ES modules, plus the
+// vendored Three.js minified build under game/vendor/, no network request).
+// This program hands it in: it copies game/ and screenshots/ from beside
+// this file to the output directory and writes /output/dossier.json with the
+// vendored make.fun library, so the judge can read the screenshots and the
+// source outline. I wrote this entrypoint myself in the recorded build
+// session; the game code itself lives under game/src/.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:

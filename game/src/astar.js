@@ -1,6 +1,5 @@
-// A-star over a coarse road grid. Police cars route on roads only; bridges are
-// explicit road cells, water is never walkable for cars. Boats use a separate
-// water graph (see world.js) and never touch this grid.
+// A-star over a coarse road grid. Police cars route on roads only; bridges
+// are explicit road cells and water is never drivable for cars.
 // Grid cells are 100 units; a cell is drivable when its centre is on a road.
 import { AVENUES, STREETS, CANAL, WORLD } from './config.js';
 
@@ -13,7 +12,7 @@ function onRoad(cx, cy) {
   const nearAve = AVENUES.some((a) => Math.abs(x - a) < 56);
   const nearSt = STREETS.some((s) => Math.abs(y - s) < 56);
   if (!nearAve && !nearSt) return false;
-  // Canal blocks everything except bridge crossings at each street.
+  // The canal blocks everything except bridge crossings at each street.
   if (x > CANAL.x0 - 20 && x < CANAL.x1 + 20 && y > CANAL.y0 && y < CANAL.y1) {
     return STREETS.some((s) => Math.abs(y - s) < 56);
   }
@@ -21,7 +20,9 @@ function onRoad(cx, cy) {
 }
 
 const walkable = new Uint8Array(COLS * ROWS);
-for (let y = 0; y < ROWS; y += 1) for (let x = 0; x < COLS; x += 1) walkable[y * COLS + x] = onRoad(x, y) ? 1 : 0;
+for (let y = 0; y < ROWS; y += 1) {
+  for (let x = 0; x < COLS; x += 1) walkable[y * COLS + x] = onRoad(x, y) ? 1 : 0;
+}
 
 export function cellOf(x, y) {
   return { cx: Math.max(0, Math.min(COLS - 1, Math.floor(x / CELL))), cy: Math.max(0, Math.min(ROWS - 1, Math.floor(y / CELL))) };
@@ -35,18 +36,20 @@ export function nearestRoadCell(x, y) {
   const c = cellOf(x, y);
   if (isRoadCell(c.cx, c.cy)) return c;
   for (let r = 1; r <= 6; r += 1) {
-    for (let dy = -r; dy <= r; dy += 1) for (let dx = -r; dx <= r; dx += 1) {
-      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-      if (isRoadCell(c.cx + dx, c.cy + dy)) return { cx: c.cx + dx, cy: c.cy + dy };
+    for (let dy = -r; dy <= r; dy += 1) {
+      for (let dx = -r; dx <= r; dx += 1) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        if (isRoadCell(c.cx + dx, c.cy + dy)) return { cx: c.cx + dx, cy: c.cy + dy };
+      }
     }
   }
   return { cx: 11, cy: 10 };
 }
 
-// A-star with a binary heap of open nodes. Returns an array of {x,y} waypoints
-// (cell centres) from start to goal, or [] when no route exists. No allocation
-// of waypoint objects happens per frame: callers repath at most every ~1.5 s,
-// staggered per police car.
+// A-star with a binary heap of open nodes. Returns an array of {x,y}
+// waypoints (cell centres) from start to goal, or [] when no route exists.
+// Callers repath at most every ~1.5 s, staggered per police car, so the
+// per-call allocations stay out of the hot loop.
 export function findPath(sx, sy, gx, gy) {
   const start = sy * COLS + sx, goal = gy * COLS + gx;
   if (start === goal) return [cellCenter(gx, gy)];

@@ -1,9 +1,10 @@
 // The mission scripting engine: missions and side jobs are data, not code.
-// Each step has a line of HUD dialogue, a GPS waypoint, a trigger radius and a
-// kind — goto, interact, escape, board, shoot — plus an optional time limit.
-// The engine advances steps, pays the reward on a win and names the failure.
-// Screen states (title/play/paused/busted) stay separate from mission progress:
-// a mission can be failed, retried or abandoned without touching the screen.
+// Each step has a line of HUD dialogue, a GPS waypoint, a trigger radius and
+// a kind — goto, interact, escape, board, shoot, hold — plus an optional
+// time limit. The engine advances steps, pays the reward on a win and names
+// the failure. Screen states (title/play/paused/busted) stay separate from
+// mission progress: a mission can be failed, retried or abandoned without
+// touching the screen.
 export const MISSIONS = [
   {
     id: 1, title: 'RETURN TO LA', reward: 400,
@@ -66,6 +67,15 @@ export const JOBS = [
   { id: 'market', title: 'NIGHT MARKET', pay: 250, say: 'Trader: Move this crate to the night market. Keep it quiet.', x: 1500, y: 1350, tx: 1500, ty: 1350 },
   { id: 'race', title: 'CANAL RACE', pay: 400, say: 'Racer: First boat through the three buoys wins the pot.', x: 2100, y: 1600, tx: 2400, ty: 1450 },
 ];
+
+// Waypoint lookup for the HUD minimap and the 3D beacon, shared so the
+// marker and the engine can never disagree about where the objective is.
+export function missionWaypoint(state) {
+  const m = MISSIONS[state.missionIndex];
+  if (!m || state.mode !== 'mission') return null;
+  const step = m.steps[state.missionStep];
+  return step ? { x: step.x, y: step.y } : null;
+}
 
 export function missionAt(state) { return MISSIONS[state.missionIndex] || null; }
 

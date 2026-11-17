@@ -13,13 +13,15 @@ export function loadSave() {
   } catch { return null; }
 }
 
-export function writeSave(state) {
+// The radio station is passed in explicitly: the world state never owns the
+// audio object, so a save must not reach for it through the state.
+export function writeSave(state, station) {
   try {
     const data = {
       money: Math.floor(state.player.money), mission: state.missionIndex,
       health: state.player.health, armor: state.player.armor,
       x: Math.round(state.player.x), y: Math.round(state.player.y),
-      dayNight: state.dayNight, station: state.radio.station, rep: state.rep || 0,
+      dayNight: state.dayNight, station: typeof station === 'number' ? station : 0, rep: state.rep || 0,
     };
     window.localStorage.setItem(SAVE_KEY, JSON.stringify(data));
     return true;

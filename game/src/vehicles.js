@@ -1,13 +1,14 @@
 // Arcade vehicle physics, one shared implementation, parameters per type.
-// Velocity is split into forward and lateral parts every step: the forward part
-// is driven by throttle/brake, the lateral part is damped by the tyre grip, so
-// a handbrake (grip cut) makes the tail slide into a drift instead of snapping.
-// Sedan is balanced, SUV is heavy and planted, the bike is quick and loose,
-// the truck is slow and wide, the boat slides on water.
+// Each step splits velocity into a forward part and a lateral part: throttle
+// drives the forward part, tyre grip damps the lateral part, so cutting grip
+// with the handbrake lets the tail slide into a drift instead of snapping.
+// Sedan is balanced, SUV heavy and planted, the bike quick and loose, the
+// truck slow and wide, the boat slides on water.
 import { VEHICLES } from './config.js';
 
-// A vehicle record. `kind` names its VEHICLES entry; `x,y,angle` are its pose;
-// `vx,vy` its world velocity; `speed` its signed forward speed.
+// A vehicle record. `kind` names its VEHICLES entry; `x,y,angle` are its
+// pose in sim units; `vx,vy` its world velocity; `speed` its signed forward
+// speed. Extra fields (driver, path, role, ...) are filled in by the world.
 export function makeVehicle(kind, x, y, angle, color) {
   const def = VEHICLES[kind] || VEHICLES.sedan;
   return {
@@ -15,6 +16,7 @@ export function makeVehicle(kind, x, y, angle, color) {
     color: color || def.color, roof: def.roof, damaged: 0, smoke: 0,
     driver: null, // 'player' | 'traffic' | 'police' | null (parked)
     path: [], pathIndex: 0, repath: 0, role: 'chase', stuck: 0,
+    reverseT: 0, bustHold: 0, sight: 0, cruise: 0, turnAt: 0, everDriven: false,
   };
 }
 
@@ -24,7 +26,7 @@ export function stepVehicle(v, throttle, steer, handbrake, dt) {
   const d = v.def;
   const fx = Math.cos(v.angle), fy = Math.sin(v.angle);
   const forward = v.vx * fx + v.vy * fy;
-  let lateral = (-v.vx * fy + v.vy * fx);
+  let lateral = -v.vx * fy + v.vy * fx;
   const grip = handbrake ? d.grip * 0.22 : d.grip;
   lateral *= Math.exp(-grip * dt);
   let next = forward + throttle * d.accel * dt;
@@ -32,8 +34,8 @@ export function stepVehicle(v, throttle, steer, handbrake, dt) {
   if (handbrake && Math.abs(forward) > 40) next *= Math.exp(-0.7 * dt);
   next = Math.max(-d.maxSpeed * 0.45, Math.min(d.maxSpeed, next));
   // Steering bites harder with speed, but never at a standstill.
-  const steerAuthority = Math.min(1, Math.abs(next) / 120);
-  v.angle += steer * d.turn * steerAuthority * dt * (next >= 0 ? 1 : -1);
+  const authority = Math.min(1, Math.abs(next) / 120);
+  v.angle += steer * d.turn * authority * dt * (next >= 0 ? 1 : -1);
   const nx = Math.cos(v.angle), ny = Math.sin(v.angle);
   v.vx = nx * next - ny * lateral;
   v.vy = ny * next + nx * lateral;

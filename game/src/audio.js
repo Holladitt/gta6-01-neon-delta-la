@@ -1,6 +1,6 @@
 // Procedural sound only — no audio files, no network. A tiny WebAudio synth:
-// engine hum whose pitch follows speed, a two-tone police siren, gunshot noise,
-// and three radio stations that play different looping note patterns.
+// engine hum whose pitch follows speed, a two-tone police siren, gunshot
+// noise, and three radio stations that play different looping note patterns.
 // Everything is created lazily on the first user gesture; silent when off.
 const STATIONS = [
   { name: 'NEON 88 — Sunset Drive', notes: [220, 277, 330, 392, 330, 277], step: 0.24 },

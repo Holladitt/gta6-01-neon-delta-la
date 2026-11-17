@@ -1,31 +1,35 @@
 // Neon Delta LA — every tuning number, colour and district in one place.
-// The world is a fixed 2600 x 1900 unit coastal city; the renderer scales it to
-// the window, so no rule below depends on screen size. Fixed step is 1/60 s.
+// The city is a fixed 2600 x 1900 coastal grid; the simulation runs in that
+// 2D plane (x east, y south) and the 3D scene maps it to (x, 0, y). The fixed
+// step is 1/60 s and no rule here depends on screen size.
 export const STEP = 1 / 60;
 export const WORLD = { w: 2600, h: 1900 };
-export const SAVE_KEY = 'neon-delta-la.save.v1';
+export const SAVE_KEY = 'neon-delta-la.save.v2';
 export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 
-// Warm sunset palette: orange-pink sky, neon cyan-orange accents, flat low-poly colours.
+// Warm sunset palette: orange-pink sky, neon cyan-orange accents, flat
+// low-poly colours. The 3D scene reads these for sky, fog, sea and ground.
 export const PALETTE = {
-  skyDay: '#ff9a5c', skyDusk: '#ff5e7a', skyNight: '#1b1440',
-  sea: '#19b8c9', sand: '#f2d492', grass: '#7fae5a', sidewalk: '#c9b8a3',
-  road: '#2b2b3a', roadLine: '#ffd23e', building: '#8f7fb8', tower: '#5f6fb0',
-  towerGlass: '#3fd2e0', roof: '#e4572e', crane: '#e5382e', container: '#f2a541',
+  skyTop: '#7a4a9e', skyMid: '#ff6b8a', skyHorizon: '#ff9a5c',
+  nightTop: '#141034', nightMid: '#3a2358', nightHorizon: '#ff7a5c',
+  fogDusk: '#e8907a', fogNight: '#4a3560',
+  sea: '#19b8c9', sand: '#f2d492', land: '#8a7a5e', sidewalk: '#c9b8a3',
+  road: '#2b2b3a', roadLine: '#ffd23e', crane: '#e5382e',
   text: '#fff7ea', muted: '#ffd9a0', panel: 'rgba(16,10,32,0.82)',
   accent: '#ff7a1a', cyan: '#2ee6d6', pink: '#ff4d8d', money: '#7dffa8',
   police: '#e8ecf5', policeBlue: '#2e6bff', policeRed: '#ff2e4d',
 };
 
-// Avenues (vertical roads) and streets (horizontal roads). The canal runs
-// north-south between the two middle avenues; bridges cross it at each street.
+// Avenues run north-south, streets east-west. The canal cuts north-south
+// between the two middle avenues; bridges cross it at each street.
 export const AVENUES = [300, 700, 1100, 1500, 1900];
 export const STREETS = [300, 650, 1000, 1350, 1650];
 export const CANAL = { x0: 1240, x1: 1330, y0: 120, y1: 1780 };
 export const BEACH = { x0: 2250, seaX: 2460 };
 export const PORT = { x0: 150, x1: 1050, y0: 1680, y1: 1880 };
 
-// Districts: name, rect, label colour. Used for the big italic district banner.
+// Districts: name, rect, label colour. The HUD shows the big italic banner
+// when the player crosses into a new one.
 export const DISTRICTS = [
   { name: 'DOWNTOWN', sub: 'Glassline Towers', x0: 120, y0: 120, x1: 1050, y1: 620, color: '#7fd4ff' },
   { name: 'HOLLYWOOD HILLS', sub: 'Hillside Homes', x0: 120, y0: 620, x1: 1050, y1: 980, color: '#ffd23e' },
@@ -41,12 +45,13 @@ export function districtAt(x, y) {
   return DISTRICTS[3];
 }
 
-// Arcade vehicle feel: sedan balanced, SUV heavy and planted, bike quick and loose,
-// truck slow and wide, speedboat only on water, police car fast with strong grip.
+// Arcade vehicle feel: sedan balanced, SUV heavy and planted, bike quick and
+// loose, truck slow and wide, speedboat only on water, police fast with grip.
+// len/wid are sim units; the 3D scene scales them to the same proportions.
 export const VEHICLES = {
   sedan: { name: 'Sedan', len: 52, wid: 26, accel: 420, maxSpeed: 560, grip: 6.5, turn: 2.9, drift: 0.55, color: '#ff4d6d', roof: '#ffd23e' },
   suv: { name: 'SUV', len: 58, wid: 30, accel: 340, maxSpeed: 500, grip: 8.0, turn: 2.4, drift: 0.30, color: '#2e6bff', roof: '#dfe8ff' },
-  bike: { name: 'Motorbike', len: 44, wid: 16, accel: 520, maxSpeed: 640, grip: 4.2, turn: 3.6, drift: 0.85, color: '#19b8c9', roof: '#122' },
+  bike: { name: 'Motorbike', len: 44, wid: 16, accel: 520, maxSpeed: 640, grip: 4.2, turn: 3.6, drift: 0.85, color: '#19b8c9', roof: '#12202e' },
   truck: { name: 'Truck', len: 86, wid: 30, accel: 260, maxSpeed: 420, grip: 7.0, turn: 1.9, drift: 0.20, color: '#f2a541', roof: '#7a4a12' },
   boat: { name: 'Speedboat', len: 64, wid: 28, accel: 460, maxSpeed: 600, grip: 3.0, turn: 2.6, drift: 0.90, color: '#ffffff', roof: '#ff7a1a' },
   police: { name: 'Police Cruiser', len: 54, wid: 27, accel: 480, maxSpeed: 600, grip: 7.5, turn: 3.1, drift: 0.35, color: '#e8ecf5', roof: '#2e6bff' },

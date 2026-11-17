@@ -1,5 +1,7 @@
-// Keyboard + mouse input. Held keys are read every frame; one-shot presses are
-// queued as bit flags and taken once, so a press between frames is never lost.
+// Keyboard + mouse input. Held keys are read every frame; one-shot presses
+// are queued as bit flags and taken once, so a press between frames is never
+// lost. The mouse position is raw screen pixels — the caller raycasts it to
+// the ground plane for aiming.
 export const ACT_CONFIRM = 1;
 export const ACT_PAUSE = 2;
 export const ACT_INTERACT = 4;
@@ -7,6 +9,13 @@ export const ACT_RELOAD = 8;
 export const ACT_RADIO = 16;
 export const ACT_MAP = 32;
 export const ACT_HORN = 64;
+export const ACT_SAVE = 128;
+export const ACT_MISSION = 256;
+export const ACT_STATION = 512;
+export const ACT_W1 = 1024;
+export const ACT_W2 = 2048;
+export const ACT_W3 = 4096;
+export const ACT_CONTINUE = 8192;
 
 export function createInput(canvas) {
   const keys = new Set();
@@ -19,6 +28,8 @@ export function createInput(canvas) {
   const pressMap = {
     Space: ACT_CONFIRM, Enter: ACT_CONFIRM, KeyF: ACT_INTERACT, KeyE: ACT_INTERACT,
     KeyR: ACT_RELOAD, KeyX: ACT_RADIO, Tab: ACT_MAP, KeyH: ACT_HORN, Escape: ACT_PAUSE, KeyP: ACT_PAUSE,
+    KeyN: ACT_SAVE, KeyM: ACT_MISSION, KeyQ: ACT_STATION,
+    Digit1: ACT_W1, Digit2: ACT_W2, Digit3: ACT_W3, KeyC: ACT_CONTINUE,
   };
   window.addEventListener('keydown', (e) => {
     if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();

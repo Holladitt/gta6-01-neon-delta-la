@@ -1,28 +1,31 @@
-// The world: the city, the player, traffic, pedestrians, police and combat.
+// The simulation: city, player, traffic, pedestrians, police and combat.
 // No drawing and no browser here — step() advances one fixed step and the
-// renderer paints the state. Screen states (title/play/paused/busted) are the
+// 3D scene paints the state. Screen states (title/play/paused/busted) are the
 // caller's job; missions are a separate progression (missions.js) and wanted
 // and combat are conditions on top of play, never a screen of their own.
 // Arrest, death, mission failure and restart have explicit precedence and
-// cleanup in reset()/bust() so no timer or actor survives a transition.
-import { AVENUES, BEACH, CANAL, DISTRICTS, PLAYER, PORT, STEP, STREETS, VEHICLES, WEAPONS, WORLD, districtAt } from './config.js';
+// cleanup in reset() and in the bust branch, so no timer or actor survives
+// a transition.
+import { AVENUES, BEACH, CANAL, DISTRICTS, PLAYER, PORT, STREETS, VEHICLES, WEAPONS, WORLD, districtAt } from './config.js';
 import { makeVehicle, stepVehicle, steerToward, dist2 } from './vehicles.js';
 import { cellOf, findPath, nearestRoadCell, cellCenter } from './astar.js';
-import { pick, range } from './random.js';
+import { pick } from './random.js';
 
 export const EVENT_BUSTED = 1;
 export const EVENT_SHOT = 2;
 export const EVENT_CRIME = 4;
-export const EVENT_PICKUP = 8;
 
 const CAR_COLORS = ['#ff4d6d', '#2ee6d6', '#ffd23e', '#ff7a1a', '#b388ff', '#e8ecf5', '#7dffa8'];
 const PED_COLORS = ['#ff8fab', '#ffd23e', '#7fd4ff', '#b388ff', '#7dffa8', '#ff9a5c'];
 
-function circleRect(px, py, r, b) {
+function circleVsRect(px, py, r, b) {
   const cx = Math.max(b.x, Math.min(px, b.x + b.w)), cy = Math.max(b.y, Math.min(py, b.y + b.h));
   const dx = px - cx, dy = py - cy, d2 = dx * dx + dy * dy;
-  return d2 < r * r ? { push: r - Math.sqrt(Math.max(d2, 0.01)), dx, dy, d: Math.sqrt(Math.max(d2, 0.01)) } : null;
+  if (d2 >= r * r) return null;
+  const d = Math.sqrt(Math.max(d2, 0.01));
+  return { push: r - d, dx, dy, d };
 }
+
 function inWater(x, y) {
   if (x > BEACH.seaX) return true;
   if (x > CANAL.x0 && x < CANAL.x1 && y > CANAL.y0 && y < CANAL.y1) {
@@ -44,23 +47,38 @@ export function createWorld(rand) {
       if (x0 > CANAL.x0 - 120 && x0 < CANAL.x1 + 120) continue; // canal corridor
       const downtown = bi === 0 && si === 0;
       const tall = downtown || (bi <= 1 && si <= 1);
-      const n = tall ? 2 : 2 + Math.floor(rand() * 3);
+      const n = tall ? 3 : 3 + Math.floor(rand() * 3);
       for (let k = 0; k < n; k += 1) {
         const w = Math.min(x1 - x0 - 20, 70 + rand() * 100);
         const h = Math.min(y1 - y0 - 20, 55 + rand() * 80);
         const x = x0 + 10 + rand() * Math.max(1, x1 - x0 - w - 20);
         const y = y0 + 10 + rand() * Math.max(1, y1 - y0 - h - 20);
         const height = tall ? 130 + rand() * 130 : 34 + rand() * 60;
-        buildings.push({ x, y, w, h, height, color: tall ? pick(rand, ['#5f6fb0', '#3fd2e0', '#8f7fb8']) : pick(rand, ['#c96f4a', '#7fae5a', '#b08968', '#e0a458', '#9b7bb8']) });
+        const glass = tall && rand() < 0.6;
+        buildings.push({
+          x, y, w, h, height,
+          color: tall ? pick(rand, ['#5f6fb0', '#3fd2e0', '#8f7fb8']) : pick(rand, ['#c96f4a', '#7fae5a', '#b08968', '#e0a458', '#9b7bb8']),
+          glass,
+        });
       }
     }
   }
-  for (let i = 0; i < 10; i += 1) containers.push({ x: PORT.x0 + 40 + i * 90, y: PORT.y0 + 40 + (i % 2) * 70, w: 64, h: 30, color: pick(rand, ['#f2a541', '#19b8c9', '#e5382e', '#7dffa8']) });
+  for (let i = 0; i < 10; i += 1) {
+    containers.push({ x: PORT.x0 + 40 + i * 90, y: PORT.y0 + 40 + (i % 2) * 70, w: 64, h: 30, color: pick(rand, ['#f2a541', '#19b8c9', '#e5382e', '#7dffa8']) });
+  }
   for (let i = 0; i < 4; i += 1) cranes.push({ x: PORT.x0 + 120 + i * 240, y: PORT.y0 + 8, h: 190 });
   // Palm trees along the beach and the Coral Strip boulevard.
   const palms = [];
   for (let y = 140; y < 1700; y += 130) palms.push({ x: 2280 + (rand() < 0.5 ? -14 : 14), y });
   for (let x = 1950; x < 2250; x += 120) palms.push({ x, y: 300 });
+  // Beach umbrellas on the sand.
+  const umbrellas = [];
+  for (let i = 0; i < 10; i += 1) umbrellas.push({ x: 2300 + rand() * 120, y: 300 + i * 130 + rand() * 40, color: pick(rand, ['#ff4d6d', '#ffd23e', '#2ee6d6', '#ff7a1a']) });
+  // Traffic lights at the busiest intersections (phase cycles with time).
+  const lights = [
+    { x: 700, y: 650, phase: 0 }, { x: 1100, y: 650, phase: 3 },
+    { x: 700, y: 1000, phase: 6 }, { x: 1900, y: 650, phase: 9 },
+  ];
 
   // ---- pooled actors: allocated once, reused, never grown in the hot loop ----
   const vehicles = [];
@@ -77,19 +95,19 @@ export function createWorld(rand) {
   const player = {
     x: 700, y: 750, angle: -Math.PI / 2, vx: 0, vy: 0, health: PLAYER.health, armor: PLAYER.armor,
     money: 250, vehicle: null, weapon: 0, ammo: [12, 30, 6], reserve: [72, 120, 36],
-    aim: 0, speed: 0, onFoot: true, invuln: 0,
+    aim: 0, speed: 0, onFoot: true, invuln: 0, walkPhase: 0,
   };
-  const camera = { x: player.x, y: player.y, zoom: 0.55 };
   const heli = { active: false, x: 0, y: 0, angle: 0 };
 
   const state = {
-    time: 0, dayNight: 'dusk', player, vehicles, peds, police, bullets, particles,
-    buildings, containers, cranes, palms, camera, heli,
+    time: 0, clockMin: 17 * 60 + 21, dayNight: 'dusk', player, vehicles, peds, police, bullets, particles,
+    buildings, containers, cranes, palms, umbrellas, lights, heli,
     wanted: 0, wantedPhase: 'clear', unseenTimer: 0, escapeProgress: 0, lastKnown: null,
     mode: 'free', missionIndex: 0, missionStep: 0, missionTimer: 0,
     missionFailed: false, missionDone: false, kills: 0, rep: 0, job: null,
     dialogue: null, banner: null, district: districtAt(700, 750), districtTimer: 0,
     bust: 0, bustTimer: 0, shotCooldown: 0, trafficTimer: 0, pedTimer: 0,
+    radioName: 'NEON 88 — Sunset Drive', radioStation: 0,
   };
 
   function freeFrom(list) { for (const it of list) if (!it.active) return it; return null; }
@@ -106,8 +124,13 @@ export function createWorld(rand) {
     const vertical = rand() < 0.5;
     const kind = pick(rand, ['sedan', 'sedan', 'suv', 'bike', 'truck']);
     let x, y, angle;
-    if (vertical) { const a = pick(rand, AVENUES); x = a + (rand() < 0.5 ? -14 : 14); y = 150 + rand() * 1600; angle = rand() < 0.5 ? Math.PI / 2 : -Math.PI / 2; }
-    else { const s = pick(rand, STREETS); y = s + (rand() < 0.5 ? -14 : 14); x = 150 + rand() * 2000; angle = rand() < 0.5 ? 0 : Math.PI; }
+    if (vertical) {
+      const a = pick(rand, AVENUES); x = a + (rand() < 0.5 ? -14 : 14); y = 150 + rand() * 1600;
+      angle = rand() < 0.5 ? Math.PI / 2 : -Math.PI / 2;
+    } else {
+      const s = pick(rand, STREETS); y = s + (rand() < 0.5 ? -14 : 14); x = 150 + rand() * 2000;
+      angle = rand() < 0.5 ? 0 : Math.PI;
+    }
     const v = makeVehicle(kind, x, y, angle, pick(rand, CAR_COLORS));
     Object.assign(slot, v, { active: true, driver: 'traffic', cruise: 150 + rand() * 120, turnAt: 0 });
   }
@@ -115,24 +138,24 @@ export function createWorld(rand) {
     const slot = freeFrom(peds);
     if (!slot) return;
     const x = 150 + rand() * 2100, y = 150 + rand() * 1550;
-    Object.assign(slot, { active: true, x, y, tx: x, ty: y, speed: 40 + rand() * 30, color: pick(rand, PED_COLORS), flee: 0, wait: rand() * 3 });
+    Object.assign(slot, { active: true, x, y, tx: x, ty: y, speed: 40 + rand() * 30, color: pick(rand, PED_COLORS), flee: 0, wait: rand() * 3, walkPhase: rand() * 6 });
   }
+
   function reset() {
     player.x = 700; player.y = 750; player.angle = -Math.PI / 2; player.vx = 0; player.vy = 0; player.speed = 0;
     player.health = PLAYER.health; player.armor = PLAYER.armor; player.money = 250;
     player.vehicle = null; player.weapon = 0; player.ammo = [12, 30, 6]; player.reserve = [72, 120, 36];
-    player.onFoot = true; player.invuln = 0;
+    player.onFoot = true; player.invuln = 0; player.walkPhase = 0;
     for (const v of vehicles) v.active = false;
     for (const p of peds) p.active = false;
     for (const p of police) p.active = false;
     for (const b of bullets) b.active = false;
     for (const q of particles) q.active = false;
-    state.time = 0; state.dayNight = 'dusk';
+    state.time = 0; state.clockMin = 17 * 60 + 21; state.dayNight = 'dusk';
     state.wanted = 0; state.wantedPhase = 'clear'; state.unseenTimer = 0; state.escapeProgress = 0; state.lastKnown = null;
     state.mode = 'free'; state.missionIndex = 0; state.missionStep = 0; state.missionTimer = 0;
     state.missionFailed = false; state.missionDone = false; state.kills = 0; state.rep = 0; state.job = null;
     state.dialogue = null; state.banner = null; state.bust = 0; state.bustTimer = 0;
-    camera.x = player.x; camera.y = player.y; camera.zoom = 0.8;
     heli.active = false;
     // Parked cars worth stealing, a boat at the Marina, trucks at the port.
     spawnParked('sedan', 700, 650, 0); spawnParked('suv', 1100, 1000, Math.PI / 2);
@@ -146,16 +169,20 @@ export function createWorld(rand) {
 
   function collideBuildings(e, r) {
     for (const b of buildings) {
-      const hit = circleRect(e.x, e.y, r, b);
+      const hit = circleVsRect(e.x, e.y, r, b);
       if (!hit) continue;
       const nx = hit.d > 0.01 ? hit.dx / hit.d : 1, ny = hit.d > 0.01 ? hit.dy / hit.d : 0;
       e.x += nx * hit.push; e.y += ny * hit.push;
-      if (e.vx !== undefined) { const dot = e.vx * nx + e.vy * ny; if (dot < 0) { e.vx -= dot * nx; e.vy -= dot * ny; } }
+      if (e.vx !== undefined) {
+        const dot = e.vx * nx + e.vy * ny;
+        if (dot < 0) { e.vx -= dot * nx; e.vy -= dot * ny; }
+      }
       return true;
     }
     return false;
   }
-  function addWanted(n, why) {
+
+  function addWanted(n) {
     const before = state.wanted;
     state.wanted = Math.max(0, Math.min(5, state.wanted + n));
     if (state.wanted > before) {
@@ -164,12 +191,14 @@ export function createWorld(rand) {
     }
     return state.wanted;
   }
+
   function burst(x, y, color, n) {
     for (let i = 0; i < n; i += 1) {
       const q = freeFrom(particles); if (!q) return;
       Object.assign(q, { active: true, x, y, vx: (rand() - 0.5) * 260, vy: (rand() - 0.5) * 260, life: 0.5 + rand() * 0.4, color });
     }
   }
+
   function fireBullet() {
     if (state.shotCooldown > 0 || player.vehicle) return 0;
     const w = WEAPONS[player.weapon];
@@ -178,7 +207,11 @@ export function createWorld(rand) {
     state.shotCooldown = w.rate;
     const b = freeFrom(bullets); if (!b) return EVENT_SHOT;
     const spread = (rand() - 0.5) * w.spread * 2;
-    Object.assign(b, { active: true, x: player.x + Math.cos(player.aim) * 24, y: player.y + Math.sin(player.aim) * 24, vx: Math.cos(player.aim + spread) * 900, vy: Math.sin(player.aim + spread) * 900, life: w.range / 900, damage: w.damage, weapon: player.weapon });
+    Object.assign(b, {
+      active: true, x: player.x + Math.cos(player.aim) * 24, y: player.y + Math.sin(player.aim) * 24,
+      vx: Math.cos(player.aim + spread) * 900, vy: Math.sin(player.aim + spread) * 900,
+      life: w.range / 900, damage: w.damage, weapon: player.weapon,
+    });
     return EVENT_SHOT;
   }
 
@@ -203,7 +236,11 @@ export function createWorld(rand) {
       x = cc.x; y = cc.y;
     }
     const v = makeVehicle('police', x, y, 0, '#e8ecf5');
-    Object.assign(slot, { active: true, x, y, angle: 0, vx: 0, vy: 0, speed: 0, def: v.def, kind: 'police', color: '#e8ecf5', roof: '#2e6bff', damaged: 0, smoke: 0, driver: 'police', path: [], pathIndex: 0, repath: rand() * 1.5, role: 'chase', stuck: 0, bustHold: 0, sight: 0 });
+    Object.assign(slot, v, {
+      active: true, x, y, angle: 0, vx: 0, vy: 0, speed: 0, color: '#e8ecf5', roof: '#2e6bff',
+      damaged: 0, smoke: 0, driver: 'police', path: [], pathIndex: 0, repath: rand() * 1.5,
+      role: 'chase', stuck: 0, reverseT: 0, bustHold: 0, sight: 0,
+    });
   }
 
   function policeTarget(pol, index) {
@@ -248,8 +285,6 @@ export function createWorld(rand) {
       }
       // Follow the route waypoint by waypoint: skip passed waypoints, brake
       // for turns and for the final approach, and reverse out if stuck.
-      // (Pure pursuit with no lane discipline cuts corners through blocks,
-      // so the car slows for every turn instead of powering through.)
       let throttle = 0.55, steer = 0;
       while (pol.pathIndex < pol.path.length) {
         const wp = pol.path[pol.pathIndex];
@@ -296,7 +331,7 @@ export function createWorld(rand) {
       if (pol.damaged >= 100) {
         pol.active = false; state.kills += 1;
         burst(pol.x, pol.y, '#888888', 14);
-        addWanted(1, 'destroyed');
+        addWanted(1);
       }
     }
     // Helicopter at 3+ stars: a readable search indicator that circles the
@@ -313,7 +348,9 @@ export function createWorld(rand) {
   function stepWanted(dt) {
     if (state.wanted === 0) { state.wantedPhase = 'clear'; state.escapeProgress = 0; return; }
     let seen = false;
-    for (const pol of police) if (pol.active && Math.hypot(pol.x - player.x, pol.y - player.y) < (state.wanted <= 2 ? 300 : 430)) seen = true;
+    for (const pol of police) {
+      if (pol.active && Math.hypot(pol.x - player.x, pol.y - player.y) < (state.wanted <= 2 ? 300 : 430)) seen = true;
+    }
     if (heli.active && Math.hypot(heli.x - player.x, heli.y - player.y) < 520) seen = true;
     if (seen) { state.unseenTimer = 0; state.escapeProgress = 0; state.wantedPhase = 'pursuit'; }
     else {
@@ -337,12 +374,12 @@ export function createWorld(rand) {
     let count = 0;
     for (const v of vehicles) if (v.active && v.driver === 'traffic') count += 1;
     if (state.trafficTimer <= 0) {
-      state.trafficTimer = 1.2;
-      if (count < 12) spawnTraffic();
+      state.trafficTimer = 0.8;
+      if (count < 14) { spawnTraffic(); if (count < 13) spawnTraffic(); }
     }
     for (const v of vehicles) {
       if (!v.active || v.driver !== 'traffic') continue;
-      // Follow the road ahead; turn at intersections; brake for the car ahead.
+      // Follow the road ahead; brake for the car ahead.
       const aheadX = v.x + Math.cos(v.angle) * 70, aheadY = v.y + Math.sin(v.angle) * 70;
       let blocked = false;
       for (const o of vehicles) {
@@ -352,7 +389,6 @@ export function createWorld(rand) {
       const onAve = AVENUES.some((a) => Math.abs(v.x - a) < 50);
       const onSt = STREETS.some((s) => Math.abs(v.y - s) < 50);
       let steer = 0, throttle = blocked ? 0 : 0.55;
-      if (onAve && onSt && rand() < 0.002) { /* intersection: keep straight, simple and safe */ }
       // Stay centred on the current road.
       if (onAve && !onSt) {
         const a = AVENUES.reduce((best, cur) => Math.abs(cur - v.x) < Math.abs(best - v.x) ? cur : best, AVENUES[0]);
@@ -379,11 +415,15 @@ export function createWorld(rand) {
         p.flee -= dt;
         const a = Math.atan2(p.y - player.y, p.x - player.x);
         p.x += Math.cos(a) * 130 * dt; p.y += Math.sin(a) * 130 * dt;
+        p.walkPhase += dt * 9;
       } else {
         p.wait -= dt;
         if (p.wait <= 0) { p.tx = 150 + rand() * 2100; p.ty = 150 + rand() * 1550; p.wait = 4 + rand() * 5; }
         const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
-        if (d > 12) { p.x += (dx / d) * p.speed * dt; p.y += (dy / d) * p.speed * dt; }
+        if (d > 12) {
+          p.x += (dx / d) * p.speed * dt; p.y += (dy / d) * p.speed * dt;
+          p.walkPhase += dt * 7;
+        }
       }
       p.x = Math.max(60, Math.min(WORLD.w - 60, p.x));
       p.y = Math.max(60, Math.min(WORLD.h - 60, p.y));
@@ -402,9 +442,8 @@ export function createWorld(rand) {
           v.damaged = (v.damaged || 0) + b.damage;
           burst(b.x, b.y, '#ffd23e', 5);
           if (v.damaged >= 100) {
-            if (v.driver === 'police') { state.kills += 1; }
             v.driver = null; v.smoke = 1;
-            addWanted(1, 'shooting');
+            addWanted(1);
           }
           break;
         }
@@ -426,10 +465,12 @@ export function createWorld(rand) {
     }
   }
 
-  // One fixed step of play. `cmd` carries the frame's input; `fired` is true
-  // on the frame the player clicked. Returns event flags for the caller.
+  // One fixed step of play. `cmd` carries the frame's input (mouseX/mouseY are
+  // world coordinates the caller raycasts from the screen); `fired` is true on
+  // the frame the player clicked. Returns event flags for the caller.
   function step(dt, cmd, fired) {
     state.time += dt;
+    state.clockMin += dt; // one game minute per real second, cosmetic only
     if (state.shotCooldown > 0) state.shotCooldown -= dt;
     if (player.invuln > 0) player.invuln -= dt;
     if (state.banner && state.banner.t > 0) state.banner.t -= dt;
@@ -444,12 +485,12 @@ export function createWorld(rand) {
       p.vx = cmd.x * sp; p.vy = cmd.y * sp;
       p.x += p.vx * dt; p.y += p.vy * dt;
       p.speed = Math.hypot(p.vx, p.vy);
-      if (p.speed > 10) p.angle = Math.atan2(p.vy, p.vx);
+      if (p.speed > 10) { p.angle = Math.atan2(p.vy, p.vx); p.walkPhase += dt * p.speed * 0.045; }
       p.x = Math.max(40, Math.min(WORLD.w - 40, p.x));
       p.y = Math.max(40, Math.min(WORLD.h - 40, p.y));
       if (inWater(p.x, p.y)) { p.x -= p.vx * dt; p.y -= p.vy * dt; }
       collideBuildings(p, PLAYER.radius);
-      p.aim = Math.atan2(cmd.mouseWorldY - p.y, cmd.mouseWorldX - p.x);
+      p.aim = Math.atan2(cmd.mouseY - p.y, cmd.mouseX - p.x);
       if (fired) events |= fireBullet();
       if (cmd.reload && p.reserve[p.weapon] > 0 && p.ammo[p.weapon] < WEAPONS[p.weapon].mag) {
         const need = WEAPONS[p.weapon].mag - p.ammo[p.weapon];
@@ -472,7 +513,10 @@ export function createWorld(rand) {
           }
         }
         if (best) {
-          if (!best.everDriven) { addWanted(1, 'carjack'); best.everDriven = true; if (best.driver === 'traffic') burst(best.x, best.y, '#ff4d6d', 6); }
+          if (!best.everDriven) {
+            addWanted(1); best.everDriven = true;
+            if (best.driver === 'traffic') burst(best.x, best.y, '#ff4d6d', 6);
+          }
           best.driver = 'player'; p.vehicle = best; p.onFoot = false;
           events |= EVENT_CRIME;
         }
@@ -502,7 +546,6 @@ export function createWorld(rand) {
         p.y = v.y + Math.sin(v.angle + Math.PI / 2) * 44;
         v.driver = null; p.vehicle = null; p.onFoot = true; p.vx = 0; p.vy = 0;
       }
-      if (cmd.horn) events |= 0;
     }
 
     const bustEvent = stepPolice(dt);
@@ -534,13 +577,6 @@ export function createWorld(rand) {
       state.banner = { title: d.name, sub: d.sub, t: 2.5 };
     } else if (state.districtTimer > 0) state.districtTimer -= dt;
 
-    // Camera: follow the player, zoom out while driving fast.
-    const targetZoom = p.vehicle ? 0.62 + Math.min(0.06, p.speed / 9000) : 0.8;
-    camera.zoom += (targetZoom - camera.zoom) * Math.min(1, dt * 3);
-    camera.x += (p.x - camera.x) * Math.min(1, dt * 5);
-    camera.y += (p.y - camera.y) * Math.min(1, dt * 5);
-    camera.x = Math.max(500, Math.min(WORLD.w - 500, camera.x));
-    camera.y = Math.max(360, Math.min(WORLD.h - 360, camera.y));
     return events;
   }
 
