@@ -1,73 +1,124 @@
-// A tiny static server for game/ (Node 22, standard library only), so an
-// entry can be played locally without a build step: `node serve.ts` serves
-// game/ on http://localhost:8080. It sends the MIME types a browser game
-// needs, refuses any path outside game/, and otherwise does nothing clever:
-// this is a development convenience, not a web server for the internet.
-import { createReadStream, statSync } from 'node:fs';
-import { createServer } from 'node:http';
-import { extname, join, normalize, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+// Tiny static file server for local development of the game.
+// Serves the game/ directory over HTTP on localhost. Node 22 stdlib only.
+// Usage: node serve.ts [--port <n>]   (default port 8080)
 
-const root = resolve(fileURLToPath(new URL('./game', import.meta.url)));
-const args = process.argv.slice(2);
-const portIndex = args.indexOf('--port');
-const requested = portIndex === -1 ? 8080 : Number(args[portIndex + 1]);
-const port = Number.isInteger(requested) && requested > 0 && requested < 65536 ? requested : 8080;
+import { createServer } from "node:http";
+import { readFile, stat } from "node:fs/promises";
+import { extname, join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const SCRIPT_DIR = fileURLToPath(new URL(".", import.meta.url));
+const GAME_ROOT = resolve(SCRIPT_DIR, "game");
 
 const MIME: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.woff2': 'font/woff2',
-  '.glb': 'model/gltf-binary',
-  '.gltf': 'model/gltf+json',
-  '.bin': 'application/octet-stream',
-  '.wasm': 'application/wasm',
-  '.wav': 'audio/wav',
-  '.mp3': 'audio/mpeg',
-  '.ogg': 'audio/ogg',
-  '.txt': 'text/plain; charset=utf-8',
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json",
+  ".bin": "application/octet-stream",
+  ".wasm": "application/wasm",
+  ".wav": "audio/wav",
+  ".mp3": "audio/mpeg",
+  ".ogg": "audio/ogg",
+  ".txt": "text/plain; charset=utf-8",
 };
 
-createServer((request, response) => {
-  const url = new URL(request.url ?? '/', 'http://localhost');
-  let pathname: string;
-  try {
-    pathname = decodeURIComponent(url.pathname);
-  } catch {
-    response.writeHead(400).end('bad request');
-    return;
+function parsePort(argv: string[]): number {
+  const i = argv.indexOf("--port");
+  if (i === -1) return 8080;
+  const n = Number(argv[i + 1]);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) {
+    console.error("usage: node serve.ts [--port <1-65535>]");
+    process.exit(1);
   }
-  if (pathname.endsWith('/')) pathname += 'index.html';
-  const file = resolve(join(root, normalize(pathname)));
-  if (file !== root && !file.startsWith(root + sep)) {
-    response.writeHead(403).end('forbidden');
-    return;
-  }
-  let size: number;
-  try {
-    const stats = statSync(file);
-    if (!stats.isFile()) throw new Error('not a file');
-    size = stats.size;
-  } catch {
-    response.writeHead(404).end('not found');
-    return;
-  }
-  response.writeHead(200, {
-    'content-type': MIME[extname(file).toLowerCase()] ?? 'application/octet-stream',
-    'content-length': size,
-    'cache-control': 'no-store',
+  return n;
+}
+
+function send(
+  res: import("node:http").ServerResponse,
+  status: number,
+  body: string | Buffer,
+  type = "text/plain; charset=utf-8",
+): void {
+  const data = typeof body === "string" ? Buffer.from(body, "utf-8") : body;
+  res.writeHead(status, {
+    "content-type": type,
+    "content-length": data.length,
+    "cache-control": "no-store",
   });
-  createReadStream(file).pipe(response);
-}).listen(port, '127.0.0.1', () => {
-  console.log(`game/ is on http://localhost:${port}`);
+  res.end(data);
+}
+
+const server = createServer(async (req, res) => {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    send(res, 405, "method not allowed");
+    return;
+  }
+
+  let rawPath: string;
+  try {
+    rawPath = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
+  } catch {
+    send(res, 400, "bad request");
+    return;
+  }
+
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(rawPath);
+  } catch {
+    send(res, 400, "bad request");
+    return;
+  }
+
+  const rel = decoded.replace(/^\/+/, "");
+  const target = resolve(GAME_ROOT, rel);
+  if (target !== GAME_ROOT && !target.startsWith(GAME_ROOT + sep)) {
+    send(res, 403, "forbidden");
+    return;
+  }
+
+  let filePath = target;
+  try {
+    const info = await stat(filePath);
+    if (info.isDirectory()) filePath = join(filePath, "index.html");
+    const fileInfo = await stat(filePath);
+    if (!fileInfo.isFile()) {
+      send(res, 404, "not found");
+      return;
+    }
+  } catch {
+    send(res, 404, "not found");
+    return;
+  }
+
+  try {
+    const data = await readFile(filePath);
+    const type = MIME[extname(filePath).toLowerCase()] ?? "application/octet-stream";
+    res.writeHead(200, {
+      "content-type": type,
+      "content-length": data.length,
+      "cache-control": "no-store",
+    });
+    if (req.method === "GET") res.end(data);
+    else res.end();
+  } catch {
+    send(res, 500, "internal error");
+  }
+});
+
+const port = parsePort(process.argv.slice(2));
+server.listen(port, "127.0.0.1", () => {
+  console.log(`Serving game/ at http://127.0.0.1:${port}/`);
 });
