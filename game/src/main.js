@@ -105,6 +105,7 @@ function boot() {
     if (!document.pointerLockElement && game.state === 'playing' && !game.shotMode) pauseGame(true);
   });
 
+  hud.setVisible(false);
   hud.showTitle(hasSave(STORE) ? loadGame(STORE) : null);
   hud.setMoney(game.money); hud.setWanted(0); hud.setHealth(100, 0);
   hud.setWeapon(combat.hudText()); hud.setClock(game.hour);
@@ -178,7 +179,7 @@ function newGame() {
   lockPointer();
 }
 function continueGame() {
-  const s = loadGame();
+  const s = loadGame(STORE);
   if (!s) { newGame(); return; }
   game.money = s.money; game.health = s.health; game.armor = s.armor;
   game.mission = engineStartMission(s.mission);
