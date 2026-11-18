@@ -17,6 +17,13 @@ export function groundY(x, z) {
   return 0;
 }
 
+// Water boundary: the ocean west of the beach (x < OCEAN_X + 2) is not
+// walkable on foot; the only way west is the Coral Pier deck corridor
+// (z 252..348, deck y 2.5). Pure — unit-tested in sim.test.mjs.
+export function inWater(x, z) {
+  return x < WORLD.OCEAN_X + 2 && (z < 252 || z > 348);
+}
+
 export function buildWorld(scene) {
   const colliders = [];
   const addCollider = (x0, z0, x1, z1, h = 30) => { colliders.push({ x0, z0, x1, z1, h }); };
@@ -309,9 +316,11 @@ export function buildWorld(scene) {
   // ---- Coral Pier (landmark): arch gate, boardwalk, shops, bunting, wheel, coaster ----
   const pier = { wheel: null, cabins: [], train: null, trainT: 0 };
   const pierItems = [];
-  // deck: wood planks (alternating strips) + side skirts
-  for (let i = 0; i < 26; i++) {
-    pierItems.push(boxItem(5, 0.6, 86, -792 + i * 5.2, 2.2, 300, i % 2 ? 0x9c7a4a : 0xa8875a));
+  // deck: narrow planks in three wood tones with a darker seam every fourth
+  // plank, so the boardwalk reads as boards, not one flat brown slab.
+  const plankTones = [0x9c7a4a, 0xa8875a, 0x8f6f42];
+  for (let i = 0; i < 52; i++) {
+    pierItems.push(boxItem(2.6, 0.6, 86, -792 + i * 2.6, 2.2, 300, i % 4 === 3 ? 0x7a5c34 : plankTones[i % 3]));
   }
   pierItems.push(boxItem(140, 1.2, 1, -725, 1.8, 258, 0x7a5c34));
   pierItems.push(boxItem(140, 1.2, 1, -725, 1.8, 342, 0x7a5c34));
@@ -346,19 +355,35 @@ export function buildWorld(scene) {
   );
   gateSign.position.set(-656, 12, 300);
   scene.add(gateSign);
-  // pier shops / stalls (colorful, awnings, signs)
+  // pier shops / stalls: two-tone body, striped canopy, counter with goods,
+  // and a big name sign on the deck-facing side (the old sign sat on the
+  // back face, hidden behind the stall, so stalls read as plain color blocks).
   const stallNames = ['RING TOSS', 'CORAL DOGS', 'POPCORN', 'CANDY', 'BALLOONS', 'FISHING', 'ARCADE', 'LEMONADE'];
   const stallColors = [0xff2e4d, 0x2ec4b6, 0xffc53d, 0xff7e5f, 0x7d3c98, 0x2471a3, 0x229954, 0xd4ac0d];
+  const goodsColors = [0xff2e4d, 0xffc53d, 0x2ec4b6, 0x7d3c98, 0xff7e5f, 0xf4f4f0];
   const stallItems = [];
   stallNames.forEach((name, i) => {
     const side = i % 2 === 0 ? 268 : 332;
     const x = -680 - Math.floor(i / 2) * 22;
-    stallItems.push(boxItem(10, 4.5, 8, x, 4.75, side, stallColors[i]));
+    const front = side + (side < 300 ? 4.5 : -4.5); // deck-facing side
+    // two-tone body: dark wood base, bright upper
+    stallItems.push(boxItem(10, 2.2, 8, x, 3.6, side, 0x8a6a42));
+    stallItems.push(boxItem(10, 2.6, 8, x, 5.8, side, stallColors[i]));
     stallItems.push(boxItem(11, 0.4, 9, x, 7.2, side, 0xf4f4f0));
-    stallItems.push(boxItem(11, 0.4, 3, x, 6.4, side + (side < 300 ? 4.5 : -4.5), stallColors[i]));
+    // striped canopy above the sign, over the stall front
+    for (let s = 0; s < 5; s++) {
+      stallItems.push(boxItem(2.2, 0.3, 3.5, x - 4.4 + s * 2.2, 7.35, front + (side < 300 ? 0.3 : -0.3), s % 2 ? 0xf4f4f0 : stallColors[i]));
+    }
+    // wooden counter + colorful goods (jars, boxes, toys) on it
+    stallItems.push(boxItem(8, 1.0, 2.2, x, 3.0, front, 0x6a4a2a));
+    for (let gIdx = 0; gIdx < 5; gIdx++) {
+      const gx = x - 3 + gIdx * 1.5;
+      stallItems.push(boxItem(0.9, 0.7 + (gIdx % 2) * 0.5, 0.9, gx, 3.85 + (gIdx % 2) * 0.25, front, goodsColors[(i + gIdx) % 6]));
+    }
     addCollider(x - 5, side - 4, x + 5, side + 4, 8);
+    // big name sign on the front face, facing the boardwalk
     const s = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), new THREE.MeshLambertMaterial({ map: signTexture([name], { bg: '#12233d' }) }));
-    s.position.set(x, 5.6, side + (side < 300 ? -4.2 : 4.2));
+    s.position.set(x, 5.6, side + (side < 300 ? 4.15 : -4.15));
     s.rotation.y = side < 300 ? 0 : Math.PI;
     scene.add(s);
   });
@@ -377,20 +402,21 @@ export function buildWorld(scene) {
     }
   }
   scene.add(new THREE.Mesh(mergeItems(buntItems), plain));
-  // festival string lights, benches, trash bins along the boardwalk
+  // festival string lights (bigger bulbs, thicker poles — readable in frame),
+  // benches, and trash bins along the boardwalk
   const festPoleItems = [];
   const bulbItems = [];
   const bulbColors = [0xffd98a, 0xff5a6e, 0x2ec4b6, 0xffc53d];
   for (const bz of [263, 337]) {
     for (let x = -786; x <= -664; x += 13.5) {
-      festPoleItems.push(cylItem(0.12, 0.16, 6, x, 5.5, bz, 0x333333, 6));
+      festPoleItems.push(cylItem(0.2, 0.24, 6, x, 5.5, bz, 0x333333, 6));
     }
     for (let x = -786; x < -664; x += 13.5) {
       for (let i = 0; i <= 4; i++) {
         const fx = x + (i / 4) * 13.5;
         const sag = Math.sin((i / 4) * Math.PI) * 1.4;
         bulbItems.push({
-          geo: new THREE.BoxGeometry(0.35, 0.35, 0.35),
+          geo: new THREE.BoxGeometry(0.55, 0.55, 0.55),
           matrix: new THREE.Matrix4().makeTranslation(fx, 8.3 - sag, bz),
           color: bulbColors[(Math.floor(x) + i) % 4],
         });
@@ -403,15 +429,15 @@ export function buildWorld(scene) {
   const benchItems = [];
   for (const bx of [-776, -750, -724, -698, -672]) {
     for (const bz of [268, 332]) {
-      benchItems.push(boxItem(2.4, 0.15, 0.7, bx, 3.0, bz, 0x8a6a42));
-      benchItems.push(boxItem(2.4, 0.8, 0.12, bx, 3.5, bz + (bz < 300 ? -0.35 : 0.35), 0x8a6a42));
-      benchItems.push(boxItem(0.15, 0.5, 0.6, bx - 1, 2.75, bz, 0x333333));
-      benchItems.push(boxItem(0.15, 0.5, 0.6, bx + 1, 2.75, bz, 0x333333));
+      benchItems.push(boxItem(3.4, 0.2, 0.9, bx, 3.05, bz, 0x8a6a42));
+      benchItems.push(boxItem(3.4, 1.1, 0.15, bx, 3.6, bz + (bz < 300 ? -0.4 : 0.4), 0x8a6a42));
+      benchItems.push(boxItem(0.2, 0.5, 0.7, bx - 1.4, 2.75, bz, 0x333333));
+      benchItems.push(boxItem(0.2, 0.5, 0.7, bx + 1.4, 2.75, bz, 0x333333));
     }
   }
   for (const [tx, tz] of [[-760, 266], [-712, 334], [-688, 266]]) {
-    benchItems.push(cylItem(0.55, 0.5, 1.1, tx, 3.05, tz, 0x2a4a2a, 10));
-    benchItems.push(cylItem(0.6, 0.6, 0.15, tx, 3.6, tz, 0x1a2a1a, 10));
+    benchItems.push(cylItem(0.8, 0.75, 1.5, tx, 3.25, tz, 0x2f7a3a, 10));
+    benchItems.push(cylItem(0.9, 0.9, 0.18, tx, 4.05, tz, 0x444444, 10));
   }
   scene.add(new THREE.Mesh(mergeItems(benchItems), plain));
   const pierStats = { stringLights: bulbItems.length, benches: 10, bins: 3 };
@@ -548,6 +574,55 @@ export function buildWorld(scene) {
   addTrailer(628, 650, Math.PI / 2, 0xd4ac0d);
   addTrailer(450, 628, 0, 0x229954);
   scene.add(new THREE.Mesh(mergeItems(trailerItems), plain));
+
+  // ---- port yard overflow: container stacks in the east + south yard strips
+  // (on the painted slots), barrels, cones, and crates along the dock roads,
+  // so the concrete between the terminal block and the avenues is not empty.
+  const yardItems = [];
+  const yardStack = (cx, cz, n) => {
+    if (nearClearYard(cx, cz, 10)) return;
+    for (let s = 0; s < n; s++) {
+      yardItems.push(boxItem(12, 2.6, 2.6, cx, 1.3 + s * 2.7, cz, pick(rng, [0xc0392b, 0x2471a3, 0x229954, 0xd4ac0d, 0x7d3c98, 0xe67e22])));
+    }
+    addCollider(cx - 6, cz - 1.3, cx + 6, cz + 1.3, 2.7 * n);
+    portStats.containers += n;
+  };
+  const nearClearYard = (x, z, r) => keepClear.some(([cx, cz, cr]) => Math.hypot(x - cx, z - cz) < cr + r);
+  for (const [cz, n] of [[440, 3], [480, 2], [520, 3], [560, 2]]) yardStack(660, cz, n);
+  for (const [cx, n] of [[440, 2], [480, 3], [520, 2], [560, 3]]) yardStack(cx, 660, n);
+  // barrel clusters (rust red / blue / yellow) in the yard strips
+  const barrelColors = [0xb03a2e, 0x2471a3, 0xd4ac0d];
+  for (const [bx, bz] of [[640, 440], [640, 560], [450, 690], [550, 690]]) {
+    for (let i = 0; i < 3; i++) {
+      const ox = (i % 2) * 2.2, oz = Math.floor(i / 2) * 2.2;
+      yardItems.push(cylItem(0.9, 0.9, 2.2, bx + ox, 1.1, bz + oz, barrelColors[i % 3], 10));
+    }
+    addCollider(bx - 1, bz - 1, bx + 3.2, bz + 3.2, 2.5);
+  }
+  // traffic cones along the dock road edge
+  for (const cz of [440, 470, 500, 530, 560]) {
+    yardItems.push({ geo: new THREE.ConeGeometry(0.7, 1.6, 8), matrix: new THREE.Matrix4().makeTranslation(584, 0.8, cz), color: 0xe67e22 });
+  }
+  // wooden crates near the yard strips
+  for (const [cx, cz] of [[700, 450], [700, 540], [450, 640], [540, 640]]) {
+    yardItems.push(boxItem(2.2, 2.2, 2.2, cx, 1.1, cz, 0xa8875a));
+    yardItems.push(boxItem(2.0, 2.0, 2.0, cx + 0.4, 3.2, cz - 0.3, 0x8f6f42));
+    addCollider(cx - 1.2, cz - 1.2, cx + 1.6, cz + 1.2, 4.5);
+  }
+  scene.add(new THREE.Mesh(mergeItems(yardItems), plain));
+
+  // ---- Midtown street props: fire hydrants at intersections + crates by the shops
+  const streetItems = [];
+  for (const [hx, hz] of [[216, 216], [-184, 16], [16, -184], [416, 216]]) {
+    streetItems.push(cylItem(0.5, 0.55, 1.4, hx, 0.7, hz, 0xc0392b, 8));
+    streetItems.push({ geo: new THREE.SphereGeometry(0.45, 8, 6), matrix: new THREE.Matrix4().makeTranslation(hx, 1.6, hz), color: 0xc0392b });
+  }
+  for (const [cx, cz] of [[-96, 118], [104, 118]]) {
+    streetItems.push(boxItem(2.0, 2.0, 2.0, cx, 1.0, cz, 0xa8875a));
+    streetItems.push(boxItem(1.6, 1.6, 1.6, cx + 0.3, 2.8, cz, 0x8f6f42));
+    addCollider(cx - 1.1, cz - 1.1, cx + 1.4, cz + 1.1, 3.8);
+  }
+  scene.add(new THREE.Mesh(mergeItems(streetItems), plain));
 
   // ---- canal bridges ----
   const bridgeItems = [];

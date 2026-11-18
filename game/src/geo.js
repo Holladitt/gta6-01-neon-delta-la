@@ -84,6 +84,20 @@ export function groundTexture() {
     g.fillStyle = '#8aa86b'; g.fillRect(0, 0, S, S); // grass base
     // port concrete
     g.fillStyle = '#9a9a92'; g.fillRect(px(340), pz(340), px(720) - px(340), pz(720) - pz(340));
+    // port yard detail: concrete panel seams every 40u, oil stains, and
+    // painted yellow container-slot outlines in the yard lanes, so the
+    // terminal floor reads as worked ground instead of flat gray.
+    g.strokeStyle = 'rgba(0,0,0,0.16)'; g.lineWidth = 2;
+    for (let x = 340; x <= 720; x += 40) { g.beginPath(); g.moveTo(px(x), pz(340)); g.lineTo(px(x), pz(720)); g.stroke(); }
+    for (let z = 340; z <= 720; z += 40) { g.beginPath(); g.moveTo(px(340), pz(z)); g.lineTo(px(720), pz(z)); g.stroke(); }
+    g.fillStyle = 'rgba(52,52,46,0.28)';
+    for (const [sx, sz, sw, sh] of [[380, 420, 70, 26], [520, 640, 90, 30], [640, 380, 50, 22], [430, 560, 60, 24], [660, 600, 46, 20]]) {
+      g.fillRect(px(sx), pz(sz), px(sx + sw) - px(sx), pz(sz + sh) - pz(sz));
+    }
+    g.strokeStyle = 'rgba(247,201,72,0.85)'; g.lineWidth = 3;
+    for (const [sx, sz] of [[654, 438.7], [654, 478.7], [654, 518.7], [654, 558.7], [434, 658.7], [474, 658.7], [514, 658.7], [554, 658.7]]) {
+      g.strokeRect(px(sx), pz(sz), px(sx + 12) - px(sx), pz(sz + 2.6) - pz(sz));
+    }
     // canal water (Venice Canals district)
     g.fillStyle = '#2f7fa8';
     g.fillRect(px(-660), pz(420), px(-120) - px(-660), 26);

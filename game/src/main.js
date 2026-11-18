@@ -3,7 +3,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { WORLD, DISTRICTS, PLAYER, SAVE_KEY, MISSIONS, SIDE_JOBS, KEYS, WEAPONS, districtAt } from './config.js';
 import { mulberry32 } from './rng.js';
-import { buildWorld, groundY } from './world.js';
+import { buildWorld, groundY, inWater } from './world.js';
 import { buildMara, animateWalk, animateIdle } from './characters.js';
 import { createVehicle, updateVehicle, setHeadlights } from './vehicles.js';
 import { Traffic, Peds } from './traffic.js';
@@ -140,6 +140,7 @@ function boot() {
     pierPeds: peds.npcs.filter((n) => n.zone === 'pier').length,
     portCars: traffic.cars.filter((c) => c.port).length,
     police: police.cars.map((c) => [Math.round(c.x), Math.round(c.z)]),
+    heli: police.heli ? [Math.round(police.heli.position.x), Math.round(police.heli.position.y), Math.round(police.heli.position.z)] : null,
     siren: police.cars.length && police.cars[0].lightBar ? police.cars[0].lightBar.red.emissiveIntensity : null,
     port: world.port, pierStats: world.pier.stats || null,
   });
@@ -377,8 +378,14 @@ function tick(now) {
       player.moving = ml > 0;
       if (ml > 0) {
         mx /= ml; mz /= ml;
-        player.x += mx * sp * dt;
-        player.z += mz * sp * dt;
+        let nx = player.x + mx * sp * dt;
+        let nz = player.z + mz * sp * dt;
+        // water boundary: the ocean is not walkable; only the pier deck
+        // corridor leads west past the beach. Block the axis that would
+        // enter the water, so the player slides along the shore instead.
+        if (inWater(nx, nz)) nx = player.x;
+        if (inWater(player.x, nz)) nz = player.z;
+        player.x = nx; player.z = nz;
         player.heading = Math.atan2(mx, mz);
         player.phase += dt * sp * 1.6;
         // collide with buildings

@@ -29,6 +29,7 @@ export class Police {
     if (!WANTED.heliFor(level) && this.heli) {
       this.scene.remove(this.heli);
       this.heli = null; this.heliLight = null;
+      if (this.heliSpot) { this.scene.remove(this.heliSpot); this.heliSpot = null; }
     }
   }
   spawnAt(x, z, heading = 0) {
@@ -62,14 +63,24 @@ export class Police {
     g.add(skids);
     const skids2 = skids.clone(); skids2.position.z = -0.9;
     g.add(skids2);
-    // searchlight cone (translucent)
+    // searchlight cone (translucent) — reaches the ground from the low orbit
     const cone = new THREE.Mesh(
-      new THREE.ConeGeometry(6, 26, 12, 1, true),
+      new THREE.ConeGeometry(5, 20, 12, 1, true),
       new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false })
     );
-    cone.position.y = -14;
+    cone.position.y = -11;
     cone.rotation.x = Math.PI;
     g.add(cone);
+    // ground searchlight pool: a bright disc on the street under the heli, so
+    // the hunt reads even when the heli itself is near the frame edge.
+    const spot = new THREE.Mesh(
+      new THREE.CircleGeometry(8, 20),
+      new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false })
+    );
+    spot.rotation.x = -Math.PI / 2;
+    spot.position.set(0, 0.15, 0);
+    this.heliSpot = spot;
+    this.scene.add(spot);
     this.heli = g; this.heliRotor = rotor; this.heliRotor2 = rotor2; this.heliLight = cone;
     this.scene.add(g);
   }
@@ -114,12 +125,15 @@ export class Police {
       }
     }
     if (this.heli) {
-      const hx = px + Math.sin(t * 0.25) * 30;
-      const hz = pz + Math.cos(t * 0.2) * 30;
-      this.heli.position.set(hx, 55 + Math.sin(t * 0.5) * 3, hz);
+      // low orbit (y ~24, radius ~42): inside the chase camera's frame, so the
+      // helicopter is visible instead of circling 60 degrees overhead.
+      const hx = px + Math.sin(t * 0.25) * 42;
+      const hz = pz + Math.cos(t * 0.2) * 42;
+      this.heli.position.set(hx, 24 + Math.sin(t * 0.5) * 2, hz);
       this.heli.rotation.y = Math.atan2(px - hx, pz - hz);
       this.heliRotor.rotation.y += dt * 22;
       this.heliRotor2.rotation.y += dt * 22;
+      if (this.heliSpot) this.heliSpot.position.set(hx, 0.15, hz);
     }
   }
   setLevel(l) { this.level = l; }

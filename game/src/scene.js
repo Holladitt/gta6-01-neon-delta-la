@@ -42,8 +42,9 @@ export class SceneRig {
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     });
-    // camera rig state
-    this.yaw = 0; this.pitch = 0.32; this.dist = 9; this.fov = 62;
+    // camera rig state: low chase angle so cars read as cars, not roof boxes,
+    // with the road ahead in frame instead of empty foreground asphalt.
+    this.yaw = 0; this.pitch = 0.20; this.dist = 8; this.fov = 62;
   }
   setTimeOfDay(hour) {
     const band = hour < 16 ? 0 : hour < 17.5 ? 1 : hour < 19 ? 2 : 3;
@@ -65,7 +66,7 @@ export class SceneRig {
   }
   // Third-person camera: mouse orbit, collision pulls the camera in.
   updateCamera(dt, tx, ty, tz, heading, speed01, inCar, colliders) {
-    const targetDist = inCar ? 9.5 : 8;
+    const targetDist = inCar ? 8.2 : 7.2;
     const targetFov = 62 + speed01 * 10;
     this.dist += (targetDist - this.dist) * Math.min(1, 5 * dt);
     this.fov += (targetFov - this.fov) * Math.min(1, 4 * dt);

@@ -11,7 +11,7 @@ export function applyShot(game, n) {
     game.spawnPolice(200, 96, 0); // dead ahead in the same lane, head-on to the camera
     game.spawnPolice(176, 108, 0); // second cruiser in the oncoming lane
     game.setMoney(1250);
-    game.setCamera(Math.PI, 0.32);
+    game.setCamera(Math.PI, 0.20);
     game.hud.setDialog('MARA: Midtown cruisers on my tail. Lose them!', 6000);
     game.hud.setMission('MISSION 5 — LAST BRIDGE: Escape the police, then cross the bridge.');
   } else if (n === 2) {
@@ -20,7 +20,7 @@ export function applyShot(game, n) {
     game.teleport(606, 556, -Math.PI / 4);
     game.setWanted(1);
     game.setMoney(250);
-    game.setCamera(-Math.PI / 4, 0.35);
+    game.setCamera(-Math.PI / 4, 0.22);
     game.hud.setDialog('MARA: That teal sedan. First wheels of the day.', 6000);
     game.hud.setMission('MISSION 1 — RETURN TO LA: Steal a sedan.');
     game.hud.setPrompt('F — STEAL SEDAN');
@@ -30,7 +30,7 @@ export function applyShot(game, n) {
     game.teleport(-735, 300, -Math.PI / 2); // stall rows at the frame edges, wheel ahead
     game.setWanted(0);
     game.setMoney(4800);
-    game.setCamera(-Math.PI / 2, 0.3);
+    game.setCamera(-Math.PI / 2, 0.20);
     game.startMission(2);
     game.hud.setDialog('MARA: Festival of Lights. The pier is lit up like a birthday cake.', 6000);
   } else if (n === 4) {
