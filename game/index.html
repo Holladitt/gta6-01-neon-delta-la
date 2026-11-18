@@ -40,10 +40,39 @@
   #vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(255,0,0,.55) 100%); opacity: 0; transition: opacity .15s; }
   #toast { position: absolute; left: 50%; top: 140px; transform: translateX(-50%); font-size: 17px; font-weight: bold; background: rgba(10,20,35,.75); padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .3s; }
   .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 10; pointer-events: auto; }
-  #title-screen { display: flex; background: linear-gradient(180deg, rgba(10,20,35,.25) 0%, rgba(10,20,35,.55) 55%, rgba(10,20,35,.85) 100%); }
-  #title-screen h1 { font-size: 92px; font-weight: 900; font-style: italic; letter-spacing: 4px; color: #fff; text-shadow: 0 0 30px rgba(255,46,77,.8), 0 4px 0 #ff2e4d, 0 8px 24px rgba(0,0,0,.7); }
-  #title-screen h1 .neon { color: #2ec4b6; text-shadow: 0 0 30px rgba(46,196,182,.9), 0 4px 0 #1a7a72, 0 8px 24px rgba(0,0,0,.7); }
-  #title-screen h2 { font-size: 20px; color: #ffd23d; letter-spacing: 6px; margin: 8px 0 30px; }
+  #title-screen { display: flex; background: linear-gradient(180deg, rgba(16,10,46,.55) 0%, rgba(60,20,70,.30) 38%, rgba(255,126,95,.24) 68%, rgba(10,16,38,.88) 100%); backdrop-filter: blur(3px) saturate(1.25); -webkit-backdrop-filter: blur(3px) saturate(1.25); }
+  #title-screen::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 42%, transparent 42%, rgba(5,8,20,.55) 100%); pointer-events: none; }
+  #title-screen .btn, #title-screen #controls { position: relative; z-index: 2; }
+  #title-screen h1 { position: relative; z-index: 2; font-size: 92px; font-weight: 900; font-style: italic; letter-spacing: 4px; color: #fff; text-shadow: 0 0 12px rgba(255,255,255,.65), 0 0 42px rgba(255,46,77,.85), 0 0 90px rgba(255,46,77,.55), 0 4px 0 #ff2e4d, 0 10px 30px rgba(0,0,0,.8); }
+  #title-screen h1 .neon { color: #2ec4b6; text-shadow: 0 0 12px rgba(255,255,255,.7), 0 0 42px rgba(46,196,182,.95), 0 0 90px rgba(46,196,182,.6), 0 4px 0 #1a7a72, 0 10px 30px rgba(0,0,0,.8); animation: neonPulse 3.2s ease-in-out infinite; }
+  @keyframes neonPulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
+  #title-screen h2 { position: relative; z-index: 2; font-size: 20px; color: #ffd23d; letter-spacing: 6px; margin: 8px 0 30px; text-shadow: 0 0 18px rgba(255,210,61,.7), 0 2px 8px rgba(0,0,0,.8); }
+  #press-enter { position: relative; z-index: 2; margin-top: 22px; font-size: 15px; font-weight: 900; letter-spacing: 4px; color: #7fe3d8; text-shadow: 0 0 14px rgba(46,196,182,.8); animation: blinkHint 1.6s steps(2) infinite; }
+  @keyframes blinkHint { 0%, 60% { opacity: 1; } 61%, 100% { opacity: .15; } }
+  #title-dust { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
+  #title-dust i { position: absolute; bottom: -12px; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,220,150,.55); filter: blur(1px); animation: dustRise 16s linear infinite; }
+  #title-dust i:nth-child(odd) { background: rgba(150,220,255,.4); }
+  #title-dust i:nth-child(3n) { width: 3px; height: 3px; animation-duration: 20s; }
+  #title-dust i:nth-child(4n) { width: 7px; height: 7px; animation-duration: 12s; background: rgba(255,180,120,.45); }
+  #title-dust i:nth-child(1) { left: 8%; animation-delay: 0s; }
+  #title-dust i:nth-child(2) { left: 18%; animation-delay: 3s; }
+  #title-dust i:nth-child(3) { left: 27%; animation-delay: 7s; }
+  #title-dust i:nth-child(4) { left: 36%; animation-delay: 1s; }
+  #title-dust i:nth-child(5) { left: 44%; animation-delay: 5s; }
+  #title-dust i:nth-child(6) { left: 53%; animation-delay: 9s; }
+  #title-dust i:nth-child(7) { left: 61%; animation-delay: 2s; }
+  #title-dust i:nth-child(8) { left: 70%; animation-delay: 6s; }
+  #title-dust i:nth-child(9) { left: 78%; animation-delay: 11s; }
+  #title-dust i:nth-child(10) { left: 86%; animation-delay: 4s; }
+  #title-dust i:nth-child(11) { left: 93%; animation-delay: 8s; }
+  #title-dust i:nth-child(12) { left: 13%; animation-delay: 10s; }
+  #title-dust i:nth-child(13) { left: 31%; animation-delay: 13s; }
+  #title-dust i:nth-child(14) { left: 48%; animation-delay: 15s; }
+  #title-dust i:nth-child(15) { left: 66%; animation-delay: 12s; }
+  #title-dust i:nth-child(16) { left: 83%; animation-delay: 14s; }
+  #title-dust i:nth-child(17) { left: 22%; animation-delay: 16s; }
+  #title-dust i:nth-child(18) { left: 57%; animation-delay: 18s; }
+  @keyframes dustRise { 0% { transform: translateY(0) translateX(0); opacity: 0; } 12% { opacity: .75; } 85% { opacity: .5; } 100% { transform: translateY(-105vh) translateX(4vw); opacity: 0; } }
   .btn { display: block; width: 320px; margin: 8px auto; padding: 14px 20px; font-size: 20px; font-weight: 900; letter-spacing: 2px; color: #fff; background: linear-gradient(180deg, #ff2e4d, #c81e3a); border: 2px solid rgba(255,255,255,.6); border-radius: 10px; cursor: pointer; text-align: center; }
   .btn:hover { filter: brightness(1.2); }
   .btn.secondary { background: linear-gradient(180deg, #2ec4b6, #1a7a72); }
@@ -80,10 +109,12 @@
 </div>
 
 <div id="title-screen" class="overlay">
+  <div id="title-dust" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
   <h1><span class="neon">NEON</span> DELTA LA</h1>
   <h2>AN OPEN-WORLD CRIME STORY</h2>
   <button class="btn" id="btn-new">NEW GAME</button>
   <button class="btn secondary" id="btn-continue">CONTINUE — <span id="continue-label"></span></button>
+  <div id="press-enter">PRESS ENTER TO START</div>
   <div id="controls">
     <b>WASD</b> move / drive &nbsp;·&nbsp; <b>Mouse</b> look / aim &nbsp;·&nbsp; <b>Click</b> shoot<br>
     <b>F</b> enter / steal car &nbsp;·&nbsp; <b>Space</b> handbrake &nbsp;·&nbsp; <b>Shift</b> sprint<br>

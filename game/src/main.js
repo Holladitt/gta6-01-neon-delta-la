@@ -8,6 +8,7 @@ import { buildMara, animateWalk, animateIdle } from './characters.js';
 import { createVehicle, updateVehicle, setHeadlights } from './vehicles.js';
 import { Traffic, Peds } from './traffic.js';
 import { Police } from './police.js';
+import { Officers } from './officers.js';
 import { Combat, rayHit } from './combat.js';
 import { startMission as engineStartMission, updateMission, startSideJob, currentStep } from './missions.js';
 import { newWantedState, WANTED } from './wanted.js';
@@ -42,7 +43,7 @@ const game = {
   fps: 0, frames: 0, fpsT: 0, errors: [],
 };
 
-let rig, world, traffic, peds, police, hud, input, audio, combat;
+let rig, world, traffic, peds, police, officers, hud, input, audio, combat;
 let mara, maraParts, parked = [];
 let waypointMarker, waypointBeam, tracers = [];
 let player = { x: PLAYER.spawn.x, z: PLAYER.spawn.z, heading: PLAYER.spawn.heading, speed: 0, phase: 0, moving: false };
@@ -54,11 +55,14 @@ function boot() {
   rig = new SceneRig(canvas);
   world = buildWorld(rig.scene);
   traffic = new Traffic(rig.scene, world.colliders, world.trafficLights);
-  peds = new Peds(rig.scene, 48);
+  traffic.spawnPortCars(6); // denser truck + car traffic around the terminal
+  peds = new Peds(rig.scene, 48, 12); // 48 sidewalk NPCs + 12 pier festival crowd
   police = new Police(rig.scene, world.graph, world.colliders);
+  officers = new Officers(rig.scene, null); // audio wired below once AudioSys exists
   hud = new HUD();
   input = new Input(canvas);
   audio = new AudioSys();
+  officers.audio = audio;
   combat = new Combat();
   game.hud = hud;
 
@@ -132,6 +136,12 @@ function boot() {
     speedKmh: game.inCar ? Math.round(Math.abs(game.inCar.speed) * 3.6) : 0,
     health: game.health, fps: Math.round(game.fps), errors: game.errors,
     waypoint: game.waypoint,
+    officers: officers.list.length, officerShots: officers.shotsFired,
+    pierPeds: peds.npcs.filter((n) => n.zone === 'pier').length,
+    portCars: traffic.cars.filter((c) => c.port).length,
+    police: police.cars.map((c) => [Math.round(c.x), Math.round(c.z)]),
+    siren: police.cars.length && police.cars[0].lightBar ? police.cars[0].lightBar.red.emissiveIntensity : null,
+    port: world.port, pierStats: world.pier.stats || null,
   });
   window.addEventListener('error', (e) => game.errors.push(String(e.message)));
 
@@ -155,11 +165,13 @@ const gameApi = {
   },
   enterCar(v) { enterCar(v); },
   setWanted(n) { game.wanted.level = n; police.setLevel(n); hud.setWanted(n); },
+  spawnPolice(x, z, heading) { return police.spawnAt(x, z, heading || 0); },
   setHour(h) { game.hour = h; rig.setTimeOfDay(h); hud.setClock(h); },
   startMission(i) { startMission(i); },
   setCamera(yaw, pitch) { rig.yaw = yaw; rig.pitch = pitch; },
   setMoney(n) { game.money = n; hud.setMoney(n); },
   setHealth(h) { game.health = h; hud.setHealth(h, game.armor); },
+  get officers() { return officers; },
   get hud() { return hud; }, // live binding: hud is assigned in boot(), after this object is created
 };
 
@@ -277,10 +289,11 @@ function fireWeapon() {
   const dir = new THREE.Vector3();
   cam.getWorldDirection(dir);
   const o = cam.position;
-  // targets: police cars, traffic cars, peds
+  // targets: police cars, traffic cars, peds, foot officers
   const targets = [];
   for (const c of police.cars) targets.push({ x: c.x, y: 1.2, z: c.z, r: 2.6, type: 'police', ref: c });
   for (const tc of traffic.cars) targets.push({ x: tc.v.x, y: 1.2, z: tc.v.z, r: 2.6, type: 'traffic', ref: tc });
+  for (const o of officers.list) targets.push({ x: o.x, y: 1.2, z: o.z, r: 1.0, type: 'officer', ref: o });
   peds.npcs.forEach((n, i) => {
     const x = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
     const z = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
@@ -299,6 +312,12 @@ function fireWeapon() {
       if (t.type === 'police') {
         t.ref.health -= res.weapon.dmg;
         if (t.ref.health <= 0 && !t.ref.wrecked) { t.ref.wrecked = true; WANTED.add(game.wanted, 1); hud.toast('Police cruiser wrecked.'); }
+      } else if (t.type === 'officer') {
+        if (officers.damage(t.ref, res.weapon.dmg)) {
+          officers.remove(officers.list.indexOf(t.ref));
+          WANTED.add(game.wanted, 1);
+          hud.toast('Officer down. The heat rises.');
+        }
       } else if (t.type === 'traffic') {
         t.ref.v.health -= res.weapon.dmg;
         if (t.ref.v.health <= 0 && !t.ref.v.wrecked) { t.ref.v.wrecked = true; WANTED.add(game.wanted, 1); }
@@ -527,6 +546,11 @@ function tick(now) {
     traffic.update(dt, t);
     peds.update(dt, player.x, player.z);
     police.update(dt, t, player.x, player.z, game.inCar ? Math.abs(game.inCar.speed) : 0);
+    officers.update(dt, t, player.x, player.z, !game.inCar, game.wanted.level, police.cars, (dmg) => {
+      game.health -= dmg;
+      hud.setHealth(Math.max(0, game.health), game.armor);
+      hud.flashDamage();
+    });
     for (const tr of tracers) {
       if (tr.t > 0) { tr.t -= dt; if (tr.t <= 0) tr.line.material.opacity = 0; }
     }
@@ -571,10 +595,10 @@ function tick(now) {
       waypoint: game.waypoint,
     });
   } else if (game.state === 'title') {
-    // slow orbit over the city behind the title screen
+    // slow orbit over the city behind the title screen (lower, more skyline in frame)
     const a = t * 0.02;
-    rig.camera.position.set(Math.cos(a) * 420, 120, Math.sin(a) * 420);
-    rig.camera.lookAt(0, 45, 0); // more sky gradient in frame
+    rig.camera.position.set(Math.cos(a) * 420, 100, Math.sin(a) * 420);
+    rig.camera.lookAt(0, 40, 0); // more sky gradient in frame
     rig.skyMesh.position.set(rig.camera.position.x, 0, rig.camera.position.z);
     world.update(dt, t);
     traffic.update(dt, t);

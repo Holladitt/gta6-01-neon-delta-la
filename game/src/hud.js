@@ -75,7 +75,7 @@ export class HUD {
     this.el.title.style.display = 'flex';
     if (save) {
       this.el.titleContinue.style.display = 'block';
-      this.el.titleContinueLabel.textContent = `CONTINUE — $${save.money.toLocaleString('en-US')}`;
+      this.el.titleContinueLabel.textContent = `$${save.money.toLocaleString('en-US')}`;
     } else {
       this.el.titleContinue.style.display = 'none';
     }

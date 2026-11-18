@@ -11,6 +11,9 @@ import { mergeItems } from './geo.js';
 const rng = mulberry32(777);
 const CAR_COLORS = [0xc0392b, 0x2471a3, 0x229954, 0xd4ac0d, 0x7d3c98, 0xe8e8e8, 0x333333, 0xff7e5f, 0x2ec4b6];
 const KINDS = ['sedan', 'sedan', 'suv', 'pickup', 'sport', 'sedan'];
+// Port roads: the two avenues/streets that bound the Container Terminal.
+const PORT_ROADS = [400, 600];
+const PORT_KINDS = ['pickup', 'pickup', 'sedan', 'suv', 'pickup', 'sport'];
 
 // ---------- traffic cars ----------
 export class Traffic {
@@ -32,6 +35,23 @@ export class Traffic {
     this.cars.push(car);
     this.scene.add(v.group);
     return car;
+  }
+  // Extra traffic confined to the port roads (trucks + cars around the terminal).
+  spawnPortCars(n) {
+    for (let i = 0; i < n; i++) {
+      const kind = pick(rng, PORT_KINDS);
+      const v = createVehicle(kind, 0, 0, 0, pick(rng, CAR_COLORS));
+      const axis = rng() < 0.5 ? 'x' : 'z';
+      const road = pick(rng, PORT_ROADS);
+      const dir = rng() < 0.5 ? 1 : -1;
+      const along = range(rng, 340, 700);
+      const lane = dir > 0 ? 5.5 : -5.5;
+      const car = { v, axis, road, dir, along, speed: range(rng, 8, 13), port: true };
+      this.place(car, along, lane);
+      this.cars.push(car);
+      this.scene.add(v.group);
+    }
+    return n;
   }
   place(car, along, lane) {
     if (car.axis === 'x') { car.v.x = along; car.v.z = car.road + lane; car.v.heading = car.dir > 0 ? Math.PI / 2 : -Math.PI / 2; }
@@ -102,11 +122,13 @@ function partGeo(boxes) {
 }
 
 export class Peds {
-  constructor(scene, count = 48) {
-    this.scene = scene; this.count = count;
+  // count = sidewalk NPCs; pierCount = festival crowd confined to the pier deck.
+  constructor(scene, count = 48, pierCount = 0) {
+    this.scene = scene; this.count = count; this.pierCount = pierCount;
+    const total = count + pierCount;
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const mk = (geo) => {
-      const m = new THREE.InstancedMesh(geo, mat, count);
+      const m = new THREE.InstancedMesh(geo, mat, total);
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.frustumCulled = false;
       scene.add(m);
@@ -144,9 +166,24 @@ export class Peds {
         n.axis = 'z'; n.road = road; n.side = side; n.along = along + (k - g) * 6; n.dir = side > 0 ? 1 : -1;
       }
     }
+    // pier festival crowd: walks the boardwalk deck (y 2.5), never leaves it.
+    // road/side are set so the shared ped-position formula lands on the deck.
+    for (let i = 0; i < pierCount; i++) {
+      const lane = (i % 2 === 0 ? 4 : -4) + range(rng, -1, 1);
+      const npc = {
+        skin: pick(rng, SKINS), shirt: pick(rng, SHIRTS), pants: pick(rng, PANTS),
+        hair: pick(rng, HAIRS), cap: rng() < 0.25 ? pick(rng, CAPS) : null,
+        pack: rng() < 0.3 ? pick(rng, [0x7d3c98, 0x2471a3, 0xd4ac0d]) : null,
+        scale: range(rng, 0.92, 1.08), phase: range(rng, 0, 6.28),
+        speed: range(rng, 1.0, 1.8), road: 300, side: lane / 15.5, along: range(rng, -780, -670),
+        dir: rng() < 0.5 ? 1 : -1, axis: 'x', zone: 'pier', y: 2.5, lane,
+      };
+      this.npcs.push(npc);
+    }
     this.applyColors();
   }
   assignRoad(npc, px, pz) {
+    if (npc.zone === 'pier') { npc.dir *= -1; return; } // festival crowd stays on the pier
     npc.axis = rng() < 0.5 ? 'z' : 'x';
     npc.road = pick(rng, npc.axis === 'z' ? WORLD.AVENUES : WORLD.STREETS);
     npc.side = rng() < 0.5 ? 1 : -1;
@@ -174,33 +211,43 @@ export class Peds {
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
     const sv = new THREE.Vector3(), pos = new THREE.Vector3();
     this.npcs.forEach((n, i) => {
-      n.along += n.dir * n.speed * dt;
-      if (n.along > 760 || n.along < -760) { this.assignRoad(n, px, pz); }
-      // respawn groups that drifted far from the player
-      const wx = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
-      const wz = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
-      if ((wx - px) ** 2 + (wz - pz) ** 2 > 420 * 420) this.assignRoad(n, px, pz);
-      const x = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
-      const z = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
-      const heading = n.axis === 'z' ? (n.dir > 0 ? 0 : Math.PI) : (n.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+      let x, z, heading;
+      if (n.zone === 'pier') {
+        // festival crowd: stroll the deck between the gate and the wheel, bounce at the ends
+        n.along += n.dir * n.speed * dt;
+        if (n.along > -668) { n.along = -668; n.dir = -1; }
+        if (n.along < -782) { n.along = -782; n.dir = 1; }
+        x = n.along; z = 300 + n.lane;
+        heading = n.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+      } else {
+        n.along += n.dir * n.speed * dt;
+        if (n.along > 760 || n.along < -760) { this.assignRoad(n, px, pz); }
+        // respawn groups that drifted far from the player
+        const wx = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
+        const wz = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
+        if ((wx - px) ** 2 + (wz - pz) ** 2 > 420 * 420) this.assignRoad(n, px, pz);
+        x = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
+        z = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
+        heading = n.axis === 'z' ? (n.dir > 0 ? 0 : Math.PI) : (n.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+      }
       n.phase += dt * n.speed * 2.4;
       const sw = Math.sin(n.phase) * 0.55;
-      const s = n.scale;
+      const s = n.scale, yb = n.y || 0;
       const set = (mesh, px2, py, pz2, rx = 0, ry = heading, rz = 0, sc = s) => {
         e.set(rx, ry, rz); q.setFromEuler(e);
         pos.set(px2, py, pz2); sv.set(sc, sc, sc);
         m4.compose(pos, q, sv);
         mesh.setMatrixAt(i, m4);
       };
-      set(this.torso, x, 1.18 * s, z);
-      set(this.head, x, 1.68 * s, z);
-      set(this.hair, x, 1.68 * s, z);
-      set(this.cap, x, 1.9 * s, z, 0, heading, 0, n.cap ? s : 0.0001);
-      set(this.pack, x - Math.sin(heading) * 0.3, 1.2 * s, z - Math.cos(heading) * 0.3, 0, heading, 0, n.pack ? s : 0.0001);
-      set(this.legL, x - Math.cos(heading) * 0.15 * s, 0.84 * s, z + Math.sin(heading) * 0.15 * s, sw, heading, 0);
-      set(this.legR, x + Math.cos(heading) * 0.15 * s, 0.84 * s, z - Math.sin(heading) * 0.15 * s, -sw, heading, 0);
-      set(this.armL, x - Math.cos(heading) * 0.44 * s, 1.46 * s, z + Math.sin(heading) * 0.44 * s, -sw * 0.8, heading, 0.12);
-      set(this.armR, x + Math.cos(heading) * 0.44 * s, 1.46 * s, z - Math.sin(heading) * 0.44 * s, sw * 0.8, heading, -0.12);
+      set(this.torso, x, 1.18 * s + yb, z);
+      set(this.head, x, 1.68 * s + yb, z);
+      set(this.hair, x, 1.68 * s + yb, z);
+      set(this.cap, x, 1.9 * s + yb, z, 0, heading, 0, n.cap ? s : 0.0001);
+      set(this.pack, x - Math.sin(heading) * 0.3, 1.2 * s + yb, z - Math.cos(heading) * 0.3, 0, heading, 0, n.pack ? s : 0.0001);
+      set(this.legL, x - Math.cos(heading) * 0.15 * s, 0.84 * s + yb, z + Math.sin(heading) * 0.15 * s, sw, heading, 0);
+      set(this.legR, x + Math.cos(heading) * 0.15 * s, 0.84 * s + yb, z - Math.sin(heading) * 0.15 * s, -sw, heading, 0);
+      set(this.armL, x - Math.cos(heading) * 0.44 * s, 1.46 * s + yb, z + Math.sin(heading) * 0.44 * s, -sw * 0.8, heading, 0.12);
+      set(this.armR, x + Math.cos(heading) * 0.44 * s, 1.46 * s + yb, z - Math.sin(heading) * 0.44 * s, sw * 0.8, heading, -0.12);
     });
     for (const m of [this.head, this.hair, this.torso, this.legL, this.legR, this.armL, this.armR, this.cap, this.pack]) {
       m.instanceMatrix.needsUpdate = true;

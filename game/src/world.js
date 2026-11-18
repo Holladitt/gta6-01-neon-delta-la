@@ -90,6 +90,7 @@ export function buildWorld(scene) {
     return 'mid';
   };
   const matCycle = ['blue', 'tan', 'white', 'dark', 'teal', 'gray'];
+  const portStats = { containers: 0, pallets: 0, trailers: 0, cranes: 0 };
   for (const [bx, bz] of blockCenters) {
     if (isClear(bx, bz)) continue;
     const kind = kindAt(bx, bz);
@@ -114,8 +115,37 @@ export function buildWorld(scene) {
       }
     } else if (kind === 'port') {
       addBuilding(bx, bz, range(rng, 50, 70), range(rng, 12, 18), range(rng, 30, 44), 'gray');
-      for (let i = 0; i < 6; i++) {
-        plainItems.push(boxItem(12, 2.6, 2.6, bx + range(rng, -60, 60), 1.3 + (i % 3) * 2.7, bz + range(rng, -50, 50), pick(rng, [0xc0392b, 0x2471a3, 0x229954, 0xd4ac0d, 0x7d3c98])));
+      // container yard: two rows of stacked containers with a gap in the middle
+      // so the terminal stays walkable; nothing blocks a keep-clear point.
+      // Extra edge rows sit right beside the roads so the yard reads as dense
+      // from the avenue (the block's inner rows are 48u+ from the road).
+      const nearClear = (x, z, r) => keepClear.some(([cx, cz, cr]) => Math.hypot(x - cx, z - cz) < cr + r);
+      const contColors = [0xc0392b, 0x2471a3, 0x229954, 0xd4ac0d, 0x7d3c98, 0xe67e22];
+      const stackAt = (cx, cz) => {
+        if (nearClear(cx, cz, 10)) return;
+        const stack = chance(rng, 0.45) ? 3 : chance(rng, 0.6) ? 2 : 1;
+        for (let s = 0; s < stack; s++) {
+          plainItems.push(boxItem(12, 2.6, 2.6, cx, 1.3 + s * 2.7, cz, pick(rng, contColors)));
+        }
+        addCollider(cx - 6, cz - 1.3, cx + 6, cz + 1.3, 2.7 * stack);
+        portStats.containers += stack;
+      };
+      for (const rz of [-42, 42]) {
+        for (const ox of [-78, -52, -39, -26, 26, 39, 52, 78]) stackAt(bx + ox, bz + rz);
+      }
+      for (const rz of [-78, 78]) {
+        for (const ox of [-52, -39, -26, 26, 39, 52]) stackAt(bx + ox, bz + rz);
+      }
+      // wooden pallet stacks near the warehouse corners
+      for (const [px, pz] of [[-58, -58], [58, -58], [-58, 58], [58, 58]]) {
+        const cx = bx + px, cz = bz + pz;
+        if (nearClear(cx, cz, 6)) continue;
+        const h = rangeInt(rng, 1, 2);
+        for (let s = 0; s < h; s++) {
+          plainItems.push(boxItem(2.4, 1.0, 2.4, cx, 0.5 + s * 1.05, cz, 0xb08a5a));
+          plainItems.push(boxItem(2.2, 0.2, 2.2, cx, 1.05 + s * 1.05, cz, 0x8a6a42));
+        }
+        portStats.pallets += h;
       }
     }
   }
@@ -347,6 +377,76 @@ export function buildWorld(scene) {
     }
   }
   scene.add(new THREE.Mesh(mergeItems(buntItems), plain));
+  // festival string lights, benches, trash bins along the boardwalk
+  const festPoleItems = [];
+  const bulbItems = [];
+  const bulbColors = [0xffd98a, 0xff5a6e, 0x2ec4b6, 0xffc53d];
+  for (const bz of [263, 337]) {
+    for (let x = -786; x <= -664; x += 13.5) {
+      festPoleItems.push(cylItem(0.12, 0.16, 6, x, 5.5, bz, 0x333333, 6));
+    }
+    for (let x = -786; x < -664; x += 13.5) {
+      for (let i = 0; i <= 4; i++) {
+        const fx = x + (i / 4) * 13.5;
+        const sag = Math.sin((i / 4) * Math.PI) * 1.4;
+        bulbItems.push({
+          geo: new THREE.BoxGeometry(0.35, 0.35, 0.35),
+          matrix: new THREE.Matrix4().makeTranslation(fx, 8.3 - sag, bz),
+          color: bulbColors[(Math.floor(x) + i) % 4],
+        });
+      }
+    }
+  }
+  scene.add(new THREE.Mesh(mergeItems(festPoleItems), plain));
+  const bulbMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  scene.add(new THREE.Mesh(mergeItems(bulbItems), bulbMat));
+  const benchItems = [];
+  for (const bx of [-776, -750, -724, -698, -672]) {
+    for (const bz of [268, 332]) {
+      benchItems.push(boxItem(2.4, 0.15, 0.7, bx, 3.0, bz, 0x8a6a42));
+      benchItems.push(boxItem(2.4, 0.8, 0.12, bx, 3.5, bz + (bz < 300 ? -0.35 : 0.35), 0x8a6a42));
+      benchItems.push(boxItem(0.15, 0.5, 0.6, bx - 1, 2.75, bz, 0x333333));
+      benchItems.push(boxItem(0.15, 0.5, 0.6, bx + 1, 2.75, bz, 0x333333));
+    }
+  }
+  for (const [tx, tz] of [[-760, 266], [-712, 334], [-688, 266]]) {
+    benchItems.push(cylItem(0.55, 0.5, 1.1, tx, 3.05, tz, 0x2a4a2a, 10));
+    benchItems.push(cylItem(0.6, 0.6, 0.15, tx, 3.6, tz, 0x1a2a1a, 10));
+  }
+  scene.add(new THREE.Mesh(mergeItems(benchItems), plain));
+  const pierStats = { stringLights: bulbItems.length, benches: 10, bins: 3 };
+  // soft light particles drifting around the ferris wheel
+  const glowCount = 140;
+  const glowBase = new Float32Array(glowCount * 3);
+  const glowPhase = new Float32Array(glowCount);
+  const glowPos = new Float32Array(glowCount * 3);
+  const glowCol = new Float32Array(glowCount * 3);
+  const glowPalette = [[1, 0.85, 0.5], [1, 0.35, 0.45], [0.18, 0.77, 0.71], [1, 0.77, 0.24]];
+  for (let i = 0; i < glowCount; i++) {
+    const a = rng() * Math.PI * 2;
+    const r = 12 + rng() * 7;
+    glowBase[i * 3] = -778 + Math.cos(a) * r;
+    glowBase[i * 3 + 1] = 16 + Math.sin(a) * r * 0.9;
+    glowBase[i * 3 + 2] = 300 + (rng() - 0.5) * 6;
+    glowPhase[i] = rng() * Math.PI * 2;
+    const c = glowPalette[i % 4];
+    glowCol[i * 3] = c[0]; glowCol[i * 3 + 1] = c[1]; glowCol[i * 3 + 2] = c[2];
+  }
+  glowPos.set(glowBase);
+  const glowGeo = new THREE.BufferGeometry();
+  glowGeo.setAttribute('position', new THREE.BufferAttribute(glowPos, 3));
+  glowGeo.setAttribute('color', new THREE.BufferAttribute(glowCol, 3));
+  const glowPts = new THREE.Points(glowGeo, new THREE.PointsMaterial({
+    size: 0.9, vertexColors: true, transparent: true, opacity: 0.85,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+  }));
+  glowPts.frustumCulled = false;
+  scene.add(glowPts);
+  pier.glowPts = glowPts;
+  pier.glowBase = glowBase;
+  pier.glowPhase = glowPhase;
+  pier.glowCount = glowCount;
+  pier.stats = pierStats;
   // ferris wheel at the far end
   const wheelGroup = new THREE.Group();
   wheelGroup.position.set(-778, 16, 300);
@@ -410,7 +510,7 @@ export function buildWorld(scene) {
 
   // ---- Long Beach Port cranes ----
   const craneItems = [];
-  for (const [cx, cz] of [[420, 480], [520, 620], [640, 480]]) {
+  const addCrane = (cx, cz) => {
     craneItems.push(boxItem(3, 40, 3, cx - 8, 20, cz, 0xc0392b));
     craneItems.push(boxItem(3, 40, 3, cx + 8, 20, cz, 0xc0392b));
     craneItems.push(boxItem(30, 3, 3, cx, 40, cz, 0xc0392b));
@@ -418,8 +518,36 @@ export function buildWorld(scene) {
     craneItems.push(cylItem(0.2, 0.2, 14, cx + 22, 32, cz, 0x333333, 6));
     craneItems.push(boxItem(4, 3, 4, cx + 22, 24, cz, 0x333333));
     addCollider(cx - 10, cz - 4, cx + 10, cz + 4, 42);
-  }
+    portStats.cranes++;
+  };
+  for (const [cx, cz] of [[420, 480], [520, 620], [640, 480], [440, 660], [640, 660]]) addCrane(cx, cz);
   scene.add(new THREE.Mesh(mergeItems(craneItems), plain));
+
+  // ---- parked cargo trailer trucks along the dock roads ----
+  const trailerItems = [];
+  const addTrailer = (x, z, ry, color) => {
+    const m = new THREE.Matrix4().makeRotationY(ry);
+    const put = (w, h, d, ox, oy, oz, c) => {
+      const mm = m.clone();
+      mm.setPosition(x + ox * Math.cos(ry) - oz * Math.sin(ry), oy, z + ox * Math.sin(ry) + oz * Math.cos(ry));
+      trailerItems.push({ geo: new THREE.BoxGeometry(w, h, d), matrix: mm, color: c });
+    };
+    put(2.6, 2.6, 2.4, 5.6, 1.5, 0, color); // cab
+    put(2.2, 1.0, 2.2, 5.6, 3.2, 0, 0xf4f4f0); // cab roof
+    put(8.5, 3.0, 2.6, -1.2, 1.7, 0, 0xd8d8d0); // trailer box
+    put(8.5, 0.3, 2.6, -1.2, 3.3, 0, color); // trailer stripe
+    for (const [wx, wz] of [[5.6, 1.1], [5.6, -1.1], [-3.5, 1.1], [-3.5, -1.1], [1.2, 1.1], [1.2, -1.1]]) {
+      put(1.0, 1.0, 0.4, wx, 0.5, wz, 0x141414);
+    }
+    const hx = ry === 0 ? 0 : 1;
+    addCollider(x - (hx ? 1.5 : 7), z - (hx ? 7 : 1.5), x + (hx ? 1.5 : 7), z + (hx ? 7 : 1.5), 4);
+    portStats.trailers++;
+  };
+  addTrailer(628, 450, Math.PI / 2, 0xc0392b);
+  addTrailer(628, 550, Math.PI / 2, 0x2471a3);
+  addTrailer(628, 650, Math.PI / 2, 0xd4ac0d);
+  addTrailer(450, 628, 0, 0x229954);
+  scene.add(new THREE.Mesh(mergeItems(trailerItems), plain));
 
   // ---- canal bridges ----
   const bridgeItems = [];
@@ -518,10 +646,20 @@ export function buildWorld(scene) {
       if (c.z < -700) c.z = 700;
       c.mesh.position.z = c.z;
     }
+    // ferris wheel glow particles: gentle drift around the wheel (in-place, no allocation)
+    if (pier.glowPts) {
+      const arr = pier.glowPts.geometry.attributes.position.array;
+      for (let i = 0; i < pier.glowCount; i++) {
+        arr[i * 3] = pier.glowBase[i * 3] + Math.sin(t * 0.6 + pier.glowPhase[i]) * 0.8;
+        arr[i * 3 + 1] = pier.glowBase[i * 3 + 1] + Math.sin(t * 0.9 + pier.glowPhase[i] * 1.7) * 0.7;
+        arr[i * 3 + 2] = pier.glowBase[i * 3 + 2] + Math.cos(t * 0.5 + pier.glowPhase[i]) * 0.8;
+      }
+      pier.glowPts.geometry.attributes.position.needsUpdate = true;
+    }
     lampHeadMat.emissiveIntensity = 0.15;
   }
 
-  return { graph, colliders, trafficLights: lightGroups, groundY, parkedSpots, update, pier };
+  return { graph, colliders, trafficLights: lightGroups, groundY, parkedSpots, update, pier, port: portStats };
 }
 
 // Curved road ribbon: flat strip following (x,z) points, with asphalt + dashes.

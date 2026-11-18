@@ -4,13 +4,15 @@ export function applyShot(game, n) {
   if (n === 1) {
     game.setState('playing');
     game.setHour(13.5);
-    const car = game.spawnCar('sport', 100, 420, Math.PI, 0xff2e4d);
+    const car = game.spawnCar('sport', 200, 140, Math.PI, 0xff2e4d);
     game.enterCar(car);
     car.speed = 22; car.vx = Math.sin(car.heading) * 22; car.vz = Math.cos(car.heading) * 22;
-    game.setWanted(3);
+    game.setWanted(2); // Midtown cruisers with flashing light bars close ahead
+    game.spawnPolice(200, 96, 0); // dead ahead in the same lane, head-on to the camera
+    game.spawnPolice(176, 108, 0); // second cruiser in the oncoming lane
     game.setMoney(1250);
     game.setCamera(Math.PI, 0.32);
-    game.hud.setDialog('MARA: They are all over me. Lose them on the freeway!', 6000);
+    game.hud.setDialog('MARA: Midtown cruisers on my tail. Lose them!', 6000);
     game.hud.setMission('MISSION 5 — LAST BRIDGE: Escape the police, then cross the bridge.');
   } else if (n === 2) {
     game.setState('playing');

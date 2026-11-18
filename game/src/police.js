@@ -31,6 +31,13 @@ export class Police {
       this.heli = null; this.heliLight = null;
     }
   }
+  spawnAt(x, z, heading = 0) {
+    const c = createVehicle('police', x, z, heading, 0x141414);
+    c.targetNode = null; c.path = []; c.pathI = 0;
+    this.cars.push(c);
+    this.scene.add(c.group);
+    return c;
+  }
   spawnHeli() {
     const g = new THREE.Group();
     const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
