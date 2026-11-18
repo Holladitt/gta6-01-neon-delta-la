@@ -6,7 +6,7 @@
 // No per-frame allocation in the hot path: temp vectors and matrices are
 // module-level, and materials/geometries are cached by colour and kind.
 import * as THREE from '../vendor/three.module.min.js';
-import { AVENUES, BEACH, CANAL, PALETTE, PORT, STREETS, WORLD } from './config.js';
+import { AVENUES, BEACH, CANAL, PALETTE, PIER, PORT, STREETS, WORLD } from './config.js';
 import { missionWaypoint } from './missions.js';
 
 const V3 = THREE.Vector3;
@@ -245,6 +245,44 @@ function buildCityMesh(state, atlasGlass, atlasWarm) {
   for (const st of STREETS) {
     for (let x = 180; x < WORLD.w; x += 320) { lampAt(x, st - 62, -1); lampAt(x + 160, st + 62, 1); }
   }
+  // Street trees + benches along the sidewalks, so no roadside is bare dirt.
+  // Trees sit mid-block on the east/south sidewalk (the lamps own the other
+  // side), benches on the intersection corners; both skip the canal, the
+  // port and the pier approach.
+  for (const av of AVENUES) {
+    for (let k = 0; k < 4; k += 1) {
+      const y = 475 + k * 350;
+      const x = av + 62;
+      if (x > CANAL.x0 - 60 && x < CANAL.x1 + 60) continue;
+      if (y > 1650 && x < 1100) continue;
+      if (x > 2240) continue;
+      pushBox(a, x, 12, y, 5, 24, 5, '#6b4a2f');
+      pushBox(a, x, 30, y, 22, 14, 22, k % 3 === 0 ? '#3f9e4d' : '#5aa85a');
+      pushBox(a, x, 40, y, 14, 8, 14, '#7dc47d');
+    }
+  }
+  for (const st of STREETS) {
+    for (let k = 0; k < 5; k += 1) {
+      const x = 475 + k * 350;
+      const y = st + 62;
+      if (x > CANAL.x0 - 60 && x < CANAL.x1 + 60) continue;
+      if (y > 1650 && x < 1100) continue;
+      if (x > 2240) continue;
+      pushBox(a, x, 12, y, 5, 24, 5, '#6b4a2f');
+      pushBox(a, x, 30, y, 22, 14, 22, k % 3 === 1 ? '#3f9e4d' : '#5aa85a');
+      pushBox(a, x, 40, y, 14, 8, 14, '#7dc47d');
+    }
+  }
+  for (const av of AVENUES) {
+    for (const st of STREETS) {
+      const bx = av + 62, bz = st + 62;
+      if (bx > CANAL.x0 - 60 && bx < CANAL.x1 + 60) continue;
+      if (bz > 1650 && bx < 1100) continue;
+      if (bx > 2240) continue;
+      pushBox(a, bx, 8, bz, 18, 3, 7, '#8a6a45');
+      pushBox(a, bx, 13, bz + 3, 18, 8, 2, '#8a6a45');
+    }
+  }
   // Port containers + cranes.
   for (const c of state.containers) pushBox(a, c.x + c.w / 2, 16, c.y + c.h / 2, c.w, 32, c.h, c.color);
   for (const cr of state.cranes) {
@@ -252,14 +290,66 @@ function buildCityMesh(state, atlasGlass, atlasWarm) {
     pushBox(a, cr.x + 60, cr.h - 8, PORT.y0 + 45, 130, 12, 12, PALETTE.crane);
     pushBox(a, cr.x + 130, cr.h / 2 - 30, PORT.y0 + 45, 10, cr.h - 60, 10, PALETTE.crane);
   }
-  // Santa Monica pier planks into the sea.
-  pushBox(a, 2525, 4, 1093, 130, 8, 26, '#8a6a45');
-  // Palm trees: chunky trunk + five flat fronds.
+  // Coral Pier: a wooden boardwalk from the sand into the sea, on posts,
+  // with railings, an entrance arch, game stalls + food kiosks, the roller
+  // coaster rail on its own posts, and festive string lights on the rails.
+  // The ferris wheel itself lives in buildStatics (it turns); the coaster
+  // train is animated in update() from state.pier.track.
+  const P = PIER;
+  for (let x = P.x0; x < P.x1; x += 8) pushBox(a, x + 4, 4, P.y, 8, 8, P.halfW * 2, '#8a6a45');
+  for (let x = P.x0 + 10; x < P.x1; x += 40) {
+    pushBox(a, x, -6, P.y - P.halfW + 3, 5, 20, 5, '#5a4632');
+    pushBox(a, x, -6, P.y + P.halfW - 3, 5, 20, 5, '#5a4632');
+  }
+  pushBox(a, (P.x0 + P.x1) / 2, 10, P.y - P.halfW + 2, P.x1 - P.x0, 4, 3, '#a87a4a');
+  pushBox(a, (P.x0 + P.x1) / 2, 10, P.y + P.halfW - 2, P.x1 - P.x0, 4, 3, '#a87a4a');
+  pushBox(a, P.x0 + 4, 22, P.y - P.halfW + 4, 6, 44, 6, '#ff7a1a');
+  pushBox(a, P.x0 + 4, 22, P.y + P.halfW - 4, 6, 44, 6, '#ff7a1a');
+  pushBox(a, P.x0 + 4, 46, P.y, 6, 6, P.halfW * 2, '#ff4d8d');
+  for (const st of state.pier.stalls) {
+    pushBox(a, st.x, 10, st.y, 22, 20, 16, st.color);
+    pushBox(a, st.x, 22, st.y, 24, 3, 18, '#fff7ea');
+    pushBox(a, st.x, 26, st.y, 10, 6, 17, st.kind === 'game' ? '#ff2e4d' : '#2e6bff');
+  }
+  // Coaster rail: a ribbon of beam segments along the loop, alternating
+  // red/yellow, on dark posts down to the water.
+  {
+    const tr = state.pier.track;
+    const railGeo = new THREE.BoxGeometry(1, 3, 7);
+    const from = new THREE.Vector3(1, 0, 0);
+    const dir = new THREE.Vector3();
+    const mid = new THREE.Vector3();
+    const scl = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    for (let i = 0; i < tr.length; i += 1) {
+      const p0 = tr[i], p1 = tr[(i + 1) % tr.length];
+      const dx = p1.x - p0.x, dy = p1.h - p0.h, dz = p1.y - p0.y;
+      const len = Math.hypot(dx, dy, dz);
+      dir.set(dx / len, dy / len, dz / len);
+      quat.setFromUnitVectors(from, dir);
+      mid.set((p0.x + p1.x) / 2, (p0.h + p1.h) / 2, (p0.y + p1.y) / 2);
+      scl.set(len, 1, 1);
+      _m4.compose(mid, quat, scl);
+      pushGeom(a, railGeo, _m4, i % 2 ? '#e5382e' : '#ffd23e');
+      if (i % 4 === 0) pushBox(a, p0.x, p0.h / 2, p0.y, 4, p0.h, 4, '#3a3a4d');
+    }
+  }
+  // String lights along both railings: bright bulbs, alternating colours.
+  {
+    const bulbColors = ['#ffd23e', '#ff4d8d', '#2ee6d6'];
+    for (let x = P.x0 + 12; x < P.x1 - 6; x += 8) {
+      const ci = Math.round(x / 8) % 3;
+      pushBox(a, x, 13, P.y - P.halfW + 2, 2, 2, 2, bulbColors[ci]);
+      pushBox(a, x, 13, P.y + P.halfW - 2, 2, 2, 2, bulbColors[(ci + 1) % 3]);
+    }
+  }
+  // Palm trees: tall thin trunk + five flat fronds, silhouetted against the
+  // sunset like a San Andreas boulevard — tall enough to read over the roofs.
   for (const pl of state.palms) {
-    pushBox(a, pl.x, 17, pl.y, 6, 34, 6, '#6b4a2f');
+    pushBox(a, pl.x, 26, pl.y, 6, 52, 6, '#6b4a2f');
     for (let f = 0; f < 5; f += 1) {
       const ang = (f / 5) * Math.PI * 2 + 0.4;
-      pushBox(a, pl.x + Math.cos(ang) * 12, 36, pl.y + Math.sin(ang) * 12, 26, 2, 7, '#3f9e4d');
+      pushBox(a, pl.x + Math.cos(ang) * 14, 54, pl.y + Math.sin(ang) * 14, 28, 2, 7, '#3f9e4d');
     }
   }
   // Beach umbrellas: pole + cone.
@@ -355,9 +445,12 @@ function carGeometry(kind, color) {
 }
 
 // ---- pedestrians: articulated low-poly figures, one InstancedMesh per body
-// part (6 draw calls for all 48 peds). Legs and arms swing about Z while
+// part (10 draw calls for all 48 peds). Legs and arms swing about Z while
 // walking; shirt/skin/pants/hair colours vary per instance so the crowd is
-// not a row of clones. Facing is +X in local space, like the player rig. ----
+// not a row of clones. Streetwear varies too — tank top (bare arms), tee,
+// hoodie, baggy pants, bright sneakers, cap or bandana, chunky or slim
+// build — so no two read the same from behind. Facing is +X in local space,
+// like the player rig. ----
 const _bm = new THREE.Matrix4();
 const _lm = new THREE.Matrix4();
 const _q2 = new THREE.Quaternion();
@@ -384,14 +477,18 @@ function makePedParts(scene) {
     head: part(new THREE.BoxGeometry(9, 9, 9), 48),
     hair: part(new THREE.BoxGeometry(9.5, 3.5, 9.5), 48),
     pack: part(new THREE.BoxGeometry(6, 8, 3), 48),
+    hat: part(new THREE.BoxGeometry(10, 3, 10), 48),
+    hood: part(new THREE.BoxGeometry(6, 6, 11), 48),
+    bandana: part(new THREE.BoxGeometry(10, 2.5, 10), 48),
+    shoes: part(new THREE.BoxGeometry(7, 3, 6).translate(2, -10.5, 0), 96),
     wasActive: new Array(48).fill(false),
     colorKey: new Array(48).fill(''),
   };
 }
 
-function setPart(mesh, idx, base, x, y, z, rotZ) {
+function setPart(mesh, idx, base, x, y, z, rotZ, s) {
   _e2.set(0, 0, rotZ); _q2.setFromEuler(_e2);
-  _lm.compose(_v2.set(x, y, z), _q2, _oneScale);
+  _lm.compose(_v2.set(x, y, z), _q2, s || _oneScale);
   _m4.multiplyMatrices(base, _lm);
   mesh.setMatrixAt(idx, _m4);
 }
@@ -406,18 +503,31 @@ function hidePed(parts, i) {
   parts.head.setMatrixAt(i, _m4);
   parts.hair.setMatrixAt(i, _m4);
   parts.pack.setMatrixAt(i, _m4);
+  parts.hat.setMatrixAt(i, _m4);
+  parts.hood.setMatrixAt(i, _m4);
+  parts.bandana.setMatrixAt(i, _m4);
+  parts.shoes.setMatrixAt(2 * i, _m4);
+  parts.shoes.setMatrixAt(2 * i + 1, _m4);
 }
 
 function setPedColors(parts, i, ped) {
   _pedColor.set(ped.pants || '#2b2b3a');
   parts.legs.setColorAt(2 * i, _pedColor); parts.legs.setColorAt(2 * i + 1, _pedColor);
-  _pedColor.set(ped.shirt || ped.color || '#ff8fab');
+  // Tank top = bare arms (skin); tee and hoodie wear the shirt on the arms.
+  const shirt = ped.shirt || ped.color || '#ff8fab';
+  _pedColor.set(ped.top === 'tank' ? (ped.skin || '#e8b48a') : shirt);
   parts.arms.setColorAt(2 * i, _pedColor); parts.arms.setColorAt(2 * i + 1, _pedColor);
+  _pedColor.set(shirt);
   parts.torso.setColorAt(i, _pedColor);
+  parts.hood.setColorAt(i, _pedColor);
   _pedColor.set(ped.skin || '#e8b48a'); parts.head.setColorAt(i, _pedColor);
   _pedColor.set(ped.hair || '#3a2a1a'); parts.hair.setColorAt(i, _pedColor);
   _pedColor.set('#7a5a3a'); parts.pack.setColorAt(i, _pedColor);
-  for (const m of [parts.legs, parts.arms, parts.torso, parts.head, parts.hair, parts.pack]) {
+  _pedColor.set(ped.hatColor || '#ffd23e'); parts.hat.setColorAt(i, _pedColor);
+  _pedColor.set(ped.bandanaColor || '#ffd23e'); parts.bandana.setColorAt(i, _pedColor);
+  _pedColor.set(ped.shoes || '#e8ecf5');
+  parts.shoes.setColorAt(2 * i, _pedColor); parts.shoes.setColorAt(2 * i + 1, _pedColor);
+  for (const m of [parts.legs, parts.arms, parts.torso, parts.head, parts.hair, parts.pack, parts.hat, parts.hood, parts.bandana, parts.shoes]) {
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   }
 }
@@ -435,73 +545,112 @@ function syncPeds(parts, state, camera) {
       continue;
     }
     parts.wasActive[i] = true;
-    const key = `${ped.shirt}|${ped.skin}|${ped.pants}|${ped.hair}|${ped.pack}`;
+    const key = `${ped.shirt}|${ped.skin}|${ped.pants}|${ped.hair}|${ped.pack}|${ped.hat}|${ped.hatColor}|${ped.top}|${ped.bulk}|${ped.baggy}|${ped.bandana}|${ped.bandanaColor}|${ped.shoes}`;
     if (parts.colorKey[i] !== key) {
       parts.colorKey[i] = key;
       setPedColors(parts, i, ped);
     }
     const moving = Math.hypot(ped.tx - ped.x, ped.ty - ped.y) > 12 || ped.flee > 0;
-    const bob = moving ? Math.abs(Math.sin(ped.walkPhase)) * 2.5 : 0;
+    const bob = moving ? Math.abs(Math.sin(ped.walkPhase)) * 3 : 0;
     // A ped right next to the camera is hidden instead of filling the frame.
     const nearCam = Math.hypot(ped.x - camX, ped.y - camZ) < 26;
-    const swing = moving ? Math.sin(ped.walkPhase) * 0.5 : 0;
+    const swing = moving ? Math.sin(ped.walkPhase) * 0.65 : 0;
     _e2.set(0, -(ped.face || 0), 0);
     _q2.setFromEuler(_e2);
-    _s2.copy(nearCam ? _zeroScale : _oneScale);
+    // Height varies per ped (0.88-1.12), so the crowd is not a row of clones.
+    const sc = nearCam ? 0.001 : (ped.scale || 1);
+    _s2.set(sc, sc, sc);
     _bm.compose(_v1.set(ped.x, bob, ped.y), _q2, _s2);
-    setPart(parts.legs, 2 * i, _bm, 0, 12, -3.5, swing);
-    setPart(parts.legs, 2 * i + 1, _bm, 0, 12, 3.5, -swing);
-    setPart(parts.arms, 2 * i, _bm, 0, 24, -7.5, -swing * 0.8);
-    setPart(parts.arms, 2 * i + 1, _bm, 0, 24, 7.5, swing * 0.8);
-    setPart(parts.torso, i, _bm, 0, 18.5, 0, 0);
+    // Build: chunky peds get a wider torso and thicker arms set further out;
+    // baggy pants get wider legs and a wider stance. One scratch vector each
+    // (reused, no allocation) — the widths read clearly from behind.
+    const bulk = ped.bulk || 1;
+    const legW = ped.baggy ? 1.25 : 1;
+    const legZ = ped.baggy ? 4 : 3.5;
+    _v3.set(legW, 1, legW);
+    setPart(parts.legs, 2 * i, _bm, 0, 12, -legZ, swing, _v3);
+    setPart(parts.legs, 2 * i + 1, _bm, 0, 12, legZ, -swing, _v3);
+    // Bright sneakers swing with the legs, so the walk reads from a distance.
+    setPart(parts.shoes, 2 * i, _bm, 0, 12, -legZ, swing, _v3);
+    setPart(parts.shoes, 2 * i + 1, _bm, 0, 12, legZ, -swing, _v3);
+    _v3.set(bulk, 1, bulk);
+    setPart(parts.arms, 2 * i, _bm, 0, 24, -7.5 * bulk, -swing * 0.8, _v3);
+    setPart(parts.arms, 2 * i + 1, _bm, 0, 24, 7.5 * bulk, swing * 0.8, _v3);
+    _v3.set(1, 1, bulk);
+    setPart(parts.torso, i, _bm, 0, 18.5, 0, 0, _v3);
     setPart(parts.head, i, _bm, 0, 30, 0, 0);
     setPart(parts.hair, i, _bm, 0, 35, 0, 0);
     _e2.set(0, 0, 0); _q2.setFromEuler(_e2);
     _lm.compose(_v2.set(-5, 19, 0), _q2, ped.pack ? _oneScale : _zeroScale);
     _m4.multiplyMatrices(_bm, _lm);
     parts.pack.setMatrixAt(i, _m4);
+    _lm.compose(_v2.set(0, 36.5, 0), _q2, ped.hat ? _oneScale : _zeroScale);
+    _m4.multiplyMatrices(_bm, _lm);
+    parts.hat.setMatrixAt(i, _m4);
+    _lm.compose(_v2.set(-7, 27, 0), _q2, ped.top === 'hoodie' ? _oneScale : _zeroScale);
+    _m4.multiplyMatrices(_bm, _lm);
+    parts.hood.setMatrixAt(i, _m4);
+    _lm.compose(_v2.set(0, 34, 0), _q2, ped.bandana ? _oneScale : _zeroScale);
+    _m4.multiplyMatrices(_bm, _lm);
+    parts.bandana.setMatrixAt(i, _m4);
   }
-  for (const m of [parts.legs, parts.arms, parts.torso, parts.head, parts.hair, parts.pack]) {
+  for (const m of [parts.legs, parts.arms, parts.torso, parts.head, parts.hair, parts.pack, parts.hat, parts.hood, parts.bandana, parts.shoes]) {
     m.instanceMatrix.needsUpdate = true;
   }
 }
 
 // Mara's rig, built facing +X in local space (the sim's forward): legs and
 // arms span the shoulder axis (Z), the gun arm points forward, and the legs
-// swing about Z while walking. Shoulders, ponytail and shoes included.
+// swing about Z while walking. She reads at a glance from behind at chase
+// distance: a coral-red jacket no pedestrian wears, a blue backpack and a
+// long dark ponytail down her back, wide shoulders, bright yellow shoes,
+// and she stands a head taller than the crowd (group scale 1.12).
 function makePlayerRig() {
   const g = new THREE.Group();
-  const legGeo = new THREE.BoxGeometry(5, 14, 5);
+  g.scale.set(1.12, 1.12, 1.12);
+  // Chunky streetwear build, San Andreas style — a broad torso, thick limbs
+  // and wide shoulders, so she reads as a person from far behind at chase
+  // distance. Her own colours stay hers alone: a coral-red jacket no
+  // pedestrian wears, a blue backpack, a long dark ponytail, yellow shoes.
+  const legGeo = new THREE.BoxGeometry(5.5, 14, 5.5);
   legGeo.translate(0, -7, 0);
   const legMat = lambert('#2b3a55');
-  const shoeGeo = new THREE.BoxGeometry(7, 3, 5);
-  const shoeMat = lambert('#1a1a2e');
+  const shoeGeo = new THREE.BoxGeometry(7, 3, 6);
+  const shoeMat = lambert('#ffd23e');
   const legL = new THREE.Mesh(legGeo, legMat); legL.position.set(0, 15, -4);
   const legR = new THREE.Mesh(legGeo, legMat); legR.position.set(0, 15, 4);
   const shoeL = new THREE.Mesh(shoeGeo, shoeMat); shoeL.position.set(2, -13, 0);
   const shoeR = new THREE.Mesh(shoeGeo, shoeMat); shoeR.position.set(2, -13, 0);
   legL.add(shoeL); legR.add(shoeR);
-  const jacket = lambert('#ff7a1a');
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(9, 15, 13), jacket);
+  const jacket = lambert('#ff2e4d');
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(10, 15, 15), jacket);
   torso.position.set(0, 22, 0);
-  const shoulderGeo = new THREE.BoxGeometry(7, 4, 4);
-  const shoulderL = new THREE.Mesh(shoulderGeo, jacket); shoulderL.position.set(0, 28, -7.5);
-  const shoulderR = new THREE.Mesh(shoulderGeo, jacket); shoulderR.position.set(0, 28, 7.5);
+  const shoulderGeo = new THREE.BoxGeometry(7, 4, 5);
+  const shoulderL = new THREE.Mesh(shoulderGeo, jacket); shoulderL.position.set(0, 28, -8.5);
+  const shoulderR = new THREE.Mesh(shoulderGeo, jacket); shoulderR.position.set(0, 28, 8.5);
+  // Blue backpack on her back — the clearest "this is Mara" mark from behind.
+  const pack = new THREE.Mesh(new THREE.BoxGeometry(7, 11, 9), lambert('#2e6bff'));
+  pack.position.set(-8, 22, 0);
+  const packFlap = new THREE.Mesh(new THREE.BoxGeometry(7.5, 3, 9.5), lambert('#1a3a8a'));
+  packFlap.position.set(-8, 26, 0);
   const head = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), lambert('#e8b48a'));
   head.position.set(0, 35, 0);
   const hair = new THREE.Mesh(new THREE.BoxGeometry(11, 4, 11), lambert('#3a2a1a'));
   hair.position.set(0, 41, 0);
-  const pony = new THREE.Mesh(new THREE.BoxGeometry(4, 9, 4), lambert('#3a2a1a'));
-  pony.position.set(-6, 36, 0);
-  const armGeo = new THREE.BoxGeometry(4, 13, 4);
-  armGeo.translate(0, -6, 0);
-  const armL = new THREE.Mesh(armGeo, jacket); armL.position.set(0, 28, -8.5);
-  const armR = new THREE.Mesh(armGeo, jacket); armR.position.set(0, 28, 8.5);
+  // Long ponytail down her back, with a coral tie at the top.
+  const pony = new THREE.Mesh(new THREE.BoxGeometry(5, 13, 5), lambert('#3a2a1a'));
+  pony.position.set(-7, 34, 0);
+  const tie = new THREE.Mesh(new THREE.BoxGeometry(5.5, 2, 5.5), lambert('#ff2e4d'));
+  tie.position.set(-7, 41, 0);
+  const armGeo = new THREE.BoxGeometry(4.5, 14, 4.5);
+  armGeo.translate(0, -7, 0);
+  const armL = new THREE.Mesh(armGeo, jacket); armL.position.set(0, 28, -9);
+  const armR = new THREE.Mesh(armGeo, jacket); armR.position.set(0, 28, 9);
   // Gun is long along the arm's own axis, so it points forward with the arm.
   const gun = new THREE.Mesh(new THREE.BoxGeometry(3, 12, 3), lambert('#1a1a2e'));
-  gun.position.set(0, -13, 0);
+  gun.position.set(0, -14, 0);
   armR.add(gun);
-  g.add(legL, legR, torso, shoulderL, shoulderR, head, hair, pony, armL, armR);
+  g.add(legL, legR, torso, shoulderL, shoulderR, pack, packFlap, head, hair, pony, tie, armL, armR);
   return { group: g, legL, legR, armL, armR, torso };
 }
 
@@ -555,15 +704,15 @@ export function createScene3D(canvas) {
   scene.fog = new THREE.Fog(hex(PALETTE.fogDusk), 800, 3400);
   const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 9000);
 
-  const hemi = new THREE.HemisphereLight(hex('#ffc49a'), hex('#7a5a48'), 1.25);
-  const sun = new THREE.DirectionalLight(hex('#ffc27a'), 2.1);
+  const hemi = new THREE.HemisphereLight(hex('#ffb347'), hex('#7a5a48'), 1.3);
+  const sun = new THREE.DirectionalLight(hex('#ffb347'), 2.35);
   sun.position.set(1700, 300, 380);
   // Cool fill from the west so faces turned away from the sunset are not black.
   const fill = new THREE.DirectionalLight(hex('#8a94c8'), 0.5);
   fill.position.set(-1200, 600, -400);
   // Warm ambient floor: shadow-side walls otherwise crush to black because
   // the dark window atlases multiply the already dim hemisphere light.
-  const amb = new THREE.AmbientLight(hex('#ffb08a'), 0.5);
+  const amb = new THREE.AmbientLight(hex('#ff9e6a'), 0.55);
   scene.add(hemi, sun, fill, amb);
 
   const atlasGlass = makeWindowAtlas('glass');
@@ -572,7 +721,7 @@ export function createScene3D(canvas) {
   atlasWarm.anisotropy = renderer.capabilities.getMaxAnisotropy();
   const sky = makeSky();
   scene.add(sky);
-  const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(120, 24), basic('#ffd9a0'));
+  const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(120, 24), basic('#ffdf8a'));
   sunDisc.position.set(3600, 700, 850);
   sunDisc.lookAt(0, 300, 950);
   scene.add(sunDisc);
@@ -587,6 +736,9 @@ export function createScene3D(canvas) {
   let billboards = [];
   let lightBulbs = [];
   let lightPoles = [];
+  // Roller-coaster train: three cars that run the pier loop (see update).
+  let coasterCars = [];
+  let coasterT = 0;
 
   // Pooled dynamic meshes.
   const carPool = [];
@@ -675,11 +827,14 @@ export function createScene3D(canvas) {
   function buildStatics(state) {
     cityMesh = buildCityMesh(state, atlasGlass, atlasWarm);
     for (const m of cityMesh) scene.add(m);
-    // Ferris wheel at the pier end.
+    // Ferris wheel at the pier end: red rim, eight coloured cabins that stay
+    // upright as it turns, a support tower from the deck, a hub, and a ring
+    // of glowing rim lights (one merged mesh, one draw call).
     wheelGroup = new THREE.Group();
     const wheelGeo = new THREE.TorusGeometry(55, 4, 6, 20);
     const wheel = new THREE.Mesh(wheelGeo, lambert('#e5382e'));
     wheelGroup.add(wheel);
+    const cabins = [];
     for (let i = 0; i < 8; i += 1) {
       const a = (i / 8) * Math.PI * 2;
       const spoke = new THREE.Mesh(new THREE.BoxGeometry(4, 104, 4), lambert('#e5382e'));
@@ -689,13 +844,56 @@ export function createScene3D(canvas) {
       const cabin = new THREE.Mesh(new THREE.BoxGeometry(13, 13, 13), lambert(['#ff4d6d', '#ffd23e', '#2ee6d6', '#ff7a1a'][i % 4]));
       cabin.position.set(Math.cos(a) * 55, Math.sin(a) * 55, 0);
       wheelGroup.add(spoke, cabin);
+      cabins.push(cabin);
+    }
+    wheelGroup.userData.cabins = cabins;
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 14, 12), lambert('#ffd23e'));
+    hub.rotation.x = Math.PI / 2;
+    wheelGroup.add(hub);
+    {
+      const lightArrays = newArrays();
+      for (let i = 0; i < 16; i += 1) {
+        const a = (i / 16) * Math.PI * 2;
+        const sph = new THREE.SphereGeometry(2.5, 6, 6);
+        _m4.makeTranslation(Math.cos(a) * 55, Math.sin(a) * 55, 0);
+        pushGeom(lightArrays, sph, _m4, ['#ffd23e', '#ff4d8d', '#2ee6d6', '#ff7a1a'][i % 4]);
+      }
+      const rimLights = new THREE.Mesh(arraysToGeometry(lightArrays), new THREE.MeshBasicMaterial({ vertexColors: true }));
+      wheelGroup.add(rimLights);
     }
     wheelGroup.position.set(2560, 78, 1093);
     scene.add(wheelGroup);
-    // Billboards on poles.
+    // Support tower + base on the pier deck, under the hub (static, not turning).
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(12, 70, 12), lambert('#3a3a4d'));
+    tower.position.set(2560, 43, 1093);
+    scene.add(tower);
+    const wheelBase = new THREE.Mesh(new THREE.BoxGeometry(34, 5, 34), lambert('#5a4632'));
+    wheelBase.position.set(2560, 10, 1093);
+    scene.add(wheelBase);
+    // Roller-coaster train: three cars, placed on the loop by update().
+    if (state.pier && state.pier.track) {
+      const carColors = ['#ff2e4d', '#ffd23e', '#2ee6d6'];
+      for (let k = 0; k < 3; k += 1) {
+        const car = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.BoxGeometry(16, 7, 11), lambert(carColors[k]));
+        body.position.y = 3;
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(10, 5, 9), lambert('#1a1a2e'));
+        seat.position.y = 8;
+        car.add(body, seat);
+        scene.add(car);
+        coasterCars.push(car);
+      }
+    }
+    // Billboards on poles. The Coral Pier board faces west (rotY -90 deg) so
+    // drivers coming up the beach road read it; +90 deg turns the face east
+    // and the road side sees the mirrored back. It stands back at the pier's
+    // south edge (2380,1140), not at the road, so it does not block the wheel
+    // and coaster from the beach road.
     const boards = [
       { x: 700, z: 250, lines: ['NEON DELTA', 'LOS ANGELES'], accent: '#ff7a1a' },
       { x: 2050, z: 300, lines: ['CORAL STRIP', 'BEACHFRONT HOTELS'], accent: '#ff4d8d' },
+      { x: 2380, z: 1140, lines: ['CORAL PIER', 'AMUSEMENT PIER'], accent: '#ffb347', rotY: -Math.PI / 2 },
+      { x: 600, z: 1700, lines: ['LONG BEACH PORT', 'CONTAINER DOCKS'], accent: '#f2a541' },
     ];
     for (const b of boards) {
       const grp = new THREE.Group();
@@ -710,6 +908,7 @@ export function createScene3D(canvas) {
       face.position.set(0, 76, 0);
       grp.add(poleL, poleR, face);
       grp.position.set(b.x, 0, b.z);
+      grp.rotation.y = b.rotY || 0;
       scene.add(grp);
       billboards.push(grp);
     }
@@ -741,9 +940,9 @@ export function createScene3D(canvas) {
     u.botColor.value.set(night ? PALETTE.nightHorizon : PALETTE.skyHorizon);
     u.eastColor.value.set(night ? PALETTE.nightEast : PALETTE.skyEast);
     scene.fog.color.set(night ? PALETTE.fogNight : PALETTE.fogDusk);
-    hemi.intensity = night ? 0.4 : 0.95;
-    sun.intensity = night ? 0.5 : 2.1;
-    amb.intensity = night ? 0.15 : 0.5;
+    hemi.intensity = night ? 0.4 : 1.3;
+    sun.intensity = night ? 0.5 : 2.35;
+    amb.intensity = night ? 0.15 : 0.55;
     sunDisc.material.color.set(night ? '#ffb37a' : '#ffe9a8');
     glow.material.opacity = night ? 0.5 : 1;
   }
@@ -782,12 +981,13 @@ export function createScene3D(canvas) {
     }
     const driving = !!p.vehicle;
     const fx = Math.cos(p.angle), fz = Math.sin(p.angle);
-    // On foot the camera sits behind the aim direction (over the shoulder);
-    // driving it sits behind the car's motion.
+    // On foot the camera sits close behind the aim direction (over the
+    // shoulder, San Andreas style — Mara fills the frame, the street and
+    // the skyline lead the eye); driving it sits behind the car's motion.
     let dirX = fx, dirZ = fz;
     if (!driving) { dirX = Math.cos(p.aim); dirZ = Math.sin(p.aim); }
-    const dist = driving ? 125 : 80;
-    const height = driving ? 50 : 40;
+    const dist = driving ? 112 : 68;
+    const height = driving ? 46 : 36;
     const rawDist = clampDistance(p.x, p.y, -dirX, -dirZ, dist, height, state.buildings);
     _v1.set(p.x - dirX * rawDist, height, p.y - dirZ * rawDist);
     cam.pos.lerp(_v1, Math.min(1, dt * (driving ? 4.2 : 6)));
@@ -887,7 +1087,9 @@ export function createScene3D(canvas) {
       const bob = p.speed > 10 ? Math.abs(Math.sin(p.walkPhase)) * 2 : 0;
       rig.group.position.set(p.x, bob, p.y);
       rig.group.rotation.y = -p.aim;
-      const swing = p.speed > 10 ? Math.sin(p.walkPhase) * 0.55 : 0;
+      // Slight forward lean while walking — a relaxed street stride.
+      rig.group.rotation.z = p.speed > 10 ? -0.06 : 0;
+      const swing = p.speed > 10 ? Math.sin(p.walkPhase) * 0.7 : 0;
       rig.legL.rotation.z = swing;
       rig.legR.rotation.z = -swing;
       rig.armL.rotation.z = -swing * 0.8;
@@ -984,8 +1186,27 @@ export function createScene3D(canvas) {
       shadowMesh.setMatrixAt(sh, _m4);
     }
     shadowMesh.instanceMatrix.needsUpdate = true;
-    // Ferris wheel turns slowly; traffic-light bulbs follow the phase.
-    if (wheelGroup) wheelGroup.rotation.z += dt * 0.12;
+    // Ferris wheel turns slowly; cabins stay upright; traffic-light bulbs follow the phase.
+    if (wheelGroup) {
+      wheelGroup.rotation.z += dt * 0.12;
+      if (wheelGroup.userData.cabins) {
+        for (const c of wheelGroup.userData.cabins) c.rotation.z = -wheelGroup.rotation.z;
+      }
+    }
+    // Roller-coaster train runs the pier loop: three cars, no allocation —
+    // positions are interpolated from the precomputed track points.
+    if (coasterCars.length && state.pier && state.pier.track) {
+      coasterT = (coasterT + dt * 0.06) % 1;
+      const track = state.pier.track, n = track.length;
+      for (let k = 0; k < coasterCars.length; k += 1) {
+        const car = coasterCars[k];
+        const t = (coasterT + k * 0.05) % 1;
+        const f = t * n, i0 = Math.floor(f) % n, i1 = (i0 + 1) % n, fr = f - Math.floor(f);
+        const a = track[i0], b = track[i1];
+        car.position.set(a.x + (b.x - a.x) * fr, a.h + (b.h - a.h) * fr + 4, a.y + (b.y - a.y) * fr);
+        car.rotation.y = -Math.atan2(b.y - a.y, b.x - a.x);
+      }
+    }
     for (let i = 0; i < lightBulbs.length; i += 1) {
       const phase = (time + (state.lights[i] ? state.lights[i].phase : 0)) % 12;
       lightBulbs[i].material = basic(phase < 6 ? '#2eff7a' : '#ff2e4d');

@@ -7,15 +7,16 @@ export const WORLD = { w: 2600, h: 1900 };
 export const SAVE_KEY = 'neon-delta-la.save.v2';
 export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 
-// Warm golden-hour palette: bright orange horizon, golden-pink mid-sky,
-// soft rose above, and a gentle cyan on the horizon opposite the sun (east).
-// Nothing dark or gloomy at dusk — the top of the sky stays a light rose.
+// Warm golden-hour palette, calibrated to the San Andreas feel: a deeply
+// saturated orange-gold horizon, golden-pink mid-sky, a light rose above,
+// and warm light washing the streets (the asphalt itself reads warm brown,
+// never cold grey). Nothing dark or gloomy at dusk.
 export const PALETTE = {
-  skyTop: '#c98aa0', skyMid: '#ff9e7a', skyHorizon: '#ffb347', skyEast: '#a8dcd8',
+  skyTop: '#c98aa0', skyMid: '#ffa06a', skyHorizon: '#ff9e3d', skyEast: '#a8dcd8',
   nightTop: '#1c1440', nightMid: '#4a2a68', nightHorizon: '#ff8a6a', nightEast: '#2a3a5a',
-  fogDusk: '#f2a983', fogNight: '#5a4066',
+  fogDusk: '#f5ab72', fogNight: '#5a4066',
   sea: '#19b8c9', sand: '#f2d492', land: '#8a7a5e', sidewalk: '#c9b8a3',
-  road: '#2b2b3a', roadLine: '#ffd23e', crane: '#e5382e',
+  road: '#332e38', roadLine: '#ffd23e', crane: '#e5382e',
   text: '#fff7ea', muted: '#ffd9a0', panel: 'rgba(16,10,32,0.82)',
   accent: '#ff7a1a', cyan: '#2ee6d6', pink: '#ff4d8d', money: '#7dffa8',
   police: '#e8ecf5', policeBlue: '#2e6bff', policeRed: '#ff2e4d',
@@ -28,6 +29,15 @@ export const STREETS = [300, 650, 1000, 1350, 1650];
 export const CANAL = { x0: 1240, x1: 1330, y0: 120, y1: 1780 };
 export const BEACH = { x0: 2250, seaX: 2460 };
 export const PORT = { x0: 150, x1: 1050, y0: 1680, y1: 1880 };
+// Coral Pier: the amusement pier on the beach, named for the Coral Strip
+// district it belongs to — an original name, nothing borrowed from Rockstar.
+// The boardwalk runs east from the sand into the sea at y ~ 1093; the
+// roller coaster loops south of it, over the water, on its own posts.
+export const PIER = {
+  name: 'CORAL PIER', x0: 2250, x1: 2620, y: 1093, halfW: 30,
+  wheel: { x: 2560, y: 1093, r: 55 },
+  coaster: { cx: 2500, cy: 1230, rx: 95, rz: 62, h: 58 },
+};
 
 // Districts: name, rect, label colour. The HUD shows the big italic banner
 // when the player crosses into a new one.
@@ -36,7 +46,7 @@ export const DISTRICTS = [
   { name: 'HOLLYWOOD HILLS', sub: 'Hillside Homes', x0: 120, y0: 620, x1: 1050, y1: 980, color: '#ffd23e' },
   { name: 'VENICE CANALS', sub: 'Canal District', x0: 1100, y0: 120, x1: 1500, y1: 980, color: '#2ee6d6' },
   { name: 'CORAL STRIP', sub: 'Beachfront Hotels', x0: 1900, y0: 120, x1: 2600, y1: 980, color: '#ff4d8d' },
-  { name: 'SANTA MONICA PIER', sub: 'Pier & Boardwalk', x0: 1900, y0: 980, x1: 2600, y1: 1350, color: '#ffb347' },
+  { name: 'CORAL PIER', sub: 'Amusement Pier & Boardwalk', x0: 1900, y0: 980, x1: 2600, y1: 1350, color: '#ffb347' },
   { name: 'LONG BEACH PORT', sub: 'Container Docks', x0: 120, y0: 1650, x1: 1500, y1: 1900, color: '#f2a541' },
   { name: 'THE MARINA', sub: 'Boats & Boardwalk', x0: 1500, y0: 1350, x1: 2600, y1: 1900, color: '#19b8c9' },
 ];

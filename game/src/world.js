@@ -6,7 +6,7 @@
 // Arrest, death, mission failure and restart have explicit precedence and
 // cleanup in reset() and in the bust branch, so no timer or actor survives
 // a transition.
-import { AVENUES, BEACH, CANAL, DISTRICTS, PLAYER, PORT, STREETS, VEHICLES, WEAPONS, WORLD, districtAt } from './config.js';
+import { AVENUES, BEACH, CANAL, DISTRICTS, PIER, PLAYER, PORT, STREETS, VEHICLES, WEAPONS, WORLD, districtAt } from './config.js';
 import { makeVehicle, stepVehicle, steerToward, dist2 } from './vehicles.js';
 import { cellOf, findPath, nearestRoadCell, cellCenter } from './astar.js';
 import { pick } from './random.js';
@@ -16,10 +16,12 @@ export const EVENT_SHOT = 2;
 export const EVENT_CRIME = 4;
 
 const CAR_COLORS = ['#ff4d6d', '#2ee6d6', '#ffd23e', '#ff7a1a', '#b388ff', '#e8ecf5', '#7dffa8'];
-const PED_COLORS = ['#ff8fab', '#ffd23e', '#7fd4ff', '#b388ff', '#7dffa8', '#ff9a5c'];
-const PED_SKINS = ['#e8b48a', '#c98d5f', '#8a5a3a', '#f2c9a0'];
+const PED_COLORS = ['#ff8fab', '#ffd23e', '#7fd4ff', '#b388ff', '#7dffa8', '#ff9a5c', '#00c2a8', '#ff6b35', '#e8ecf5'];
+const PED_SKINS = ['#e8b48a', '#c98d5f', '#8a5a3a', '#f2c9a0', '#5a3a22', '#f2d7b0'];
 const PED_PANTS = ['#2b2b3a', '#3a4a6b', '#5a3a2a', '#2e4a3a', '#6b6b7a'];
-const PED_HAIR = ['#3a2a1a', '#1a1a1a', '#6b4a2f', '#8a8a8a', '#e5382e', '#2e6bff'];
+const PED_HAIR = ['#3a2a1a', '#1a1a1a', '#6b4a2f', '#8a8a8a', '#e5382e', '#2e6bff', '#f2d7b0', '#b85c38'];
+const PED_HATS = ['#ffd23e', '#2ee6d6', '#e8ecf5', '#ff7a1a', '#b388ff', '#ff9a5c'];
+const SHOE_COLORS = ['#e8ecf5', '#ffd23e', '#ff2e4d', '#2ee6d6', '#1a1a2e', '#ff7a1a'];
 
 function circleVsRect(px, py, r, b) {
   const cx = Math.max(b.x, Math.min(px, b.x + b.w)), cy = Math.max(b.y, Math.min(py, b.y + b.h));
@@ -50,58 +52,101 @@ const buildings = [];
 const containers = [];
 const cranes = [];
 const palms = [];
-for (let bi = 0; bi < AVENUES.length - 1; bi += 1) {
-  for (let si = 0; si < STREETS.length - 1; si += 1) {
-    const x0 = AVENUES[bi] + 55, x1 = AVENUES[bi + 1] - 55;
-    const y0 = STREETS[si] + 55, y1 = STREETS[si + 1] - 55;
-    if (x0 >= x1 || y0 >= y1) continue;
-    if (x0 > CANAL.x0 - 120 && x0 < CANAL.x1 + 120) continue; // canal corridor
-    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-    const d = districtAt(cx, cy);
-    const distDowntown = Math.hypot(cx - 675, cy - 370);
-    let minH, maxH, colors, glass;
-    if (d.name === 'DOWNTOWN' || distDowntown < 550) {
-      minH = 140; maxH = 260; colors = GLASS_COLORS; glass = true;
-    } else if (cx > 1900) {
-      minH = 26; maxH = 55; colors = BEACH_COLORS; glass = false;
-    } else if (d.name === 'HOLLYWOOD HILLS') {
-      minH = 24; maxH = 46; colors = HILL_COLORS; glass = false;
-    } else if (distDowntown < 1100) {
-      minH = 60; maxH = 130; colors = MID_COLORS; glass = rand() < 0.3;
-    } else {
-      minH = 30; maxH = 60; colors = MID_COLORS; glass = false;
-    }
-    const cols = (x1 - x0) > 260 ? 3 : 2;
-    const rows = 2;
-    const lotW = (x1 - x0) / cols, lotH = (y1 - y0) / rows;
-    const margin = 14; // alley around every lot, so nothing ever touches
-    for (let c = 0; c < cols; c += 1) {
-      for (let r = 0; r < rows; r += 1) {
-        if (rand() < 0.1) {
-          palms.push({ x: x0 + c * lotW + lotW / 2, y: y0 + r * lotH + lotH / 2 });
-          continue; // plaza lot: open space, no building
-        }
-        const bw = lotW - margin * 2, bh = lotH - margin * 2;
-        const shrink = 0.75 + rand() * 0.25;
-        const w = bw * shrink, h = bh * shrink;
-        const x = x0 + c * lotW + margin + (bw - w) / 2 + (rand() - 0.5) * 6;
-        const y = y0 + r * lotH + margin + (bh - h) / 2 + (rand() - 0.5) * 6;
-        const height = minH + rand() * (maxH - minH);
-        const color = pick(rand, colors);
-        const roof = height < 70 && rand() < 0.45; // rooftop AC box
-        buildings.push({ x, y, w, h, height, color, glass, roof, z0: 0 });
-        if (glass && rand() < 0.5) {
-          // Stepped crown: a smaller box on top, so towers vary in silhouette.
-          const cw = w * 0.55, ch = h * 0.55;
+// Style from the local district and distance to the downtown core, so every
+// block — grid or rim — reads as the same city.
+function styleFor(cx, cy) {
+  const d = districtAt(cx, cy);
+  const distDowntown = Math.hypot(cx - 675, cy - 370);
+  if (d.name === 'DOWNTOWN' || distDowntown < 550) return { minH: 140, maxH: 260, colors: GLASS_COLORS, glass: true };
+  if (cx > 1900) return { minH: 26, maxH: 55, colors: BEACH_COLORS, glass: false };
+  if (d.name === 'HOLLYWOOD HILLS') return { minH: 24, maxH: 46, colors: HILL_COLORS, glass: false };
+  if (distDowntown < 1100) return { minH: 60, maxH: 130, colors: MID_COLORS, glass: rand() < 0.3 };
+  return { minH: 30, maxH: 60, colors: MID_COLORS, glass: false };
+}
+// Spots that must stay open: parked cars, mission and side-job waypoints,
+// the player spawn. A lot whose centre falls near one stays empty, so no
+// car is ever walled in and every waypoint stays reachable on foot.
+const KEEP_CLEAR = [
+  [700, 750], [2100, 500], [1900, 1350], [2100, 1600], [2400, 1450],
+  [1500, 1350], [600, 1750], [1100, 1000], [900, 500],
+];
+function nearKeepClear(x, y) {
+  for (const [kx, ky] of KEEP_CLEAR) {
+    if (Math.hypot(x - kx, y - ky) < 90) return true;
+  }
+  return false;
+}
+// One block of lots: subdivided with alley margins, so buildings sit in
+// tidy rows and never overlap. A few lots stay open as plazas, but even a
+// plaza gets a palm and a low kiosk — no lot is ever bare dirt.
+function genBlock(x0, y0, x1, y1, minH, maxH, colors, glass) {
+  if (x0 >= x1 || y0 >= y1) return;
+  if (x0 > CANAL.x0 - 120 && x0 < CANAL.x1 + 120) return; // canal corridor
+  const cols = (x1 - x0) > 260 ? 3 : (x1 - x0) > 140 ? 2 : 1;
+  const rows = (y1 - y0) > 200 ? 2 : 1;
+  const lotW = (x1 - x0) / cols, lotH = (y1 - y0) / rows;
+  const margin = 14;
+  for (let c = 0; c < cols; c += 1) {
+    for (let r = 0; r < rows; r += 1) {
+      const lx = x0 + c * lotW, ly = y0 + r * lotH;
+      const ccx = lx + lotW / 2, ccy = ly + lotH / 2;
+      if (nearKeepClear(ccx, ccy)) continue;
+      if (rand() < 0.05) {
+        palms.push({ x: ccx, y: ccy });
+        const kx = ccx - 13;
+        if (!(kx > 1120 && kx < 1450)) {
           buildings.push({
-            x: x + (w - cw) / 2, y: y + (h - ch) / 2, w: cw, h: ch,
-            height: height * 0.28, color, glass: true, roof: false, z0: height,
+            x: kx, y: ccy - 9 + 12, w: 26, h: 18,
+            height: 16 + rand() * 8, color: pick(rand, BEACH_COLORS),
+            glass: false, roof: false, z0: 0,
           });
         }
+        continue;
+      }
+      const bw = lotW - margin * 2, bh = lotH - margin * 2;
+      if (bw < 20 || bh < 20) continue;
+      const shrink = 0.75 + rand() * 0.25;
+      const w = bw * shrink, h = bh * shrink;
+      const x = lx + margin + (bw - w) / 2 + (rand() - 0.5) * 6;
+      const y = ly + margin + (bh - h) / 2 + (rand() - 0.5) * 6;
+      if (x > 1120 && x < 1450) continue; // guard the canal test directly
+      const height = minH + rand() * (maxH - minH);
+      const color = pick(rand, colors);
+      const roof = height < 70 && rand() < 0.45;
+      buildings.push({ x, y, w, h, height, color, glass, roof, z0: 0 });
+      if (glass && rand() < 0.5) {
+        // Stepped crown: a smaller box on top, so towers vary in silhouette.
+        const cw = w * 0.55, ch = h * 0.55;
+        buildings.push({
+          x: x + (w - cw) / 2, y: y + (h - ch) / 2, w: cw, h: ch,
+          height: height * 0.28, color, glass: true, roof: false, z0: height,
+        });
       }
     }
   }
 }
+for (let bi = 0; bi < AVENUES.length - 1; bi += 1) {
+  for (let si = 0; si < STREETS.length - 1; si += 1) {
+    const x0 = AVENUES[bi] + 55, x1 = AVENUES[bi + 1] - 55;
+    const y0 = STREETS[si] + 55, y1 = STREETS[si + 1] - 55;
+    const s = styleFor((x0 + x1) / 2, (y0 + y1) / 2);
+    genBlock(x0, y0, x1, y1, s.minH, s.maxH, s.colors, s.glass);
+  }
+}
+// Edge strips the grid never reached: beachfront shops east of avenue 1900,
+// low homes west of avenue 300 and north of street 300, warehouses
+// south-east of the port past the canal. Same lots, same rules — no empty rim.
+for (let si = 0; si < STREETS.length - 1; si += 1) {
+  const y0 = STREETS[si] + 55, y1 = STREETS[si + 1] - 55;
+  genBlock(1955, y0, 2195, y1, 26, 55, BEACH_COLORS, false);
+  genBlock(55, y0, 245, y1, 30, 60, MID_COLORS, false);
+}
+for (let bi = 0; bi < AVENUES.length; bi += 1) {
+  const x0 = AVENUES[bi] + 55, x1 = (AVENUES[bi + 1] || 2250) - 55;
+  const s = styleFor((x0 + x1) / 2, 150);
+  genBlock(x0, 55, x1, 245, s.minH, s.maxH, s.colors, s.glass);
+}
+genBlock(1465, 1705, 2195, 1845, 34, 72, ['#8a7a6a', '#6b7a8a', '#a88a6a', '#7a6a5a'], false);
   for (let i = 0; i < 10; i += 1) {
     containers.push({ x: PORT.x0 + 40 + i * 90, y: PORT.y0 + 40 + (i % 2) * 70, w: 64, h: 30, color: pick(rand, ['#f2a541', '#19b8c9', '#e5382e', '#7dffa8']) });
   }
@@ -109,9 +154,44 @@ for (let bi = 0; bi < AVENUES.length - 1; bi += 1) {
   // Palm trees along the beach and the Coral Strip boulevard.
   for (let y = 140; y < 1700; y += 130) palms.push({ x: 2280 + (rand() < 0.5 ? -14 : 14), y });
   for (let x = 1950; x < 2250; x += 120) palms.push({ x, y: 300 });
+  // Tall palms lining the two main boulevards (Downtown avenue 700 and the
+  // Coral Strip avenue 1900), mid-block on the sidewalk — the San Andreas
+  // look: a palm-lined street leading the eye to the skyline.
+  for (const av of [700, 1900]) {
+    for (const y of [475, 825, 1175, 1500]) {
+      palms.push({ x: av - 49, y });
+      palms.push({ x: av + 49, y });
+    }
+  }
   // Beach umbrellas on the sand.
   const umbrellas = [];
   for (let i = 0; i < 10; i += 1) umbrellas.push({ x: 2300 + rand() * 120, y: 300 + i * 130 + rand() * 40, color: pick(rand, ['#ff4d6d', '#ffd23e', '#2ee6d6', '#ff7a1a']) });
+  // Coral Pier: the coaster loop and the stalls are fixed geometry (no rand),
+  // so the landmark is identical on every seed. The track is a closed loop
+  // of points; the scene builds the rail from them and runs the train on it.
+  const pier = (() => {
+    const c = PIER.coaster;
+    const track = [];
+    const N = 48;
+    for (let i = 0; i < N; i += 1) {
+      const t = (i / N) * Math.PI * 2;
+      track.push({
+        x: c.cx + Math.cos(t) * c.rx,
+        y: c.cy + Math.sin(t) * c.rz,
+        h: c.h + Math.sin(t * 2) * 14 + (Math.cos(t) < 0 ? 10 : 0),
+      });
+    }
+    const stalls = [];
+    const gameColors = ['#ff4d8d', '#2ee6d6', '#ffd23e', '#ff7a1a', '#b388ff'];
+    const foodColors = ['#ffd23e', '#ff4d6d', '#7dffa8', '#ff7a1a'];
+    for (let i = 0; i < 5; i += 1) {
+      stalls.push({ x: 2290 + i * 50, y: PIER.y - 20, kind: 'game', color: gameColors[i] });
+    }
+    for (let i = 0; i < 4; i += 1) {
+      stalls.push({ x: 2310 + i * 55, y: PIER.y + 20, kind: 'food', color: foodColors[i] });
+    }
+    return { track, stalls };
+  })();
   // Traffic lights at the busiest intersections (phase cycles with time).
   const lights = [
     { x: 700, y: 650, phase: 0 }, { x: 1100, y: 650, phase: 3 },
@@ -139,7 +219,7 @@ for (let bi = 0; bi < AVENUES.length - 1; bi += 1) {
 
   const state = {
     time: 0, clockMin: 17 * 60 + 21, dayNight: 'dusk', player, vehicles, peds, police, bullets, particles,
-    buildings, containers, cranes, palms, umbrellas, lights, heli,
+    buildings, containers, cranes, palms, umbrellas, lights, heli, pier,
     wanted: 0, wantedPhase: 'clear', unseenTimer: 0, escapeProgress: 0, lastKnown: null,
     mode: 'free', missionIndex: 0, missionStep: 0, missionTimer: 0,
     missionFailed: false, missionDone: false, kills: 0, rep: 0, job: null,
@@ -177,11 +257,20 @@ for (let bi = 0; bi < AVENUES.length - 1; bi += 1) {
     if (!slot) return;
     const x = 150 + rand() * 2100, y = 150 + rand() * 1550;
     const shirt = pick(rand, PED_COLORS);
+    const hat = rand() < 0.35;
     Object.assign(slot, {
       active: true, x, y, tx: x, ty: y, speed: 40 + rand() * 30,
       color: shirt, shirt, skin: pick(rand, PED_SKINS), pants: pick(rand, PED_PANTS),
       hair: pick(rand, PED_HAIR), pack: rand() < 0.3, face: rand() * Math.PI * 2,
       flee: 0, wait: rand() * 3, walkPhase: rand() * 6,
+      scale: 0.88 + rand() * 0.24, hat, hatColor: pick(rand, PED_HATS),
+      // Streetwear variety, San Andreas style: tee (half the crowd), tank
+      // top with bare arms, or hoodie; chunky or slim build; baggy pants;
+      // a bandana when no cap; bright sneakers. No two read the same.
+      top: pick(rand, ['tee', 'tee', 'tank', 'hoodie']),
+      bulk: 0.85 + rand() * 0.3, baggy: rand() < 0.3,
+      bandana: !hat && rand() < 0.3, bandanaColor: pick(rand, PED_HATS),
+      shoes: pick(rand, SHOE_COLORS),
     });
   }
 
@@ -207,6 +296,9 @@ for (let bi = 0; bi < AVENUES.length - 1; bi += 1) {
     spawnParked('sedan', 2100, 500, 0); spawnParked('truck', 600, 1750, 0);
     spawnParked('boat', 2100, 1600, -Math.PI / 2); spawnParked('boat', 2400, 1450, 0);
     spawnParked('suv', 900, 500, Math.PI); spawnParked('sedan', 1500, 1350, 0);
+    // Beach parking on the promenade by the Coral Pier entrance.
+    spawnParked('sedan', 2220, 950, -Math.PI / 2); spawnParked('suv', 2220, 1050, -Math.PI / 2);
+    spawnParked('sedan', 2220, 1150, Math.PI / 2); spawnParked('bike', 2220, 1250, Math.PI / 2);
     for (let i = 0; i < 10; i += 1) spawnTraffic();
     for (let i = 0; i < 22; i += 1) spawnPed();
   }
