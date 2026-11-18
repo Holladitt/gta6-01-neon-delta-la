@@ -1,76 +1,110 @@
-// Neon Delta LA — every tuning number, colour and district in one place.
-// The city is a fixed 2600 x 1900 coastal grid; the simulation runs in that
-// 2D plane (x east, y south) and the 3D scene maps it to (x, 0, y). The fixed
-// step is 1/60 s and no rule here depends on screen size.
-export const STEP = 1 / 60;
-export const WORLD = { w: 2600, h: 1900 };
-export const SAVE_KEY = 'neon-delta-la.save.v2';
-export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
-
-// Warm golden-hour palette, calibrated to the San Andreas feel: a deeply
-// saturated orange-gold horizon, golden-pink mid-sky, a light rose above,
-// and warm light washing the streets (the asphalt itself reads warm brown,
-// never cold grey). Nothing dark or gloomy at dusk.
-export const PALETTE = {
-  skyTop: '#c98aa0', skyMid: '#ffa06a', skyHorizon: '#ff9e3d', skyEast: '#a8dcd8',
-  nightTop: '#1c1440', nightMid: '#4a2a68', nightHorizon: '#ff8a6a', nightEast: '#2a3a5a',
-  fogDusk: '#f5ab72', fogNight: '#5a4066',
-  sea: '#19b8c9', sand: '#f2d492', land: '#8a7a5e', sidewalk: '#c9b8a3',
-  road: '#332e38', roadLine: '#ffd23e', crane: '#e5382e',
-  text: '#fff7ea', muted: '#ffd9a0', panel: 'rgba(16,10,32,0.82)',
-  accent: '#ff7a1a', cyan: '#2ee6d6', pink: '#ff4d8d', money: '#7dffa8',
-  police: '#e8ecf5', policeBlue: '#2e6bff', policeRed: '#ff2e4d',
+// Neon Delta LA — config: world layout, districts, tuning, weapons, missions.
+// All original content. No Rockstar names, characters, maps or assets.
+export const WORLD = {
+  HALF: 800,            // world extends x,z in [-800, 800]
+  OCEAN_X: -720,        // water begins west of this x
+  BEACH_X: -660,        // sand strip ends here (boardwalk meets land)
+  ROAD_W: 22,
+  WALK_W: 7,
+  AVENUES: [-600, -400, -200, 0, 200, 400, 600],
+  STREETS: [-600, -400, -200, 0, 200, 400, 600],
+  GRID: 200,
 };
 
-// Avenues run north-south, streets east-west. The canal cuts north-south
-// between the two middle avenues; bridges cross it at each street.
-export const AVENUES = [300, 700, 1100, 1500, 1900];
-export const STREETS = [300, 650, 1000, 1350, 1650];
-export const CANAL = { x0: 1240, x1: 1330, y0: 120, y1: 1780 };
-export const BEACH = { x0: 2250, seaX: 2460 };
-export const PORT = { x0: 150, x1: 1050, y0: 1680, y1: 1880 };
-// Coral Pier: the amusement pier on the beach, named for the Coral Strip
-// district it belongs to — an original name, nothing borrowed from Rockstar.
-// The boardwalk runs east from the sand into the sea at y ~ 1093; the
-// roller coaster loops south of it, over the water, on its own posts.
-export const PIER = {
-  name: 'CORAL PIER', x0: 2250, x1: 2620, y: 1093, halfW: 30,
-  wheel: { x: 2560, y: 1093, r: 55 },
-  coaster: { cx: 2500, cy: 1230, rx: 95, rz: 62, h: 58 },
-};
-
-// Districts: name, rect, label colour. The HUD shows the big italic banner
-// when the player crosses into a new one.
 export const DISTRICTS = [
-  { name: 'DOWNTOWN', sub: 'Glassline Towers', x0: 120, y0: 120, x1: 1050, y1: 620, color: '#7fd4ff' },
-  { name: 'HOLLYWOOD HILLS', sub: 'Hillside Homes', x0: 120, y0: 620, x1: 1050, y1: 980, color: '#ffd23e' },
-  { name: 'VENICE CANALS', sub: 'Canal District', x0: 1100, y0: 120, x1: 1500, y1: 980, color: '#2ee6d6' },
-  { name: 'CORAL STRIP', sub: 'Beachfront Hotels', x0: 1900, y0: 120, x1: 2600, y1: 980, color: '#ff4d8d' },
-  { name: 'CORAL PIER', sub: 'Amusement Pier & Boardwalk', x0: 1900, y0: 980, x1: 2600, y1: 1350, color: '#ffb347' },
-  { name: 'LONG BEACH PORT', sub: 'Container Docks', x0: 120, y0: 1650, x1: 1500, y1: 1900, color: '#f2a541' },
-  { name: 'THE MARINA', sub: 'Boats & Boardwalk', x0: 1500, y0: 1350, x1: 2600, y1: 1900, color: '#19b8c9' },
+  { id: 'downtown', name: 'DOWNTOWN', sub: 'Glassline Towers', x0: -320, z0: -720, x1: 320, z1: -80, kind: 'towers' },
+  { id: 'marina', name: 'MARINA', sub: 'Yachts & Canals', x0: -660, z0: -720, x1: -340, z1: -80, kind: 'low' },
+  { id: 'hills', name: 'HOLLYWOOD HILLS', sub: 'Overlook Estates', x0: -660, z0: -800, x1: 660, z1: -720, kind: 'hills' },
+  { id: 'pier', name: 'CORAL PIER', sub: 'Amusement Pier & Boardwalk', x0: -800, z0: 120, x1: -600, z1: 480, kind: 'pier' },
+  { id: 'canals', name: 'VENICE CANALS', sub: 'Bridges & Waterways', x0: -660, z0: 420, x1: -120, z1: 720, kind: 'canal' },
+  { id: 'port', name: 'LONG BEACH PORT', sub: 'Container Terminal', x0: 340, z0: 340, x1: 720, z1: 720, kind: 'port' },
+  { id: 'freeway', name: 'FREEWAY', sub: 'Delta Expressway', x0: 660, z0: -720, x1: 800, z1: 720, kind: 'freeway' },
+  { id: 'coral', name: 'CORAL STRIP', sub: 'Beachfront Hotels', x0: -660, z0: -80, x1: -120, z1: 420, kind: 'mid' },
+  { id: 'midtown', name: 'MIDTOWN', sub: 'Shops & Theatres', x0: -120, z0: -80, x1: 660, z1: 340, kind: 'mid' },
 ];
 
-export function districtAt(x, y) {
-  for (const d of DISTRICTS) if (x >= d.x0 && x < d.x1 && y >= d.y0 && y < d.y1) return d;
-  return DISTRICTS[3];
+export function districtAt(x, z) {
+  for (const d of DISTRICTS) if (x >= d.x0 && x <= d.x1 && z >= d.z0 && z <= d.z1) return d;
+  return DISTRICTS[8];
 }
 
-// Arcade vehicle feel: sedan balanced, SUV heavy and planted, bike quick and
-// loose, truck slow and wide, speedboat only on water, police fast with grip.
-// len/wid are sim units; the 3D scene scales them to the same proportions.
-export const VEHICLES = {
-  sedan: { name: 'Sedan', len: 52, wid: 26, accel: 420, maxSpeed: 560, grip: 6.5, turn: 2.9, drift: 0.55, color: '#ff4d6d', roof: '#ffd23e' },
-  suv: { name: 'SUV', len: 58, wid: 30, accel: 340, maxSpeed: 500, grip: 8.0, turn: 2.4, drift: 0.30, color: '#2e6bff', roof: '#dfe8ff' },
-  bike: { name: 'Motorbike', len: 44, wid: 16, accel: 520, maxSpeed: 640, grip: 4.2, turn: 3.6, drift: 0.85, color: '#19b8c9', roof: '#12202e' },
-  truck: { name: 'Truck', len: 86, wid: 30, accel: 260, maxSpeed: 420, grip: 7.0, turn: 1.9, drift: 0.20, color: '#f2a541', roof: '#7a4a12' },
-  boat: { name: 'Speedboat', len: 64, wid: 28, accel: 460, maxSpeed: 600, grip: 3.0, turn: 2.6, drift: 0.90, color: '#ffffff', roof: '#ff7a1a' },
-  police: { name: 'Police Cruiser', len: 54, wid: 27, accel: 480, maxSpeed: 600, grip: 7.5, turn: 3.1, drift: 0.35, color: '#e8ecf5', roof: '#2e6bff' },
+export const PALETTE = {
+  skyDay: 0x87c5e8, skyGold: 0xffb347, skyDusk: 0xff7e5f,
+  sun: 0xfff2d0, hemiSky: 0xbfe3ff, hemiGround: 0x8a7a5a,
+  asphalt: '#3a3a40', sidewalk: '#b8a88f', sand: '#e8cf9a', grass: '#7fae62',
+  water: 0x1e6f9e, coral: 0xff2e4d, turquoise: 0x2ec4b6, sodium: 0xffc53d,
 };
 
-export const PLAYER = { walkSpeed: 230, sprintSpeed: 340, radius: 14, health: 100, armor: 50 };
+export const KEYS = {
+  fwd: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD',
+  sprint: 'ShiftLeft', handbrake: 'Space', enter: 'KeyF', interact: 'KeyE',
+  reload: 'KeyR', horn: 'KeyH', radio: 'KeyQ', pause: 'Escape',
+  save: 'KeyN', mission: 'KeyM', map: 'Tab',
+  w1: 'Digit1', w2: 'Digit2', w3: 'Digit3',
+};
+
 export const WEAPONS = [
-  { name: 'PISTOL', damage: 34, mag: 12, reserve: 72, rate: 0.22, spread: 0.05, range: 420 },
-  { name: 'SMG', damage: 18, mag: 30, reserve: 120, rate: 0.09, spread: 0.11, range: 360 },
-  { name: 'SHOTGUN', damage: 22, mag: 6, reserve: 36, rate: 0.7, spread: 0.22, range: 260 },
+  { id: 0, name: 'PISTOL', dmg: 34, mag: 12, reserve: 120, rate: 0.22, spread: 0.012, range: 120, auto: false },
+  { id: 1, name: 'SMG', dmg: 17, mag: 30, reserve: 240, rate: 0.085, spread: 0.03, range: 90, auto: true },
+  { id: 2, name: 'SHOTGUN', dmg: 13, mag: 6, reserve: 48, rate: 0.85, spread: 0.07, range: 55, auto: false, pellets: 7 },
+];
+
+export const VEHICLE_DEFS = {
+  sedan: { name: 'SEDAN', accel: 14, top: 34, reverse: 10, turn: 1.9, grip: 6.5, brake: 26, len: 4.6, wid: 2.0 },
+  suv: { name: 'SUV', accel: 11, top: 30, reverse: 9, turn: 1.6, grip: 6.0, brake: 24, len: 5.0, wid: 2.2 },
+  pickup: { name: 'PICKUP', accel: 12, top: 31, reverse: 9, turn: 1.7, grip: 6.2, brake: 24, len: 5.2, wid: 2.1 },
+  sport: { name: 'SPORT', accel: 19, top: 42, reverse: 8, turn: 2.3, grip: 7.2, brake: 30, len: 4.4, wid: 2.0 },
+  bike: { name: 'BIKE', accel: 18, top: 38, reverse: 6, turn: 2.6, grip: 5.0, brake: 22, len: 2.4, wid: 0.8 },
+  police: { name: 'PATROL', accel: 15, top: 36, reverse: 10, turn: 2.0, grip: 7.0, brake: 28, len: 4.8, wid: 2.1 },
+};
+
+export const PLAYER = {
+  walkSpeed: 5.2, runSpeed: 9.5, health: 100, armor: 50, money: 250,
+  spawn: { x: 600, z: 700, heading: Math.PI }, // south avenue, facing north (into the city)
+};
+
+export const SAVE_KEY = 'neon-delta-la.save.v3';
+
+// Mission + side-job data. Steps: goto | steal | deliver | chase | escape | survive | visit | talk
+export const MISSIONS = [
+  { id: 1, name: 'RETURN TO LA', brief: 'Mara is back. Steal a sedan and get to the safehouse.',
+    steps: [
+      { type: 'goto', x: 600, z: 560, r: 10, text: 'Get to the parked sedan on Coral Avenue.' },
+      { type: 'steal', kind: 'sedan', text: 'Take the sedan. Press F next to it.' },
+      { type: 'goto', x: 100, z: -500, r: 14, text: 'Drive to the Downtown safehouse.', inCar: true },
+    ], reward: 400 },
+  { id: 2, name: 'MIDNIGHT CARGO', brief: 'A crate at the port needs to reach the Marina. No questions.',
+    steps: [
+      { type: 'goto', x: 520, z: 560, r: 12, text: 'Pick up the crate at Long Beach Port.' },
+      { type: 'deliver', x: -480, z: -560, r: 14, text: 'Deliver the crate to the Marina. Keep it quiet.', inCar: true },
+    ], reward: 650 },
+  { id: 3, name: 'FESTIVAL OF LIGHTS', brief: 'Something is hidden at Coral Pier. Visit the stalls.',
+    steps: [
+      { type: 'goto', x: -700, z: 300, r: 16, text: 'Go to Coral Pier.' },
+      { type: 'visit', points: [[-740, 260], [-760, 340], [-730, 420]], r: 8, text: 'Check the three game stalls on the pier.' },
+      { type: 'goto', x: -600, z: 300, r: 12, text: 'Get back to the beach road.' },
+    ], reward: 700 },
+  { id: 4, name: 'CANAL CROSSING', brief: 'A courier is running the canals. Stay on his tail.',
+    steps: [
+      { type: 'goto', x: -400, z: 500, r: 12, text: 'Find the courier near the canals.' },
+      { type: 'chase', seconds: 20, text: 'Stay close to the courier for 20 seconds.' },
+      { type: 'goto', x: 0, z: 100, r: 14, text: 'Lose him at the Midtown crossing.', inCar: true },
+    ], reward: 800 },
+  { id: 5, name: 'LAST BRIDGE', brief: 'The whole force is after you. Break the line, then cross.',
+    steps: [
+      { type: 'escape', text: 'Lose the police. Break line of sight, swap cars, or change clothes.' },
+      { type: 'goto', x: 700, z: -300, r: 14, text: 'Cross the Freeway bridge, clean.', inCar: true },
+    ], reward: 1000, startWanted: 4 },
+  { id: 6, name: 'THE BURNING CITY', brief: 'The proof is in three places. Get it all, then vanish.',
+    steps: [
+      { type: 'visit', points: [[100, -500], [-480, -560], [520, 560]], r: 10, text: 'Collect the proof: safehouse, marina, port.' },
+      { type: 'goto', x: 0, z: 700, r: 16, text: 'Reach the south gate and disappear.', inCar: true },
+    ], reward: 2000, startWanted: 3 },
+];
+
+export const SIDE_JOBS = [
+  { id: 'taxi', name: 'TAXI FARE', text: 'Pick up the passenger and drop them off.', reward: 150 },
+  { id: 'delivery', name: 'COURIER RUN', text: 'Deliver the package across town.', reward: 180 },
+  { id: 'vigilante', name: 'STREET JUSTICE', text: 'Wreck the target car.', reward: 250 },
+  { id: 'stunt', name: 'STUNT JUMP', text: 'Hit the ramp at speed.', reward: 200 },
 ];

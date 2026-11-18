@@ -1,121 +1,114 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Neon Delta LA — an open-world crime game</title>
+<title>Neon Delta LA</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #1a0f2e; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .shadow { text-shadow: 0 2px 6px rgba(10,6,24,0.85), 0 0 2px rgba(10,6,24,0.9); }
-  /* ---------- HUD ---------- */
-  #hud { position: fixed; inset: 0; pointer-events: none; display: none; color: #fff7ea; z-index: 5; }
-  #clock { position: absolute; top: 16px; left: 22px; font-size: 15px; font-weight: 700; color: #ffd9a0; }
-  #radio { position: absolute; top: 38px; left: 22px; font-size: 14px; color: #ffd9a0; }
-  .bar { position: absolute; left: 22px; width: 190px; height: 12px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0d1b2a; font-family: Arial, Helvetica, sans-serif; }
+  #c { display: block; width: 100vw; height: 100vh; }
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,.8); z-index: 5; }
+  .panel { background: rgba(10,20,35,.55); border-radius: 8px; padding: 6px 10px; }
+  #hud-top-left { position: absolute; top: 14px; left: 16px; font-weight: bold; font-size: 17px; letter-spacing: 1px; }
+  #hud-top-left span { margin-right: 14px; }
+  #radio { color: #7fe3d8; }
+  #hud-top-right { position: absolute; top: 14px; right: 16px; text-align: right; }
+  #money { font-size: 30px; font-weight: 900; color: #7dffa8; letter-spacing: 1px; }
+  #weapon { font-size: 15px; font-weight: bold; color: #ffe9a0; margin-bottom: 2px; }
+  #stars { font-size: 26px; letter-spacing: 3px; color: rgba(255,255,255,.25); }
+  #stars span.on { color: #ffd23d; text-shadow: 0 0 8px rgba(255,210,61,.9); }
+  #bars { width: 190px; margin-left: auto; margin-top: 6px; }
+  .bar { height: 9px; background: rgba(0,0,0,.6); border-radius: 5px; margin-top: 4px; overflow: hidden; border: 1px solid rgba(255,255,255,.35); }
   .bar > div { height: 100%; }
-  #health-bar { top: 66px; } #health-fill { background: #7dffa8; width: 100%; }
-  #armor-bar { top: 82px; } #armor-fill { background: #7fd4ff; width: 50%; }
-  .bar-label { position: absolute; left: 218px; font-size: 11px; font-weight: 700; color: #fff; }
-  #health-label { top: 66px; } #armor-label { top: 82px; }
-  #money { position: absolute; top: 12px; right: 24px; font-size: 30px; font-weight: 800; color: #7dffa8; text-align: right; }
-  #stars { position: absolute; top: 48px; right: 24px; display: flex; gap: 4px; }
-  #wanted-label { position: absolute; top: 82px; right: 24px; font-size: 14px; font-weight: 800; color: #ff8fab; text-align: right; }
-  #weapon { position: absolute; top: 106px; right: 24px; font-size: 18px; font-weight: 700; color: #fff; text-align: right; }
-  #minimap-wrap { position: absolute; left: 22px; bottom: 22px; width: 200px; height: 146px; border-radius: 50%; overflow: hidden; border: 4px solid #2ee6d6; box-shadow: 0 0 0 2px rgba(10,6,24,0.6); }
-  #minimap { display: block; width: 200px; height: 146px; }
-  #minimap-district { position: absolute; left: 22px; bottom: 178px; font-size: 13px; font-weight: 800; color: #2ee6d6; letter-spacing: 1px; }
-  #district-title { position: absolute; right: 30px; bottom: 150px; font-size: 34px; font-weight: 900; font-style: italic; color: #fff; text-align: right; }
-  #district-sub { position: absolute; right: 30px; bottom: 126px; font-size: 16px; font-weight: 700; color: #2ee6d6; text-align: right; }
-  #vehicle-name { position: absolute; right: 30px; bottom: 104px; font-size: 15px; font-weight: 700; color: #2ee6d6; text-align: right; }
-  #speed { position: absolute; right: 30px; bottom: 30px; font-size: 54px; font-weight: 900; color: #fff; text-align: right; line-height: 1; }
-  #speed-unit { position: absolute; right: 30px; bottom: 12px; font-size: 15px; font-weight: 700; color: #ffd9a0; text-align: right; }
-  #objective { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); background: rgba(16,10,32,0.82); border: 2px solid rgba(255,122,26,0.55); border-radius: 14px; padding: 12px 26px; font-size: 17px; font-weight: 700; color: #fff; white-space: nowrap; max-width: 62vw; overflow: hidden; text-overflow: ellipsis; }
-  #dialogue { position: absolute; left: 50%; bottom: 78px; transform: translateX(-50%); font-size: 17px; font-weight: 700; color: #ffd9a0; white-space: nowrap; }
-  #prompt { position: absolute; left: 50%; bottom: 116px; transform: translateX(-50%); font-size: 16px; font-weight: 800; color: #fff; background: rgba(16,10,32,0.7); border-radius: 8px; padding: 6px 14px; }
-  #bust { position: absolute; left: 50%; top: 90px; transform: translateX(-50%); width: 360px; background: rgba(16,10,32,0.82); border-radius: 12px; padding: 10px 14px; text-align: center; font-size: 18px; font-weight: 800; color: #ff5e7a; }
-  #bust-fill { height: 6px; background: #ff2e4d; margin-top: 6px; width: 0; }
-  #crosshair { position: fixed; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 2px solid rgba(255,255,255,0.9); border-radius: 50%; pointer-events: none; display: none; z-index: 6; }
-  #crosshair::after { content: ''; position: absolute; left: 11px; top: 11px; width: 4px; height: 4px; background: #fff; border-radius: 50%; }
-  #map-overlay { position: fixed; inset: 0; background: rgba(10,6,24,0.8); display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 8; pointer-events: none; }
-  #map-canvas { border: 3px solid #2ee6d6; border-radius: 12px; }
-  #map-overlay p { color: #ffd9a0; font-weight: 700; }
-  /* ---------- Screens ---------- */
-  .screen { position: fixed; inset: 0; display: none; z-index: 10; }
-  #title-screen { align-items: flex-start; background: linear-gradient(90deg, rgba(10,6,24,0.72) 0%, rgba(10,6,24,0.35) 45%, rgba(10,6,24,0) 75%); }
-  .title-inner { padding: 48px 0 0 64px; max-width: 640px; }
-  .title-kicker { color: #2ee6d6; font-size: 16px; font-weight: 800; letter-spacing: 3px; }
-  .title-big { font-size: 84px; font-weight: 900; font-style: italic; line-height: 0.95; background: linear-gradient(180deg, #ffd23e 0%, #ff7a1a 55%, #ff4d8d 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 3px 8px rgba(10,6,24,0.8)); }
-  .title-sub { color: #fff; font-size: 24px; font-weight: 800; letter-spacing: 4px; margin-top: 6px; }
-  .title-story { color: #fff; font-size: 17px; line-height: 1.45; margin: 14px 0 22px; max-width: 480px; }
-  .menu-btn { pointer-events: auto; cursor: pointer; border: none; border-radius: 12px; font-weight: 900; font-size: 22px; letter-spacing: 1px; padding: 14px 28px; margin: 0 12px 12px 0; }
-  #btn-new { background: #ff7a1a; color: #fff; box-shadow: 0 4px 0 #b34d00; }
-  #btn-continue { background: rgba(255,255,255,0.25); color: #fff; }
-  .controls { background: rgba(16,10,32,0.82); border: 2px solid rgba(255,122,26,0.55); border-radius: 14px; padding: 16px 22px; margin-top: 18px; color: #eef1f5; font-size: 14px; line-height: 1.85; width: 460px; }
-  .controls b { color: #ffd23e; }
-  .panel { background: rgba(16,10,32,0.85); border: 2px solid rgba(255,122,26,0.55); border-radius: 16px; padding: 28px 40px; text-align: center; color: #fff; }
-  #pause-screen, #busted-screen { align-items: center; justify-content: center; background: rgba(10,6,24,0.6); }
-  .panel h1 { margin: 0 0 12px; font-size: 44px; }
-  .panel p { margin: 6px 0; font-size: 17px; color: #ffd9a0; }
+  #health-fill { background: #2ecc71; width: 100%; }
+  #armor-fill { background: #2ec4b6; width: 0%; }
+  #minimap { position: absolute; left: 16px; bottom: 16px; width: 180px; height: 180px; border-radius: 50%; border: 3px solid #2ec4b6; box-shadow: 0 0 0 3px rgba(0,0,0,.5); background: #0d1b2a; }
+  #district { position: absolute; right: 20px; bottom: 118px; text-align: right; }
+  #district-name { font-size: 42px; font-weight: 900; font-style: italic; letter-spacing: 2px; color: #fff; }
+  #district-sub { font-size: 15px; color: #ffd23d; font-weight: bold; }
+  #district.pop #district-name { animation: pop .45s ease-out; }
+  @keyframes pop { 0% { transform: scale(1.25); opacity: .3; } 100% { transform: scale(1); opacity: 1; } }
+  #speed { position: absolute; right: 20px; bottom: 16px; text-align: right; }
+  #speed-num { font-size: 56px; font-weight: 900; line-height: .9; }
+  #speed-num + span { font-size: 16px; font-weight: bold; color: #ffd23d; margin-left: 6px; }
+  #veh-name { font-size: 15px; font-weight: bold; color: #7fe3d8; letter-spacing: 2px; }
+  #mission-bar { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); max-width: 46vw; text-align: center; font-size: 16px; font-weight: bold; color: #ffe9a0; }
+  #dialog { position: absolute; left: 50%; top: 74px; transform: translateX(-50%); max-width: 60vw; text-align: center; font-size: 18px; font-weight: bold; background: rgba(10,20,35,.82); border-radius: 8px; padding: 10px 18px; opacity: 0; transition: opacity .3s; }
+  #prompt { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); font-size: 19px; font-weight: 900; letter-spacing: 1px; color: #ffd23d; display: none; }
+  #crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 26px; font-weight: bold; color: rgba(255,255,255,.9); display: none; }
+  #vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(255,0,0,.55) 100%); opacity: 0; transition: opacity .15s; }
+  #toast { position: absolute; left: 50%; top: 140px; transform: translateX(-50%); font-size: 17px; font-weight: bold; background: rgba(10,20,35,.75); padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .3s; }
+  .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 10; pointer-events: auto; }
+  #title-screen { display: flex; background: linear-gradient(180deg, rgba(10,20,35,.25) 0%, rgba(10,20,35,.55) 55%, rgba(10,20,35,.85) 100%); }
+  #title-screen h1 { font-size: 92px; font-weight: 900; font-style: italic; letter-spacing: 4px; color: #fff; text-shadow: 0 0 30px rgba(255,46,77,.8), 0 4px 0 #ff2e4d, 0 8px 24px rgba(0,0,0,.7); }
+  #title-screen h1 .neon { color: #2ec4b6; text-shadow: 0 0 30px rgba(46,196,182,.9), 0 4px 0 #1a7a72, 0 8px 24px rgba(0,0,0,.7); }
+  #title-screen h2 { font-size: 20px; color: #ffd23d; letter-spacing: 6px; margin: 8px 0 30px; }
+  .btn { display: block; width: 320px; margin: 8px auto; padding: 14px 20px; font-size: 20px; font-weight: 900; letter-spacing: 2px; color: #fff; background: linear-gradient(180deg, #ff2e4d, #c81e3a); border: 2px solid rgba(255,255,255,.6); border-radius: 10px; cursor: pointer; text-align: center; }
+  .btn:hover { filter: brightness(1.2); }
+  .btn.secondary { background: linear-gradient(180deg, #2ec4b6, #1a7a72); }
+  .btn.small { width: 220px; font-size: 16px; padding: 10px 14px; }
+  #controls { margin-top: 26px; font-size: 14px; line-height: 1.7; color: #dfe9f2; text-align: center; background: rgba(10,20,35,.6); padding: 12px 22px; border-radius: 10px; }
+  #controls b { color: #ffd23d; }
+  #pause-menu { background: rgba(5,10,20,.72); }
+  #pause-menu h1 { font-size: 54px; font-weight: 900; font-style: italic; letter-spacing: 4px; margin-bottom: 22px; }
+  #map-screen { background: rgba(5,10,20,.8); }
+  #map-screen h1 { font-size: 30px; font-weight: 900; letter-spacing: 3px; margin-bottom: 12px; }
+  #citymap { border: 3px solid #2ec4b6; border-radius: 10px; background: #12233d; }
+  #map-screen p { margin-top: 10px; color: #ffd23d; font-weight: bold; }
 </style>
 </head>
 <body>
-<canvas id="game" aria-label="Neon Delta LA: explore Los Angeles on foot and by car, steal cars, outrun the police, run missions for Mara Solano"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
-
+<canvas id="c"></canvas>
 <div id="hud">
-  <div id="clock" class="shadow">17:21 · SUNSET</div>
-  <div id="radio" class="shadow">♪ NEON 88 — Sunset Drive</div>
-  <div class="bar" id="health-bar"><div id="health-fill"></div></div><span class="bar-label shadow" id="health-label">HEALTH</span>
-  <div class="bar" id="armor-bar"><div id="armor-fill"></div></div><span class="bar-label shadow" id="armor-label">ARMOR</span>
-  <div id="money" class="shadow">$250</div>
-  <div id="stars"></div>
-  <div id="wanted-label" class="shadow" style="display:none"></div>
-  <div id="weapon" class="shadow">PISTOL 12 / 72</div>
-  <div id="minimap-district" class="shadow">HOLLYWOOD HILLS</div>
-  <div id="minimap-wrap"><canvas id="minimap" width="200" height="146"></canvas></div>
-  <div id="district-title" class="shadow" style="opacity:0"></div>
-  <div id="district-sub" class="shadow" style="opacity:0"></div>
-  <div id="vehicle-name" class="shadow" style="display:none"></div>
-  <div id="speed" class="shadow" style="display:none">0</div>
-  <div id="speed-unit" class="shadow" style="display:none">KM/H</div>
-  <div id="dialogue" class="shadow" style="display:none"></div>
-  <div id="prompt" style="display:none"></div>
-  <div id="objective">FREE ROAM — press M for the next mission, F to steal a car</div>
-  <div id="bust" style="display:none">BUSTED — break away!<div id="bust-fill"></div></div>
+  <div id="vignette"></div>
+  <div id="hud-top-left" class="panel"><span id="clock">13:29</span><span id="radio">RADIO: NEON 88</span></div>
+  <div id="hud-top-right">
+    <div id="weapon">PISTOL 12 / 120</div>
+    <div id="money">$250</div>
+    <div id="stars"></div>
+    <div id="bars"><div class="bar"><div id="health-fill"></div></div><div class="bar"><div id="armor-fill"></div></div></div>
+  </div>
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="district"><div id="district-name">DOWNTOWN</div><div id="district-sub">Glassline Towers</div></div>
+  <div id="speed"><span id="speed-num">0</span><span>KM/H</span><div id="veh-name">ON FOOT</div></div>
+  <div id="mission-bar" class="panel"><span id="mission-text">Press M to start the next mission.</span></div>
+  <div id="dialog"></div>
+  <div id="prompt"></div>
+  <div id="crosshair">+</div>
+  <div id="toast"></div>
 </div>
-<div id="crosshair"></div>
-<div id="map-overlay"><canvas id="map-canvas" width="640" height="468"></canvas><p>Tab — close map</p></div>
 
-<div id="title-screen" class="screen">
-  <div class="title-inner">
-    <div class="title-kicker shadow">NEON DELTA LA &nbsp;·&nbsp; AN OPEN-WORLD CRIME GAME</div>
-    <div class="title-big">NEON DELTA LA</div>
-    <div class="title-sub shadow">CRIMES OF LOS ANGELES</div>
-    <p class="title-story shadow">Mara Solano is back in Los Angeles. Her sister is gone — and the city is watching. Steal, drive, outrun the law.</p>
-    <button class="menu-btn" id="btn-new">NEW GAME</button>
-    <button class="menu-btn" id="btn-continue"><span id="continue-line">CONTINUE — no save yet</span></button>
-    <div class="controls">
-      <b>CONTROLS</b><br>
-      <b>WASD</b> move / drive &nbsp;&nbsp; <b>Mouse</b> look, aim &nbsp;&nbsp; <b>Click</b> shoot<br>
-      <b>Shift</b> sprint &nbsp;&nbsp; <b>Space</b> handbrake / drift<br>
-      <b>F</b> enter, exit or carjack &nbsp;&nbsp; <b>E</b> talk / interact<br>
-      <b>R</b> reload &nbsp;&nbsp; <b>1-3</b> switch weapon &nbsp;&nbsp; <b>X</b> radio<br>
-      <b>Q</b> next station &nbsp;&nbsp; <b>H</b> horn &nbsp;&nbsp; <b>Tab</b> city map<br>
-      <b>Esc</b> pause &nbsp;&nbsp; <b>M</b> next mission &nbsp;&nbsp; <b>N</b> save game
-    </div>
+<div id="title-screen" class="overlay">
+  <h1><span class="neon">NEON</span> DELTA LA</h1>
+  <h2>AN OPEN-WORLD CRIME STORY</h2>
+  <button class="btn" id="btn-new">NEW GAME</button>
+  <button class="btn secondary" id="btn-continue">CONTINUE — <span id="continue-label"></span></button>
+  <div id="controls">
+    <b>WASD</b> move / drive &nbsp;·&nbsp; <b>Mouse</b> look / aim &nbsp;·&nbsp; <b>Click</b> shoot<br>
+    <b>F</b> enter / steal car &nbsp;·&nbsp; <b>Space</b> handbrake &nbsp;·&nbsp; <b>Shift</b> sprint<br>
+    <b>1 2 3</b> weapons &nbsp;·&nbsp; <b>R</b> reload &nbsp;·&nbsp; <b>E</b> interact &nbsp;·&nbsp; <b>Q</b> radio<br>
+    <b>H</b> horn &nbsp;·&nbsp; <b>Tab</b> city map &nbsp;·&nbsp; <b>N</b> save &nbsp;·&nbsp; <b>M</b> next mission &nbsp;·&nbsp; <b>Esc</b> pause
   </div>
 </div>
 
-<div id="pause-screen" class="screen">
-  <div class="panel"><h1>PAUSED</h1><p>Esc resume &nbsp;·&nbsp; N save game &nbsp;·&nbsp; M next mission</p><p>The city waits for you.</p><p>Radio: X on/off, Q next station</p></div>
+<div id="pause-menu" class="overlay">
+  <h1>PAUSED</h1>
+  <button class="btn" id="btn-resume">RESUME</button>
+  <button class="btn secondary" id="btn-restart">RESTART</button>
+  <button class="btn small" id="btn-quit">QUIT TO TITLE</button>
 </div>
 
-<div id="busted-screen" class="screen">
-  <div class="panel"><h1 style="color:#ff5e7a">BUSTED</h1><p>The police took $200. Mara wakes at the hospital.</p><p>Press Enter to get back on the streets</p></div>
+<div id="map-screen" class="overlay">
+  <h1>NEON DELTA — CITY MAP</h1>
+  <canvas id="citymap" width="800" height="600"></canvas>
+  <p>Tab / Esc — close &nbsp;·&nbsp; Yellow diamond = mission target</p>
+  <button class="btn small" id="btn-map-close" style="margin-top:14px">CLOSE</button>
 </div>
 
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

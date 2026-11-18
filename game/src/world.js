@@ -1,723 +1,559 @@
-// The simulation: city, player, traffic, pedestrians, police and combat.
-// No drawing and no browser here — step() advances one fixed step and the
-// 3D scene paints the state. Screen states (title/play/paused/busted) are the
-// caller's job; missions are a separate progression (missions.js) and wanted
-// and combat are conditions on top of play, never a screen of their own.
-// Arrest, death, mission failure and restart have explicit precedence and
-// cleanup in reset() and in the bust branch, so no timer or actor survives
-// a transition.
-import { AVENUES, BEACH, CANAL, DISTRICTS, PIER, PLAYER, PORT, STREETS, VEHICLES, WEAPONS, WORLD, districtAt } from './config.js';
-import { makeVehicle, stepVehicle, steerToward, dist2 } from './vehicles.js';
-import { cellOf, findPath, nearestRoadCell, cellCenter } from './astar.js';
-import { pick } from './random.js';
+// Neon Delta LA — world: city layout, landmarks, Coral Pier, roads, props.
+// All original content. Landmark names are invented for this game.
+import * as THREE from '../vendor/three.module.min.js';
+import { WORLD, DISTRICTS, PALETTE } from './config.js';
+import { mulberry32, pick, range, rangeInt, chance } from './rng.js';
+import { mergeItems, boxItem, cylItem, groundTexture, windowTexture, signTexture } from './geo.js';
+import { lightState } from './lights.js';
 
-export const EVENT_BUSTED = 1;
-export const EVENT_SHOT = 2;
-export const EVENT_CRIME = 4;
+const rng = mulberry32(20261118);
 
-const CAR_COLORS = ['#ff4d6d', '#2ee6d6', '#ffd23e', '#ff7a1a', '#b388ff', '#e8ecf5', '#7dffa8'];
-const PED_COLORS = ['#ff8fab', '#ffd23e', '#7fd4ff', '#b388ff', '#7dffa8', '#ff9a5c', '#00c2a8', '#ff6b35', '#e8ecf5'];
-const PED_SKINS = ['#e8b48a', '#c98d5f', '#8a5a3a', '#f2c9a0', '#5a3a22', '#f2d7b0'];
-const PED_PANTS = ['#2b2b3a', '#3a4a6b', '#5a3a2a', '#2e4a3a', '#6b6b7a'];
-const PED_HAIR = ['#3a2a1a', '#1a1a1a', '#6b4a2f', '#8a8a8a', '#e5382e', '#2e6bff', '#f2d7b0', '#b85c38'];
-const PED_HATS = ['#ffd23e', '#2ee6d6', '#e8ecf5', '#ff7a1a', '#b388ff', '#ff9a5c'];
-const SHOE_COLORS = ['#e8ecf5', '#ffd23e', '#ff2e4d', '#2ee6d6', '#1a1a2e', '#ff7a1a'];
-
-function circleVsRect(px, py, r, b) {
-  const cx = Math.max(b.x, Math.min(px, b.x + b.w)), cy = Math.max(b.y, Math.min(py, b.y + b.h));
-  const dx = px - cx, dy = py - cy, d2 = dx * dx + dy * dy;
-  if (d2 >= r * r) return null;
-  const d = Math.sqrt(Math.max(d2, 0.01));
-  return { push: r - d, dx, dy, d };
-}
-
-function inWater(x, y) {
-  if (x > BEACH.seaX) return true;
-  if (x > CANAL.x0 && x < CANAL.x1 && y > CANAL.y0 && y < CANAL.y1) {
-    return !STREETS.some((s) => Math.abs(y - s) < 48); // bridges cross the canal
+export function groundY(x, z) {
+  if (x >= -795 && x <= -650 && z >= 255 && z <= 345) {
+    if (x > -665) return 2.5 * ((-650 - x) / 15); // entrance ramp
+    return 2.5;
   }
-  return false;
+  if (z < -720) return Math.min(12, (-720 - z) * 0.3);
+  return 0;
 }
 
-export function createWorld(rand) {
-// ---- static city: grid-based blocks, lots that never overlap, height
-// falling off from the downtown core to low beach hotels. Each block is
-// split into lots with alley margins, so buildings sit in tidy rows instead
-// of piling up at random. A few lots stay empty as plazas with a palm.
-const GLASS_COLORS = ['#5f6fb0', '#3fd2e0', '#8f7fb8', '#4a7fb8', '#6fb0c9'];
-const MID_COLORS = ['#c96f4a', '#b08968', '#a87a5a', '#8a6f8a', '#7fae5a'];
-const HILL_COLORS = ['#c9a06a', '#a8b08a', '#d9c49a', '#b08968', '#8a9a7a'];
-const BEACH_COLORS = ['#f2d8c9', '#ffd9a0', '#ffb3a0', '#c9e8e0', '#f2e8d5'];
-const buildings = [];
-const containers = [];
-const cranes = [];
-const palms = [];
-// Style from the local district and distance to the downtown core, so every
-// block — grid or rim — reads as the same city.
-function styleFor(cx, cy) {
-  const d = districtAt(cx, cy);
-  const distDowntown = Math.hypot(cx - 675, cy - 370);
-  if (d.name === 'DOWNTOWN' || distDowntown < 550) return { minH: 140, maxH: 260, colors: GLASS_COLORS, glass: true };
-  if (cx > 1900) return { minH: 26, maxH: 55, colors: BEACH_COLORS, glass: false };
-  if (d.name === 'HOLLYWOOD HILLS') return { minH: 24, maxH: 46, colors: HILL_COLORS, glass: false };
-  if (distDowntown < 1100) return { minH: 60, maxH: 130, colors: MID_COLORS, glass: rand() < 0.3 };
-  return { minH: 30, maxH: 60, colors: MID_COLORS, glass: false };
-}
-// Spots that must stay open: parked cars, mission and side-job waypoints,
-// the player spawn. A lot whose centre falls near one stays empty, so no
-// car is ever walled in and every waypoint stays reachable on foot.
-const KEEP_CLEAR = [
-  [700, 750], [2100, 500], [1900, 1350], [2100, 1600], [2400, 1450],
-  [1500, 1350], [600, 1750], [1100, 1000], [900, 500],
-];
-function nearKeepClear(x, y) {
-  for (const [kx, ky] of KEEP_CLEAR) {
-    if (Math.hypot(x - kx, y - ky) < 90) return true;
+export function buildWorld(scene) {
+  const colliders = [];
+  const addCollider = (x0, z0, x1, z1, h = 30) => { colliders.push({ x0, z0, x1, z1, h }); };
+
+  // ---- ground + ocean ----
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(WORLD.HALF * 2, WORLD.HALF * 2),
+    new THREE.MeshLambertMaterial({ map: groundTexture() })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  scene.add(ground);
+  const ocean = new THREE.Mesh(
+    new THREE.PlaneGeometry(600, 1800),
+    new THREE.MeshLambertMaterial({ color: PALETTE.water })
+  );
+  ocean.rotation.x = -Math.PI / 2;
+  ocean.position.set(-1020, -0.4, 0);
+  scene.add(ocean);
+
+  // ---- facade materials (window-grid textures, repeated per building size) ----
+  const fac = {
+    blue: new THREE.MeshLambertMaterial({ map: windowTexture('#8fb8d8') }),
+    tan: new THREE.MeshLambertMaterial({ map: windowTexture('#c9a876') }),
+    white: new THREE.MeshLambertMaterial({ map: windowTexture('#e8e4da') }),
+    dark: new THREE.MeshLambertMaterial({ map: windowTexture('#5a6a7a') }),
+    pink: new THREE.MeshLambertMaterial({ map: windowTexture('#e8a0a8') }),
+    gray: new THREE.MeshLambertMaterial({ map: windowTexture('#9a9a92') }),
+    teal: new THREE.MeshLambertMaterial({ map: windowTexture('#7fc4bd') }),
+  };
+  const plain = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const glassCurved = new THREE.MeshLambertMaterial({ map: windowTexture('#6fa8c8'), transparent: true, opacity: 0.92 });
+
+  const byMat = { blue: [], tan: [], white: [], dark: [], pink: [], gray: [], teal: [] };
+  const plainItems = [];
+  const addBuilding = (x, z, w, h, d, mat, opts = {}) => {
+    const it = boxItem(w, h, d, x, h / 2 + (opts.y || 0), z, 0xffffff, opts.ry || 0);
+    it.uvScale = [Math.max(w, d) / 16, h / 30];
+    byMat[mat].push(it);
+    addCollider(x - w / 2, z - d / 2, x + w / 2, z + d / 2, h + (opts.y || 0));
+    // roof AC boxes + parapet
+    const n = rangeInt(rng, 1, 3);
+    for (let i = 0; i < n; i++) {
+      plainItems.push(boxItem(3, 1.6, 3, x + range(rng, -w / 4, w / 4), h + 0.8 + (opts.y || 0), z + range(rng, -d / 4, d / 4), 0x8a8a82));
+    }
+    if (opts.canopy) {
+      plainItems.push(boxItem(w * 0.6, 0.5, 6, x, 4.2, z + d / 2 + 2.5, opts.canopyColor || 0xff2e4d));
+      plainItems.push(boxItem(0.4, 4, 0.4, x - w * 0.28, 2, z + d / 2 + 5, 0x333333));
+      plainItems.push(boxItem(0.4, 4, 0.4, x + w * 0.28, 2, z + d / 2 + 5, 0x333333));
+    }
+    if (opts.antenna) {
+      plainItems.push(cylItem(0.3, 0.3, 18, x, h + 9, z, 0x666666, 6));
+      plainItems.push(boxItem(4, 0.3, 4, x, h + 16, z, 0x888888));
+    }
+    return { x, z, w, h, d };
+  };
+
+  // ---- district fill: blocks between roads ----
+  const keepClear = [
+    [600, 700, 30], [600, 560, 24], [100, -500, 30], [-480, -560, 30], [520, 560, 30],
+    [-700, 300, 60], [0, 700, 30], [700, -300, 30], [-400, 500, 30],
+  ];
+  const isClear = (x, z) => keepClear.some(([cx, cz, r]) => Math.abs(x - cx) < r && Math.abs(z - cz) < r);
+  const blockCenters = [];
+  for (let i = 0; i < WORLD.AVENUES.length - 1; i++) {
+    for (let j = 0; j < WORLD.STREETS.length - 1; j++) {
+      blockCenters.push([(WORLD.AVENUES[i] + WORLD.AVENUES[i + 1]) / 2, (WORLD.STREETS[j] + WORLD.STREETS[j + 1]) / 2]);
+    }
   }
-  return false;
-}
-// One block of lots: subdivided with alley margins, so buildings sit in
-// tidy rows and never overlap. A few lots stay open as plazas, but even a
-// plaza gets a palm and a low kiosk — no lot is ever bare dirt.
-function genBlock(x0, y0, x1, y1, minH, maxH, colors, glass) {
-  if (x0 >= x1 || y0 >= y1) return;
-  if (x0 > CANAL.x0 - 120 && x0 < CANAL.x1 + 120) return; // canal corridor
-  const cols = (x1 - x0) > 260 ? 3 : (x1 - x0) > 140 ? 2 : 1;
-  const rows = (y1 - y0) > 200 ? 2 : 1;
-  const lotW = (x1 - x0) / cols, lotH = (y1 - y0) / rows;
-  const margin = 14;
-  for (let c = 0; c < cols; c += 1) {
-    for (let r = 0; r < rows; r += 1) {
-      const lx = x0 + c * lotW, ly = y0 + r * lotH;
-      const ccx = lx + lotW / 2, ccy = ly + lotH / 2;
-      if (nearKeepClear(ccx, ccy)) continue;
-      if (rand() < 0.05) {
-        palms.push({ x: ccx, y: ccy });
-        const kx = ccx - 13;
-        if (!(kx > 1120 && kx < 1450)) {
-          buildings.push({
-            x: kx, y: ccy - 9 + 12, w: 26, h: 18,
-            height: 16 + rand() * 8, color: pick(rand, BEACH_COLORS),
-            glass: false, roof: false, z0: 0,
-          });
-        }
-        continue;
+  const kindAt = (x, z) => {
+    for (const d of DISTRICTS) if (x >= d.x0 && x <= d.x1 && z >= d.z0 && z <= d.z1) return d.kind;
+    return 'mid';
+  };
+  const matCycle = ['blue', 'tan', 'white', 'dark', 'teal', 'gray'];
+  for (const [bx, bz] of blockCenters) {
+    if (isClear(bx, bz)) continue;
+    const kind = kindAt(bx, bz);
+    if (kind === 'pier' || kind === 'freeway' || kind === 'hills') continue;
+    if (kind === 'towers') {
+      const n = chance(rng, 0.5) ? 1 : 2;
+      for (let i = 0; i < n; i++) {
+        const w = range(rng, 34, 52), d = range(rng, 34, 52), h = range(rng, 90, 240);
+        addBuilding(bx + (i === 0 ? -18 : 22), bz + (i === 0 ? 10 : -14), w, h, d, pick(rng, ['blue', 'dark', 'teal']), { antenna: chance(rng, 0.4) });
       }
-      const bw = lotW - margin * 2, bh = lotH - margin * 2;
-      if (bw < 20 || bh < 20) continue;
-      const shrink = 0.75 + rand() * 0.25;
-      const w = bw * shrink, h = bh * shrink;
-      const x = lx + margin + (bw - w) / 2 + (rand() - 0.5) * 6;
-      const y = ly + margin + (bh - h) / 2 + (rand() - 0.5) * 6;
-      if (x > 1120 && x < 1450) continue; // guard the canal test directly
-      const height = minH + rand() * (maxH - minH);
-      const color = pick(rand, colors);
-      const roof = height < 70 && rand() < 0.45;
-      buildings.push({ x, y, w, h, height, color, glass, roof, z0: 0 });
-      if (glass && rand() < 0.5) {
-        // Stepped crown: a smaller box on top, so towers vary in silhouette.
-        const cw = w * 0.55, ch = h * 0.55;
-        buildings.push({
-          x: x + (w - cw) / 2, y: y + (h - ch) / 2, w: cw, h: ch,
-          height: height * 0.28, color, glass: true, roof: false, z0: height,
-        });
+    } else if (kind === 'mid') {
+      const n = rangeInt(rng, 2, 4);
+      for (let i = 0; i < n; i++) {
+        const w = range(rng, 22, 34), d = range(rng, 22, 34), h = range(rng, 22, 58);
+        addBuilding(bx + range(rng, -50, 50), bz + range(rng, -50, 50), w, h, d, pick(rng, matCycle), { canopy: chance(rng, 0.5), canopyColor: pick(rng, [0xff2e4d, 0x2ec4b6, 0xffc53d, 0xff7e5f]) });
+      }
+    } else if (kind === 'low' || kind === 'canal') {
+      const n = rangeInt(rng, 3, 5);
+      for (let i = 0; i < n; i++) {
+        const w = range(rng, 14, 22), d = range(rng, 14, 22), h = range(rng, 8, 16);
+        addBuilding(bx + range(rng, -55, 55), bz + range(rng, -55, 55), w, h, d, pick(rng, ['tan', 'white', 'pink', 'teal']));
+      }
+    } else if (kind === 'port') {
+      addBuilding(bx, bz, range(rng, 50, 70), range(rng, 12, 18), range(rng, 30, 44), 'gray');
+      for (let i = 0; i < 6; i++) {
+        plainItems.push(boxItem(12, 2.6, 2.6, bx + range(rng, -60, 60), 1.3 + (i % 3) * 2.7, bz + range(rng, -50, 50), pick(rng, [0xc0392b, 0x2471a3, 0x229954, 0xd4ac0d, 0x7d3c98])));
       }
     }
   }
-}
-for (let bi = 0; bi < AVENUES.length - 1; bi += 1) {
-  for (let si = 0; si < STREETS.length - 1; si += 1) {
-    const x0 = AVENUES[bi] + 55, x1 = AVENUES[bi + 1] - 55;
-    const y0 = STREETS[si] + 55, y1 = STREETS[si + 1] - 55;
-    const s = styleFor((x0 + x1) / 2, (y0 + y1) / 2);
-    genBlock(x0, y0, x1, y1, s.minH, s.maxH, s.colors, s.glass);
+
+  // ---- landmarks with identity (original names) ----
+  // Delta General Hospital: white slab + blue-glass tower + canopy + ambulance.
+  addBuilding(200, -480, 64, 26, 34, 'white', { canopy: true, canopyColor: 0x2ec4b6 });
+  addBuilding(200, -520, 34, 64, 26, 'blue', { antenna: true });
+  plainItems.push(boxItem(10, 3.4, 4, 236, 1.7, -440, 0xf4f4f0)); // ambulance body
+  plainItems.push(boxItem(3, 3.4, 3.8, 228, 1.7, -440, 0xf4f4f0));
+  plainItems.push(boxItem(0.4, 2.2, 0.4, 236, 1.7, -438, 0xc0392b));
+  plainItems.push(boxItem(2.2, 0.4, 0.4, 236, 1.7, -438, 0xc0392b));
+  // Neon Delta City Hall: brown stepped mass + central tower + antenna + walled plaza.
+  addBuilding(-120, -480, 84, 18, 52, 'tan');
+  addBuilding(-120, -480, 52, 32, 40, 'tan', { y: 18 });
+  addBuilding(-120, -480, 22, 74, 22, 'tan', { y: 50, antenna: true });
+  plainItems.push(boxItem(90, 3, 1, -120, 1.5, -448, 0xb09a7a));
+  plainItems.push(boxItem(90, 3, 1, -120, 1.5, -512, 0xb09a7a));
+  // Civic Center (gray + tower) beside the freeway.
+  addBuilding(560, -480, 52, 24, 38, 'gray');
+  addBuilding(560, -520, 18, 62, 18, 'gray', { antenna: true });
+  // Shophouses: bright colors, ground-floor stores with awnings + signs.
+  const shopColors = ['pink', 'teal', 'tan', 'blue', 'white', 'pink'];
+  const shopNames = ['CORAL TACOS', 'NEON DONUTS', 'PIER GIFTS', 'SUNSET CAFE', 'VINYL & CO', 'TIDE BOOKS'];
+  const shopSigns = [];
+  shopColors.forEach((m, i) => {
+    const x = -80 + i * 34;
+    addBuilding(x, 100, 26, range(rng, 12, 18), 16, m, { canopy: true, canopyColor: pick(rng, [0xff2e4d, 0xffc53d, 0x2ec4b6]) });
+    shopSigns.push({ x, z: 100, text: shopNames[i] });
+  });
+  // Curved-glass corner towers (Downtown landmarks).
+  const curved = [];
+  for (const [cx, cz] of [[-100, -300], [140, -260]]) {
+    const bh = range(rng, 120, 180);
+    addBuilding(cx, cz, 44, bh, 44, 'blue');
+    const seg = new THREE.Mesh(
+      new THREE.CylinderGeometry(24, 24, bh, 12, 1, false, 0, Math.PI / 2),
+      glassCurved
+    );
+    seg.position.set(cx + 22, bh / 2, cz + 22);
+    scene.add(seg);
+    curved.push(seg);
+    addCollider(cx + 10, cz + 10, cx + 34, cz + 34, 180);
   }
-}
-// Edge strips the grid never reached: beachfront shops east of avenue 1900,
-// low homes west of avenue 300 and north of street 300, warehouses
-// south-east of the port past the canal. Same lots, same rules — no empty rim.
-for (let si = 0; si < STREETS.length - 1; si += 1) {
-  const y0 = STREETS[si] + 55, y1 = STREETS[si + 1] - 55;
-  genBlock(1955, y0, 2195, y1, 26, 55, BEACH_COLORS, false);
-  genBlock(55, y0, 245, y1, 30, 60, MID_COLORS, false);
-}
-for (let bi = 0; bi < AVENUES.length; bi += 1) {
-  const x0 = AVENUES[bi] + 55, x1 = (AVENUES[bi + 1] || 2250) - 55;
-  const s = styleFor((x0 + x1) / 2, 150);
-  genBlock(x0, 55, x1, 245, s.minH, s.maxH, s.colors, s.glass);
-}
-genBlock(1465, 1705, 2195, 1845, 34, 72, ['#8a7a6a', '#6b7a8a', '#a88a6a', '#7a6a5a'], false);
-  for (let i = 0; i < 10; i += 1) {
-    containers.push({ x: PORT.x0 + 40 + i * 90, y: PORT.y0 + 40 + (i % 2) * 70, w: 64, h: 30, color: pick(rand, ['#f2a541', '#19b8c9', '#e5382e', '#7dffa8']) });
+
+  // ---- merge buildings into a few meshes ----
+  for (const [key, items] of Object.entries(byMat)) {
+    if (!items.length) continue;
+    const mesh = new THREE.Mesh(mergeItems(items), fac[key]);
+    scene.add(mesh);
   }
-  for (let i = 0; i < 4; i += 1) cranes.push({ x: PORT.x0 + 120 + i * 240, y: PORT.y0 + 8, h: 190 });
-  // Palm trees along the beach and the Coral Strip boulevard.
-  for (let y = 140; y < 1700; y += 130) palms.push({ x: 2280 + (rand() < 0.5 ? -14 : 14), y });
-  for (let x = 1950; x < 2250; x += 120) palms.push({ x, y: 300 });
-  // Tall palms lining the two main boulevards (Downtown avenue 700 and the
-  // Coral Strip avenue 1900), mid-block on the sidewalk — the San Andreas
-  // look: a palm-lined street leading the eye to the skyline.
-  for (const av of [700, 1900]) {
-    for (const y of [475, 825, 1175, 1500]) {
-      palms.push({ x: av - 49, y });
-      palms.push({ x: av + 49, y });
+  scene.add(new THREE.Mesh(mergeItems(plainItems), plain));
+  plainItems.length = 0; // merged; reuse the array for sign posts below
+
+  // ---- signs (billboards with original names) ----
+  const signDefs = [
+    { x: 200, z: -460, ry: 0, lines: ['DELTA GENERAL', 'HOSPITAL', 'EMERGENCY 24H'] },
+    { x: -120, z: -448, ry: 0, lines: ['NEON DELTA', 'CITY HALL'] },
+    { x: -700, z: 220, ry: 0, lines: ['CORAL PIER', 'AMUSEMENT PIER', 'GAMES • RIDES • CAFES'] },
+    ...shopSigns.map((s) => ({ x: s.x, z: s.z + 10, ry: 0, lines: [s.text] })),
+  ];
+  for (const s of signDefs) {
+    const tex = signTexture(s.lines, { bg: '#12233d' });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshLambertMaterial({ map: tex }));
+    m.position.set(s.x, 10, s.z);
+    m.rotation.y = s.ry;
+    scene.add(m);
+    plainItems.push(boxItem(0.6, 10, 0.6, s.x - 7, 5, s.z, 0x333333));
+    plainItems.push(boxItem(0.6, 10, 0.6, s.x + 7, 5, s.z, 0x333333));
+  }
+  if (plainItems.length) scene.add(new THREE.Mesh(mergeItems(plainItems), plain));
+  plainItems.length = 0;
+
+  // Hillside sign: NEON DELTA LA letters on the north hills.
+  const hillSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(90, 18),
+    new THREE.MeshLambertMaterial({ map: signTexture(['NEON DELTA LA'], { bg: '#e8e4da', fg: '#ff2e4d' }) })
+  );
+  hillSign.position.set(0, 14, -755);
+  hillSign.rotation.x = -0.25;
+  scene.add(hillSign);
+  for (const [hx, hz] of [[-300, -760], [-100, -770], [200, -760], [420, -770]]) {
+    const mound = new THREE.Mesh(new THREE.SphereGeometry(60, 12, 8), new THREE.MeshLambertMaterial({ color: 0x6a8a52 }));
+    mound.scale.set(1, 0.28, 0.7);
+    mound.position.set(hx, 0, hz);
+    scene.add(mound);
+  }
+  for (const [hx, hz] of [[-320, -740], [120, -740], [380, -740]]) {
+    addBuilding(hx, hz, 20, 10, 16, 'tan');
+  }
+
+  // ---- palms, lamps, trees (merged) ----
+  const palmTrunks = [], palmFronds = [], lampPosts = [], lampHeads = [], treeItems = [];
+  const addPalm = (x, z, s = 1) => {
+    const h = 11 * s;
+    palmTrunks.push(cylItem(0.35, 0.55, h, x, h / 2, z, 0x8a6a42, 7));
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      palmFronds.push(boxItem(5.5, 0.25, 1.6, x + Math.cos(a) * 2.4, h + 0.4, z + Math.sin(a) * 2.4, 0x2f8f4e, a, 0, 0.5));
     }
+  };
+  // beachfront drive palms + pier palms + boulevard palms
+  for (let z = -380; z <= 500; z += 44) addPalm(-640, z, range(rng, 0.9, 1.2));
+  for (const z of [272, 328]) { addPalm(-680, z, 1); addPalm(-760, z, 1); } // off the center line: nothing blocks the wheel
+  for (let x = -560; x <= 560; x += 88) addPalm(x, -188, range(rng, 0.9, 1.15));
+  for (let i = 0; i < 40; i++) {
+    const x = range(rng, -640, 640), z = range(rng, -640, 640);
+    if (Math.abs(x % 200) < 30 || Math.abs(z % 200) < 30) continue;
+    treeItems.push(cylItem(0.4, 0.5, 3, x, 1.5, z, 0x6a4a2a, 6));
+    treeItems.push({ geo: new THREE.SphereGeometry(range(rng, 2.5, 4), 8, 6), matrix: new THREE.Matrix4().makeTranslation(x, 5.5, z), color: 0x4a8a3a });
   }
-  // Beach umbrellas on the sand.
-  const umbrellas = [];
-  for (let i = 0; i < 10; i += 1) umbrellas.push({ x: 2300 + rand() * 120, y: 300 + i * 130 + rand() * 40, color: pick(rand, ['#ff4d6d', '#ffd23e', '#2ee6d6', '#ff7a1a']) });
-  // Coral Pier: the coaster loop and the stalls are fixed geometry (no rand),
-  // so the landmark is identical on every seed. The track is a closed loop
-  // of points; the scene builds the rail from them and runs the train on it.
-  const pier = (() => {
-    const c = PIER.coaster;
-    const track = [];
-    const N = 48;
-    for (let i = 0; i < N; i += 1) {
-      const t = (i / N) * Math.PI * 2;
-      track.push({
-        x: c.cx + Math.cos(t) * c.rx,
-        y: c.cy + Math.sin(t) * c.rz,
-        h: c.h + Math.sin(t * 2) * 14 + (Math.cos(t) < 0 ? 10 : 0),
+  for (const x of WORLD.AVENUES) for (let z = -700; z <= 700; z += 100) {
+    lampPosts.push(cylItem(0.18, 0.22, 8, x + 13, 4, z, 0x2a2a2e, 6));
+    lampPosts.push(boxItem(3, 0.3, 0.3, x + 11.5, 8, z, 0x2a2a2e));
+    lampHeads.push(boxItem(1.2, 0.5, 0.6, x + 10, 7.8, z, 0xfff2c0));
+  }
+  scene.add(new THREE.Mesh(mergeItems(palmTrunks), plain));
+  scene.add(new THREE.Mesh(mergeItems(palmFronds), plain));
+  scene.add(new THREE.Mesh(mergeItems(lampPosts), plain));
+  const lampHeadMat = new THREE.MeshLambertMaterial({ color: 0xfff2c0, emissive: 0xffdf80, emissiveIntensity: 0.15 });
+  scene.add(new THREE.Mesh(mergeItems(lampHeads), lampHeadMat));
+  scene.add(new THREE.Mesh(mergeItems(treeItems), plain));
+
+  // ---- traffic lights (working, cycling) ----
+  const lightGroups = [];
+  const lampMats = {
+    red: new THREE.MeshLambertMaterial({ color: 0x330000, emissive: 0xff2222, emissiveIntensity: 0 }),
+    yellow: new THREE.MeshLambertMaterial({ color: 0x332200, emissive: 0xffcc22, emissiveIntensity: 0 }),
+    green: new THREE.MeshLambertMaterial({ color: 0x002200, emissive: 0x22ff66, emissiveIntensity: 0 }),
+  };
+  const lightPosts = [];
+  const lightDefs = [];
+  for (const x of [-400, 0, 400]) for (const z of [-400, 0, 400]) lightDefs.push([x, z]);
+  lightDefs.push([-600, 200], [200, 600], [-200, -200]);
+  lightDefs.forEach(([x, z], i) => {
+    const off = (i % 4) * 3.75;
+    // NS light (faces traffic along z) on the east side, EW light on the north side
+    const mk = (lx, lz, axis, ry) => {
+      lightPosts.push(cylItem(0.22, 0.26, 7, lx, 3.5, lz, 0x222222, 6));
+      lightPosts.push(boxItem(7, 0.35, 0.35, lx + (axis === 'ns' ? 0 : -3.5), 7, lz + (axis === 'ns' ? -3.5 : 0), 0x222222));
+      const head = new THREE.Group();
+      head.position.set(lx + (axis === 'ns' ? 0 : -6.5), 6.2, lz + (axis === 'ns' ? -6.5 : 0));
+      head.rotation.y = ry;
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.4, 0.9), new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
+      head.add(box);
+      const lamps = {};
+      [['red', 0.75], ['yellow', 0], ['green', -0.75]].forEach(([name, dy]) => {
+        const s = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), lampMats[name]);
+        s.position.set(0, dy, 0.48);
+        head.add(s);
+        lamps[name] = s;
       });
+      scene.add(head);
+      lightGroups.push({ axis, offset: off, lamps, x: lx, z: lz });
+    };
+    mk(x + 14, z + 14, 'ns', Math.PI);
+    mk(x - 14, z - 14, 'ew', Math.PI / 2);
+  });
+  scene.add(new THREE.Mesh(mergeItems(lightPosts), plain));
+
+  // ---- Coral Pier (landmark): arch gate, boardwalk, shops, bunting, wheel, coaster ----
+  const pier = { wheel: null, cabins: [], train: null, trainT: 0 };
+  const pierItems = [];
+  // deck: wood planks (alternating strips) + side skirts
+  for (let i = 0; i < 26; i++) {
+    pierItems.push(boxItem(5, 0.6, 86, -792 + i * 5.2, 2.2, 300, i % 2 ? 0x9c7a4a : 0xa8875a));
+  }
+  pierItems.push(boxItem(140, 1.2, 1, -725, 1.8, 258, 0x7a5c34));
+  pierItems.push(boxItem(140, 1.2, 1, -725, 1.8, 342, 0x7a5c34));
+  // support pillars under the deck
+  for (let x = -790; x <= -665; x += 18) for (const z of [262, 300, 338]) {
+    pierItems.push(cylItem(0.9, 1.1, 8, x, -1.5, z, 0x6a5a44, 8));
+  }
+  // double-yellow center line down the boardwalk (per the pier reference)
+  pierItems.push(boxItem(130, 0.15, 0.5, -725, 2.55, 297, 0xf7c948));
+  pierItems.push(boxItem(130, 0.15, 0.5, -725, 2.55, 303, 0xf7c948));
+  // railings
+  for (let x = -790; x <= -660; x += 10) {
+    pierItems.push(boxItem(0.3, 1.1, 0.3, x, 3.1, 258.5, 0xf4f4f0));
+    pierItems.push(boxItem(0.3, 1.1, 0.3, x, 3.1, 341.5, 0xf4f4f0));
+  }
+  pierItems.push(boxItem(132, 0.25, 0.25, -725, 3.6, 258.5, 0xf4f4f0));
+  pierItems.push(boxItem(132, 0.25, 0.25, -725, 3.6, 341.5, 0xf4f4f0));
+  scene.add(new THREE.Mesh(mergeItems(pierItems), plain));
+  // arch gate at the beach end: striped pillars + arch + CORAL PIER sign
+  const gateItems = [];
+  for (let i = 0; i < 6; i++) {
+    gateItems.push(boxItem(2.4, 2.2, 2.4, -656, 2.5 + i * 2.2 + 1.1, 282, i % 2 ? 0xf4f4f0 : 0xc0392b));
+    gateItems.push(boxItem(2.4, 2.2, 2.4, -656, 2.5 + i * 2.2 + 1.1, 318, i % 2 ? 0xf4f4f0 : 0xc0392b));
+  }
+  scene.add(new THREE.Mesh(mergeItems(gateItems), plain));
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(18, 1.4, 8, 24, Math.PI), new THREE.MeshLambertMaterial({ color: 0xc0392b }));
+  arch.position.set(-656, 15.5, 300);
+  scene.add(arch);
+  const gateSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(30, 10),
+    new THREE.MeshLambertMaterial({ map: signTexture(['CORAL PIER', 'AMUSEMENT PIER', 'GAMES • RIDES • CAFES'], { bg: '#12233d', fg: '#ff5a6e' }) })
+  );
+  gateSign.position.set(-656, 12, 300);
+  scene.add(gateSign);
+  // pier shops / stalls (colorful, awnings, signs)
+  const stallNames = ['RING TOSS', 'CORAL DOGS', 'POPCORN', 'CANDY', 'BALLOONS', 'FISHING', 'ARCADE', 'LEMONADE'];
+  const stallColors = [0xff2e4d, 0x2ec4b6, 0xffc53d, 0xff7e5f, 0x7d3c98, 0x2471a3, 0x229954, 0xd4ac0d];
+  const stallItems = [];
+  stallNames.forEach((name, i) => {
+    const side = i % 2 === 0 ? 268 : 332;
+    const x = -680 - Math.floor(i / 2) * 22;
+    stallItems.push(boxItem(10, 4.5, 8, x, 4.75, side, stallColors[i]));
+    stallItems.push(boxItem(11, 0.4, 9, x, 7.2, side, 0xf4f4f0));
+    stallItems.push(boxItem(11, 0.4, 3, x, 6.4, side + (side < 300 ? 4.5 : -4.5), stallColors[i]));
+    addCollider(x - 5, side - 4, x + 5, side + 4, 8);
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), new THREE.MeshLambertMaterial({ map: signTexture([name], { bg: '#12233d' }) }));
+    s.position.set(x, 5.6, side + (side < 300 ? -4.2 : 4.2));
+    s.rotation.y = side < 300 ? 0 : Math.PI;
+    scene.add(s);
+  });
+  scene.add(new THREE.Mesh(mergeItems(stallItems), plain));
+  // bunting strings across the deck
+  const buntItems = [];
+  const buntColors = [0xff2e4d, 0xffc53d, 0x2ec4b6, 0x7d3c98, 0xff7e5f];
+  for (const bx of [-672, -720, -768]) {
+    for (let i = 0; i < 12; i++) {
+      const z = 262 + i * 6.8;
+      const sag = Math.sin((i / 11) * Math.PI) * 1.2;
+      const tri = new THREE.BufferGeometry();
+      tri.setAttribute('position', new THREE.Float32BufferAttribute([bx, 8.4 - sag, z, bx + 1.6, 8.4 - sag, z, bx + 0.8, 7.2 - sag, z], 3));
+      tri.computeVertexNormals();
+      buntItems.push({ geo: tri, matrix: new THREE.Matrix4(), color: buntColors[i % 5] });
     }
-    const stalls = [];
-    const gameColors = ['#ff4d8d', '#2ee6d6', '#ffd23e', '#ff7a1a', '#b388ff'];
-    const foodColors = ['#ffd23e', '#ff4d6d', '#7dffa8', '#ff7a1a'];
-    for (let i = 0; i < 5; i += 1) {
-      stalls.push({ x: 2290 + i * 50, y: PIER.y - 20, kind: 'game', color: gameColors[i] });
+  }
+  scene.add(new THREE.Mesh(mergeItems(buntItems), plain));
+  // ferris wheel at the far end
+  const wheelGroup = new THREE.Group();
+  wheelGroup.position.set(-778, 16, 300);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(13, 0.7, 8, 32), new THREE.MeshLambertMaterial({ color: 0xf4f4f0 }));
+  wheelGroup.add(rim);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.5, 26, 0.5), new THREE.MeshLambertMaterial({ color: 0xffc53d }));
+    spoke.position.set(0, 0, 0);
+    spoke.rotation.z = a + Math.PI / 2; // bar through the hub
+    wheelGroup.add(spoke);
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.4, 2.4), new THREE.MeshLambertMaterial({ color: [0xff2e4d, 0x2ec4b6, 0xffc53d, 0x7d3c98][i % 4] }));
+    cab.position.set(Math.cos(a) * 13, Math.sin(a) * 13, 0);
+    wheelGroup.add(cab);
+    pier.cabins.push(cab);
+  }
+  wheelGroup.rotation.y = Math.PI / 2;
+  scene.add(wheelGroup);
+  pier.wheel = wheelGroup;
+  const legItems = [];
+  legItems.push(boxItem(1.2, 18, 1.2, -778, 9, 294, 0xdddddd));
+  legItems.push(boxItem(1.2, 18, 1.2, -778, 9, 306, 0xdddddd));
+  legItems.push(boxItem(1.2, 16, 1.2, -772, 8, 300, 0xdddddd));
+  legItems.push(boxItem(1.2, 16, 1.2, -784, 8, 300, 0xdddddd));
+  scene.add(new THREE.Mesh(mergeItems(legItems), plain));
+  // roller coaster loop beside the wheel
+  const coasterPath = [];
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * Math.PI * 2;
+    coasterPath.push([-742 + Math.cos(a) * 22, 9 + Math.sin(a * 2) * 2.5, 322 + Math.sin(a) * 12]);
+  }
+  const trackItems = [];
+  for (let i = 0; i < coasterPath.length; i++) {
+    const p = coasterPath[i], q = coasterPath[(i + 1) % coasterPath.length];
+    const mx = (p[0] + q[0]) / 2, mz = (p[2] + q[2]) / 2;
+    const dx = q[0] - p[0], dz = q[2] - p[2];
+    const len = Math.hypot(dx, dz) + 0.4;
+    trackItems.push(boxItem(len, 0.5, 1.2, mx, (p[1] + q[1]) / 2, mz, i % 2 ? 0xff2e4d : 0xffc53d, -Math.atan2(dz, dx)));
+  }
+  for (let i = 0; i < 12; i++) {
+    const p = coasterPath[(i * 4) % 48];
+    trackItems.push(cylItem(0.3, 0.3, p[1] - 2.5, p[0], (p[1] - 2.5) / 2 + 2.5, p[2], 0x888888, 6));
+  }
+  scene.add(new THREE.Mesh(mergeItems(trackItems), plain));
+  const train = new THREE.Group();
+  for (let i = 0; i < 3; i++) {
+    const car = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.6, 1.8), new THREE.MeshLambertMaterial({ color: [0xff2e4d, 0xffc53d, 0x2ec4b6][i] }));
+    car.position.x = -i * 3;
+    train.add(car);
+  }
+  scene.add(train);
+  pier.train = train;
+  pier.coasterPath = coasterPath;
+  // beach umbrellas
+  const umbItems = [];
+  for (const [ux, uz, uc] of [[-700, 180, 0xff2e4d], [-690, 220, 0xffc53d], [-705, 420, 0x2ec4b6], [-695, 460, 0xff7e5f]]) {
+    umbItems.push(cylItem(0.15, 0.15, 3, ux, 1.5, uz, 0xdddddd, 6));
+    umbItems.push({ geo: new THREE.ConeGeometry(3, 1.6, 8), matrix: new THREE.Matrix4().makeTranslation(ux, 3.6, uz), color: uc });
+  }
+  scene.add(new THREE.Mesh(mergeItems(umbItems), plain));
+
+  // ---- Long Beach Port cranes ----
+  const craneItems = [];
+  for (const [cx, cz] of [[420, 480], [520, 620], [640, 480]]) {
+    craneItems.push(boxItem(3, 40, 3, cx - 8, 20, cz, 0xc0392b));
+    craneItems.push(boxItem(3, 40, 3, cx + 8, 20, cz, 0xc0392b));
+    craneItems.push(boxItem(30, 3, 3, cx, 40, cz, 0xc0392b));
+    craneItems.push(boxItem(3, 3, 22, cx + 14, 40, cz, 0xc0392b));
+    craneItems.push(cylItem(0.2, 0.2, 14, cx + 22, 32, cz, 0x333333, 6));
+    craneItems.push(boxItem(4, 3, 4, cx + 22, 24, cz, 0x333333));
+    addCollider(cx - 10, cz - 4, cx + 10, cz + 4, 42);
+  }
+  scene.add(new THREE.Mesh(mergeItems(craneItems), plain));
+
+  // ---- canal bridges ----
+  const bridgeItems = [];
+  for (const [bx, bz] of [[-400, 433], [-200, 573], [-500, 573]]) {
+    bridgeItems.push(boxItem(26, 1.5, 12, bx, 1.2, bz, 0xb8a88f));
+    bridgeItems.push(boxItem(0.5, 1.2, 12, bx - 13, 2.4, bz, 0x8a7a5a));
+    bridgeItems.push(boxItem(0.5, 1.2, 12, bx + 13, 2.4, bz, 0x8a7a5a));
+  }
+  scene.add(new THREE.Mesh(mergeItems(bridgeItems), plain));
+
+  // ---- freeway overpass (east edge) with truss railing + looping cars ----
+  const fwItems = [];
+  fwItems.push(boxItem(26, 2, 1440, 730, 11, 0, 0x555550));
+  for (let z = -680; z <= 680; z += 80) {
+    fwItems.push(boxItem(4, 11, 4, 722, 5.5, z, 0x777770));
+    fwItems.push(boxItem(4, 11, 4, 738, 5.5, z, 0x777770));
+  }
+  for (let z = -700; z <= 700; z += 20) {
+    fwItems.push(boxItem(0.4, 2.2, 0.4, 717, 13, z, 0xf4f4f0));
+    fwItems.push(boxItem(0.4, 2.2, 0.4, 743, 13, z, 0xf4f4f0));
+    fwItems.push(boxItem(0.4, 0.4, 20, 717, 14, z + 10, 0xf4f4f0));
+  }
+  scene.add(new THREE.Mesh(mergeItems(fwItems), plain));
+  addCollider(716, -720, 744, 720, 13);
+  const freewayCars = [];
+  for (let i = 0; i < 4; i++) {
+    const c = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.4, 2), new THREE.MeshLambertMaterial({ color: [0xff2e4d, 0x2ec4b6, 0xffc53d, 0xdddddd][i] }));
+    c.position.set(726 + (i % 2) * 8, 12.6, -600 + i * 300);
+    scene.add(c);
+    freewayCars.push({ mesh: c, z: -600 + i * 300, speed: 22 + i * 3, dir: i % 2 ? -1 : 1 });
+  }
+
+  // ---- curved coastal road (beachfront drive) ----
+  const curvePts = [];
+  for (let z = -400; z <= 500; z += 20) curvePts.push([-640 + Math.sin(z * 0.004) * 26, z]);
+  const ribbon = buildRibbon(curvePts, 16, 0.06);
+  scene.add(ribbon);
+
+  // ---- road graph (A* nodes at intersections) ----
+  const graph = {};
+  for (const x of WORLD.AVENUES) for (const z of WORLD.STREETS) {
+    const id = `${x},${z}`;
+    graph[id] = { x, z, links: [] };
+  }
+  for (const x of WORLD.AVENUES) for (const z of WORLD.STREETS) {
+    const id = `${x},${z}`;
+    for (const [dx, dz] of [[200, 0], [-200, 0], [0, 200], [0, -200]]) {
+      const nid = `${x + dx},${z + dz}`;
+      if (graph[nid]) graph[id].links.push({ id: nid, cost: 200 });
     }
-    for (let i = 0; i < 4; i += 1) {
-      stalls.push({ x: 2310 + i * 55, y: PIER.y + 20, kind: 'food', color: foodColors[i] });
-    }
-    return { track, stalls };
-  })();
-  // Traffic lights at the busiest intersections (phase cycles with time).
-  const lights = [
-    { x: 700, y: 650, phase: 0 }, { x: 1100, y: 650, phase: 3 },
-    { x: 700, y: 1000, phase: 6 }, { x: 1900, y: 650, phase: 9 },
+  }
+
+  // ---- parked cars (stealable) ----
+  const parkedSpots = [
+    { x: 600, z: 560, heading: 0, kind: 'sedan', color: 0x2ec4b6 }, // mission 1 target
+    { x: 640, z: 620, heading: 0, kind: 'suv', color: 0xc0392b }, // kept clear of the mission-1 steal framing
+    { x: -388, z: -200, heading: Math.PI / 2, kind: 'pickup', color: 0xffc53d },
+    { x: 212, z: 400, heading: 0, kind: 'sport', color: 0xff2e4d },
+    { x: -200, z: -388, heading: Math.PI / 2, kind: 'sedan', color: 0xff7e5f },
+    { x: 400, z: -212, heading: 0, kind: 'bike', color: 0x7d3c98 },
+    { x: -612, z: 100, heading: Math.PI / 2, kind: 'sedan', color: 0x2471a3 },
+    { x: 100, z: 612, heading: 0, kind: 'pickup', color: 0x229954 },
+    { x: -100, z: 200, heading: Math.PI, kind: 'sport', color: 0xd4ac0d },
+    { x: 600, z: -600, heading: Math.PI / 2, kind: 'suv', color: 0xdddddd },
+    { x: 200, z: -612, heading: 0, kind: 'sedan', color: 0x2ec4b6 },
+    { x: -388, z: 612, heading: Math.PI, kind: 'bike', color: 0xff2e4d },
   ];
 
-  // ---- pooled actors: allocated once, reused, never grown in the hot loop ----
-  const vehicles = [];
-  const peds = [];
-  const police = [];
-  const bullets = [];
-  const particles = [];
-  for (let i = 0; i < 40; i += 1) vehicles.push({ active: false });
-  for (let i = 0; i < 48; i += 1) peds.push({ active: false });
-  for (let i = 0; i < 6; i += 1) police.push({ active: false });
-  for (let i = 0; i < 64; i += 1) bullets.push({ active: false });
-  for (let i = 0; i < 96; i += 1) particles.push({ active: false });
-
-  const player = {
-    x: 700, y: 750, angle: -Math.PI / 2, vx: 0, vy: 0, health: PLAYER.health, armor: PLAYER.armor,
-    money: 250, vehicle: null, weapon: 0, ammo: [12, 30, 6], reserve: [72, 120, 36],
-    aim: 0, speed: 0, onFoot: true, invuln: 0, walkPhase: 0,
-  };
-  const heli = { active: false, x: 0, y: 0, angle: 0 };
-
-  const state = {
-    time: 0, clockMin: 17 * 60 + 21, dayNight: 'dusk', player, vehicles, peds, police, bullets, particles,
-    buildings, containers, cranes, palms, umbrellas, lights, heli, pier,
-    wanted: 0, wantedPhase: 'clear', unseenTimer: 0, escapeProgress: 0, lastKnown: null,
-    mode: 'free', missionIndex: 0, missionStep: 0, missionTimer: 0,
-    missionFailed: false, missionDone: false, kills: 0, rep: 0, job: null,
-    dialogue: null, banner: null, district: districtAt(700, 750), districtTimer: 0,
-    bust: 0, bustTimer: 0, shotCooldown: 0, trafficTimer: 0, pedTimer: 0,
-    radioName: 'NEON 88 — Sunset Drive', radioStation: 0,
-  };
-
-  function freeFrom(list) { for (const it of list) if (!it.active) return it; return null; }
-  function spawnParked(kind, x, y, angle) {
-    const slot = freeFrom(vehicles);
-    if (!slot) return null;
-    const v = makeVehicle(kind, x, y, angle, pick(rand, CAR_COLORS));
-    Object.assign(slot, v, { active: true, driver: null });
-    return slot;
-  }
-  function spawnTraffic() {
-    const slot = freeFrom(vehicles);
-    if (!slot) return;
-    const vertical = rand() < 0.5;
-    const kind = pick(rand, ['sedan', 'sedan', 'suv', 'bike', 'truck']);
-    let x, y, angle;
-    if (vertical) {
-      const a = pick(rand, AVENUES); x = a + (rand() < 0.5 ? -14 : 14); y = 150 + rand() * 1600;
-      angle = rand() < 0.5 ? Math.PI / 2 : -Math.PI / 2;
-    } else {
-      const s = pick(rand, STREETS); y = s + (rand() < 0.5 ? -14 : 14); x = 150 + rand() * 2000;
-      angle = rand() < 0.5 ? 0 : Math.PI;
+  // ---- per-frame animation ----
+  function update(dt, t) {
+    // traffic lights
+    for (const lg of lightGroups) {
+      const st = lightState(t, lg.offset);
+      const on = st[lg.axis];
+      lg.lamps.red.material.emissiveIntensity = on === 'red' ? 1.6 : 0;
+      lg.lamps.yellow.material.emissiveIntensity = on === 'yellow' ? 1.6 : 0;
+      lg.lamps.green.material.emissiveIntensity = on === 'green' ? 1.6 : 0;
     }
-    const v = makeVehicle(kind, x, y, angle, pick(rand, CAR_COLORS));
-    Object.assign(slot, v, { active: true, driver: 'traffic', cruise: 150 + rand() * 120, turnAt: 0 });
-  }
-  function spawnPed() {
-    const slot = freeFrom(peds);
-    if (!slot) return;
-    const x = 150 + rand() * 2100, y = 150 + rand() * 1550;
-    const shirt = pick(rand, PED_COLORS);
-    const hat = rand() < 0.35;
-    Object.assign(slot, {
-      active: true, x, y, tx: x, ty: y, speed: 40 + rand() * 30,
-      color: shirt, shirt, skin: pick(rand, PED_SKINS), pants: pick(rand, PED_PANTS),
-      hair: pick(rand, PED_HAIR), pack: rand() < 0.3, face: rand() * Math.PI * 2,
-      flee: 0, wait: rand() * 3, walkPhase: rand() * 6,
-      scale: 0.88 + rand() * 0.24, hat, hatColor: pick(rand, PED_HATS),
-      // Streetwear variety, San Andreas style: tee (half the crowd), tank
-      // top with bare arms, or hoodie; chunky or slim build; baggy pants;
-      // a bandana when no cap; bright sneakers. No two read the same.
-      top: pick(rand, ['tee', 'tee', 'tank', 'hoodie']),
-      bulk: 0.85 + rand() * 0.3, baggy: rand() < 0.3,
-      bandana: !hat && rand() < 0.3, bandanaColor: pick(rand, PED_HATS),
-      shoes: pick(rand, SHOE_COLORS),
-    });
+    // ferris wheel (slow) + cabins stay upright
+    if (pier.wheel) {
+      pier.wheel.rotation.z += dt * 0.12;
+      pier.cabins.forEach((c, i) => { c.rotation.z = -pier.wheel.rotation.z; });
+    }
+    // coaster train
+    if (pier.train) {
+      pier.trainT = (pier.trainT + dt * 0.02) % 1;
+      const idx = Math.floor(pier.trainT * 48);
+      const p = coasterPath[idx], q = coasterPath[(idx + 1) % 48];
+      pier.train.position.set(p[0], p[1] + 1.2, p[2]);
+      pier.train.rotation.y = -Math.atan2(q[2] - p[2], q[0] - p[0]);
+    }
+    // freeway cars loop
+    for (const c of freewayCars) {
+      c.z += c.speed * c.dir * dt;
+      if (c.z > 700) c.z = -700;
+      if (c.z < -700) c.z = 700;
+      c.mesh.position.z = c.z;
+    }
+    lampHeadMat.emissiveIntensity = 0.15;
   }
 
-  function reset() {
-    player.x = 700; player.y = 750; player.angle = -Math.PI / 2; player.vx = 0; player.vy = 0; player.speed = 0;
-    player.health = PLAYER.health; player.armor = PLAYER.armor; player.money = 250;
-    player.vehicle = null; player.weapon = 0; player.ammo = [12, 30, 6]; player.reserve = [72, 120, 36];
-    player.onFoot = true; player.invuln = 0; player.walkPhase = 0;
-    for (const v of vehicles) v.active = false;
-    for (const p of peds) p.active = false;
-    for (const p of police) p.active = false;
-    for (const b of bullets) b.active = false;
-    for (const q of particles) q.active = false;
-    state.time = 0; state.clockMin = 17 * 60 + 21; state.dayNight = 'dusk';
-    state.wanted = 0; state.wantedPhase = 'clear'; state.unseenTimer = 0; state.escapeProgress = 0; state.lastKnown = null;
-    state.mode = 'free'; state.missionIndex = 0; state.missionStep = 0; state.missionTimer = 0;
-    state.missionFailed = false; state.missionDone = false; state.kills = 0; state.rep = 0; state.job = null;
-    state.dialogue = null; state.banner = null; state.bust = 0; state.bustTimer = 0;
-    heli.active = false;
-    // Parked cars worth stealing, a boat at the Marina, trucks at the port.
-    spawnParked('sedan', 700, 650, 0); spawnParked('suv', 1100, 1000, Math.PI / 2);
-    spawnParked('bike', 1500, 650, 0); spawnParked('sedan', 1900, 1000, -Math.PI / 2);
-    spawnParked('sedan', 2100, 500, 0); spawnParked('truck', 600, 1750, 0);
-    spawnParked('boat', 2100, 1600, -Math.PI / 2); spawnParked('boat', 2400, 1450, 0);
-    spawnParked('suv', 900, 500, Math.PI); spawnParked('sedan', 1500, 1350, 0);
-    // Beach parking on the promenade by the Coral Pier entrance.
-    spawnParked('sedan', 2220, 950, -Math.PI / 2); spawnParked('suv', 2220, 1050, -Math.PI / 2);
-    spawnParked('sedan', 2220, 1150, Math.PI / 2); spawnParked('bike', 2220, 1250, Math.PI / 2);
-    for (let i = 0; i < 10; i += 1) spawnTraffic();
-    for (let i = 0; i < 22; i += 1) spawnPed();
+  return { graph, colliders, trafficLights: lightGroups, groundY, parkedSpots, update, pier };
+}
+
+// Curved road ribbon: flat strip following (x,z) points, with asphalt + dashes.
+function buildRibbon(pts, width, y) {
+  const pos = [], uvA = [], idx = [];
+  let dist = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x, z] = pts[i];
+    const [nx, nz] = pts[Math.min(i + 1, pts.length - 1)];
+    const [px, pz] = pts[Math.max(i - 1, 0)];
+    let dx = nx - px, dz = nz - pz;
+    const len = Math.hypot(dx, dz) || 1;
+    dx /= len; dz /= len;
+    const ox = -dz * width / 2, oz = dx * width / 2;
+    if (i > 0) dist += Math.hypot(x - pts[i - 1][0], z - pts[i - 1][1]);
+    pos.push(x + ox, y, z + oz, x - ox, y, z - oz);
+    uvA.push(0, dist / 12, 1, dist / 12);
+    if (i > 0) { const b = (i - 1) * 2; idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
   }
-
-  function collideBuildings(e, r) {
-    for (const b of buildings) {
-      const hit = circleVsRect(e.x, e.y, r, b);
-      if (!hit) continue;
-      const nx = hit.d > 0.01 ? hit.dx / hit.d : 1, ny = hit.d > 0.01 ? hit.dy / hit.d : 0;
-      e.x += nx * hit.push; e.y += ny * hit.push;
-      if (e.vx !== undefined) {
-        const dot = e.vx * nx + e.vy * ny;
-        if (dot < 0) { e.vx -= dot * nx; e.vy -= dot * ny; }
-      }
-      return true;
-    }
-    return false;
-  }
-
-  function addWanted(n) {
-    const before = state.wanted;
-    state.wanted = Math.max(0, Math.min(5, state.wanted + n));
-    if (state.wanted > before) {
-      state.wantedPhase = 'pursuit'; state.unseenTimer = 0; state.escapeProgress = 0;
-      state.lastKnown = { x: player.x, y: player.y };
-    }
-    return state.wanted;
-  }
-
-  function burst(x, y, color, n) {
-    for (let i = 0; i < n; i += 1) {
-      const q = freeFrom(particles); if (!q) return;
-      Object.assign(q, { active: true, x, y, vx: (rand() - 0.5) * 260, vy: (rand() - 0.5) * 260, life: 0.5 + rand() * 0.4, color });
-    }
-  }
-
-  function fireBullet() {
-    if (state.shotCooldown > 0 || player.vehicle) return 0;
-    const w = WEAPONS[player.weapon];
-    if (player.ammo[player.weapon] <= 0) return 0;
-    player.ammo[player.weapon] -= 1;
-    state.shotCooldown = w.rate;
-    const b = freeFrom(bullets); if (!b) return EVENT_SHOT;
-    const spread = (rand() - 0.5) * w.spread * 2;
-    Object.assign(b, {
-      active: true, x: player.x + Math.cos(player.aim) * 24, y: player.y + Math.sin(player.aim) * 24,
-      vx: Math.cos(player.aim + spread) * 900, vy: Math.sin(player.aim + spread) * 900,
-      life: w.range / 900, damage: w.damage, weapon: player.weapon,
-    });
-    return EVENT_SHOT;
-  }
-
-  // Police: capped pursuers, roles held for seconds, flank targets are road
-  // nodes ahead of the player's motion — never raw offsets, never on bridges.
-  function desiredPolice() {
-    if (state.wanted <= 0) return 0;
-    if (state.wanted <= 2) return 1;
-    if (state.wanted === 3) return 2;
-    if (state.wanted === 4) return 3;
-    return 4;
-  }
-  function spawnPolice() {
-    const slot = freeFrom(police);
-    if (!slot) return;
-    // Spawn on a road out of the player's view, with time to approach.
-    let x = 0, y = 0;
-    for (let tries = 0; tries < 12; tries += 1) {
-      const c = nearestRoadCell(player.x + (rand() - 0.5) * 1800, player.y + (rand() - 0.5) * 1400);
-      const cc = cellCenter(c.cx, c.cy);
-      if (Math.hypot(cc.x - player.x, cc.y - player.y) > 750) { x = cc.x; y = cc.y; break; }
-      x = cc.x; y = cc.y;
-    }
-    const v = makeVehicle('police', x, y, 0, '#e8ecf5');
-    Object.assign(slot, v, {
-      active: true, x, y, angle: 0, vx: 0, vy: 0, speed: 0, color: '#e8ecf5', roof: '#2e6bff',
-      damaged: 0, smoke: 0, driver: 'police', path: [], pathIndex: 0, repath: rand() * 1.5,
-      role: 'chase', stuck: 0, reverseT: 0, bustHold: 0, sight: 0,
-    });
-  }
-
-  function policeTarget(pol, index) {
-    const p = player;
-    if (pol.role === 'chase' || index === 0) {
-      const lk = state.lastKnown || { x: p.x, y: p.y };
-      return nearestRoadCell(lk.x, lk.y);
-    }
-    // Interceptor: a road node ahead of the player's motion, offset to one side.
-    const sp = Math.hypot(p.vx, p.vy);
-    const ahead = sp > 60 ? 420 : 200;
-    const dirx = sp > 60 ? p.vx / sp : Math.cos(p.angle), diry = sp > 60 ? p.vy / sp : Math.sin(p.angle);
-    const side = index % 2 === 0 ? 1 : -1;
-    const tx = p.x + dirx * ahead - diry * side * 320;
-    const ty = p.y + diry * ahead + dirx * side * 320;
-    return nearestRoadCell(tx, ty);
-  }
-
-  function stepPolice(dt) {
-    const want = desiredPolice();
-    let active = 0;
-    for (const pol of police) if (pol.active) active += 1;
-    while (active < want) { spawnPolice(); active += 1; }
-    let idx = 0;
-    for (const pol of police) {
-      if (!pol.active) continue;
-      idx += 1;
-      const dPlayer = Math.hypot(pol.x - player.x, pol.y - player.y);
-      const sightR = state.wanted <= 2 ? 300 : 430;
-      const sees = dPlayer < sightR;
-      if (sees) { state.lastKnown = { x: player.x, y: player.y }; pol.sight = 1; }
-      else pol.sight = Math.max(0, pol.sight - dt * 0.2);
-      // Repath staggered; flank roles held, never recomputed every tick.
-      pol.repath -= dt;
-      if (pol.repath <= 0 || pol.pathIndex >= pol.path.length) {
-        pol.repath = 1.2 + (idx % 3) * 0.3;
-        const from = nearestRoadCell(pol.x, pol.y);
-        const to = policeTarget(pol, idx);
-        const pts = findPath(from.cx, from.cy, to.cx, to.cy);
-        pol.path = pts; pol.pathIndex = 0;
-        if (pol.path.length === 0) pol.stuck += dt;
-      }
-      // Follow the route waypoint by waypoint: skip passed waypoints, brake
-      // for turns and for the final approach, and reverse out if stuck.
-      let throttle = 0.55, steer = 0;
-      while (pol.pathIndex < pol.path.length) {
-        const wp = pol.path[pol.pathIndex];
-        if (Math.hypot(wp.x - pol.x, wp.y - pol.y) < 55) pol.pathIndex += 1;
-        else break;
-      }
-      if (pol.pathIndex >= pol.path.length) pol.repath = 0;
-      const target = pol.path[pol.pathIndex];
-      if (target) {
-        steer = steerToward(pol, target.x, target.y);
-        const td = Math.hypot(target.x - pol.x, target.y - pol.y);
-        throttle = Math.abs(steer) > 0.6 ? 0.35 : td < 130 ? 0.4 : 0.7;
-        if (dPlayer < 90) { throttle = 0.9; steer = steerToward(pol, player.x, player.y); }
-      } else if (dPlayer < 400) { throttle = 0.8; steer = steerToward(pol, player.x, player.y); }
-      if (pol.reverseT > 0) {
-        pol.reverseT -= dt;
-        throttle = -0.6; steer = -steer;
-      } else if (Math.hypot(pol.vx, pol.vy) < 25 && pol.path.length > 0) {
-        pol.stuck += dt;
-        if (pol.stuck > 1.5) { pol.reverseT = 0.6; pol.stuck = 0; pol.repath = 0; }
-      } else pol.stuck = 0;
-      if (!player.vehicle && dPlayer < 260) {
-        // Crawl in for the arrest, never arrive at ramming speed: brake down
-        // to a slow approach, then sit on the player so the bust timer can
-        // run. A sprinting player outruns the crawl and re-triggers the chase.
-        throttle = Math.abs(pol.speed) > 70 ? -0.5 : 0.3;
-        steer = steerToward(pol, player.x, player.y);
-        if (dPlayer < 110 && Math.abs(pol.speed) < 70) { throttle = 0; steer = 0; }
-      }
-      stepVehicle(pol, throttle, steer, false, dt);
-      collideBuildings(pol, 24);
-      // Ram damage and the arrest rule: sustained close contact while the
-      // player is on foot or effectively stopped, with visible progress.
-      if (dPlayer < (player.vehicle ? 64 : 110)) {
-        if (player.vehicle) {
-          player.vehicle.damaged = (player.vehicle.damaged || 0) + 12 * dt;
-          if (player.health > 0) player.health = Math.max(1, player.health - 4 * dt);
-        } else {
-          pol.bustHold += dt;
-          state.bust = Math.min(1, pol.bustHold / 2.5);
-          if (pol.bustHold > 2.5) { state.bust = 0; return EVENT_BUSTED; }
-        }
-      } else { pol.bustHold = Math.max(0, pol.bustHold - dt); }
-      if (pol.damaged >= 100) {
-        pol.active = false; state.kills += 1;
-        burst(pol.x, pol.y, '#888888', 14);
-        addWanted(1);
-      }
-    }
-    // Helicopter at 3+ stars: a readable search indicator that circles the
-    // player and keeps the heat on — escapable under cover, never a gunship.
-    heli.active = state.wanted >= 3;
-    if (heli.active) {
-      heli.angle += dt * 0.45;
-      heli.x = player.x + Math.cos(heli.angle) * 260;
-      heli.y = player.y + Math.sin(heli.angle) * 260 - 60;
-    }
-    return 0;
-  }
-
-  function stepWanted(dt) {
-    if (state.wanted === 0) { state.wantedPhase = 'clear'; state.escapeProgress = 0; return; }
-    let seen = false;
-    for (const pol of police) {
-      if (pol.active && Math.hypot(pol.x - player.x, pol.y - player.y) < (state.wanted <= 2 ? 300 : 430)) seen = true;
-    }
-    if (heli.active && Math.hypot(heli.x - player.x, heli.y - player.y) < 520) seen = true;
-    if (seen) { state.unseenTimer = 0; state.escapeProgress = 0; state.wantedPhase = 'pursuit'; }
-    else {
-      state.unseenTimer += dt;
-      if (state.unseenTimer > 4) {
-        state.wantedPhase = 'search';
-        const need = 10 + state.wanted * 5;
-        state.escapeProgress = Math.min(1, state.escapeProgress + dt / need);
-        if (state.escapeProgress >= 1) {
-          state.wanted = 0; state.wantedPhase = 'clear'; state.escapeProgress = 0;
-          for (const pol of police) pol.active = false;
-          heli.active = false;
-          state.banner = { title: 'YOU LOST THE POLICE', sub: 'Wanted level cleared', t: 3 };
-        }
-      }
-    }
-  }
-
-  function stepTraffic(dt) {
-    state.trafficTimer -= dt;
-    let count = 0;
-    for (const v of vehicles) if (v.active && v.driver === 'traffic') count += 1;
-    if (state.trafficTimer <= 0) {
-      state.trafficTimer = 0.8;
-      if (count < 14) { spawnTraffic(); if (count < 13) spawnTraffic(); }
-    }
-    for (const v of vehicles) {
-      if (!v.active || v.driver !== 'traffic') continue;
-      // Follow the road ahead; brake for the car ahead.
-      const aheadX = v.x + Math.cos(v.angle) * 70, aheadY = v.y + Math.sin(v.angle) * 70;
-      let blocked = false;
-      for (const o of vehicles) {
-        if (o === v || !o.active) continue;
-        if (dist2(aheadX, aheadY, o.x, o.y) < 55 * 55) { blocked = true; break; }
-      }
-      const onAve = AVENUES.some((a) => Math.abs(v.x - a) < 50);
-      const onSt = STREETS.some((s) => Math.abs(v.y - s) < 50);
-      let steer = 0, throttle = blocked ? 0 : 0.55;
-      // Stay centred on the current road.
-      if (onAve && !onSt) {
-        const a = AVENUES.reduce((best, cur) => Math.abs(cur - v.x) < Math.abs(best - v.x) ? cur : best, AVENUES[0]);
-        steer = steerToward(v, a + (v.angle > 0 ? 12 : -12), v.y + (v.angle > 0 ? 300 : -300));
-      } else if (onSt) {
-        const s = STREETS.reduce((best, cur) => Math.abs(cur - v.y) < Math.abs(best - v.y) ? cur : best, STREETS[0]);
-        steer = steerToward(v, v.x + (Math.abs(v.angle) < Math.PI / 2 ? 300 : -300), s + 12);
-      }
-      stepVehicle(v, throttle, steer, false, dt);
-      if (v.x < 100 || v.x > WORLD.w - 100 || v.y < 100 || v.y > WORLD.h - 100) v.active = false;
-    }
-  }
-
-  function stepPeds(dt) {
-    state.pedTimer -= dt;
-    let count = 0;
-    for (const p of peds) if (p.active) count += 1;
-    if (state.pedTimer <= 0) { state.pedTimer = 2; if (count < 24) spawnPed(); }
-    for (const p of peds) {
-      if (!p.active) continue;
-      const dPlayer = Math.hypot(p.x - player.x, p.y - player.y);
-      if (dPlayer < 260 && (state.shotCooldown > 0 || player.vehicle)) p.flee = 2.5;
-      if (p.flee > 0) {
-        p.flee -= dt;
-        const a = Math.atan2(p.y - player.y, p.x - player.x);
-        p.face = a;
-        p.x += Math.cos(a) * 130 * dt; p.y += Math.sin(a) * 130 * dt;
-        p.walkPhase += dt * 9;
-      } else {
-        p.wait -= dt;
-        if (p.wait <= 0) { p.tx = 150 + rand() * 2100; p.ty = 150 + rand() * 1550; p.wait = 4 + rand() * 5; }
-        const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
-        if (d > 12) {
-          p.face = Math.atan2(dy, dx);
-          p.x += (dx / d) * p.speed * dt; p.y += (dy / d) * p.speed * dt;
-          p.walkPhase += dt * 7;
-        }
-      }
-      p.x = Math.max(60, Math.min(WORLD.w - 60, p.x));
-      p.y = Math.max(60, Math.min(WORLD.h - 60, p.y));
-    }
-  }
-
-  function stepBullets(dt) {
-    for (const b of bullets) {
-      if (!b.active) continue;
-      b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
-      if (b.life <= 0 || b.x < 0 || b.y < 0 || b.x > WORLD.w || b.y > WORLD.h) { b.active = false; continue; }
-      for (const v of vehicles) {
-        if (!v.active || v.driver === 'player') continue;
-        if (Math.abs(b.x - v.x) < 30 && Math.abs(b.y - v.y) < 18) {
-          b.active = false;
-          v.damaged = (v.damaged || 0) + b.damage;
-          burst(b.x, b.y, '#ffd23e', 5);
-          if (v.damaged >= 100) {
-            v.driver = null; v.smoke = 1;
-            addWanted(1);
-          }
-          break;
-        }
-      }
-      for (const pol of police) {
-        if (!pol.active) continue;
-        if (Math.abs(b.x - pol.x) < 30 && Math.abs(b.y - pol.y) < 18) {
-          b.active = false;
-          pol.damaged = (pol.damaged || 0) + b.damage;
-          burst(b.x, b.y, '#ffd23e', 5);
-          break;
-        }
-      }
-    }
-    for (const q of particles) {
-      if (!q.active) continue;
-      q.x += q.vx * dt; q.y += q.vy * dt; q.life -= dt;
-      if (q.life <= 0) q.active = false;
-    }
-  }
-
-  // One fixed step of play. `cmd` carries the frame's input (mouseX/mouseY are
-  // world coordinates the caller raycasts from the screen); `fired` is true on
-  // the frame the player clicked. Returns event flags for the caller.
-  function step(dt, cmd, fired) {
-    state.time += dt;
-    state.clockMin += dt; // one game minute per real second, cosmetic only
-    if (state.shotCooldown > 0) state.shotCooldown -= dt;
-    if (player.invuln > 0) player.invuln -= dt;
-    if (state.banner && state.banner.t > 0) state.banner.t -= dt;
-    if (state.dialogue && state.dialogue.t > 0) state.dialogue.t -= dt;
-    state.dayNight = state.missionIndex === 1 ? 'night' : 'dusk';
-    let events = 0;
-    const p = player;
-
-    // --- player on foot ---
-    if (!p.vehicle) {
-      const sp = cmd.sprint ? PLAYER.sprintSpeed : PLAYER.walkSpeed;
-      p.vx = cmd.x * sp; p.vy = cmd.y * sp;
-      p.x += p.vx * dt; p.y += p.vy * dt;
-      p.speed = Math.hypot(p.vx, p.vy);
-      if (p.speed > 10) { p.angle = Math.atan2(p.vy, p.vx); p.walkPhase += dt * p.speed * 0.045; }
-      p.x = Math.max(40, Math.min(WORLD.w - 40, p.x));
-      p.y = Math.max(40, Math.min(WORLD.h - 40, p.y));
-      if (inWater(p.x, p.y)) { p.x -= p.vx * dt; p.y -= p.vy * dt; }
-      collideBuildings(p, PLAYER.radius);
-      p.aim = Math.atan2(cmd.mouseY - p.y, cmd.mouseX - p.x);
-      if (fired) events |= fireBullet();
-      if (cmd.reload && p.reserve[p.weapon] > 0 && p.ammo[p.weapon] < WEAPONS[p.weapon].mag) {
-        const need = WEAPONS[p.weapon].mag - p.ammo[p.weapon];
-        const take = Math.min(need, p.reserve[p.weapon]);
-        p.ammo[p.weapon] += take; p.reserve[p.weapon] -= take;
-      }
-      // Enter / carjack a nearby vehicle with F.
-      if (cmd.interact) {
-        let best = null, bd = 80 * 80;
-        for (const v of vehicles) {
-          if (!v.active || v.kind === 'boat') continue;
-          const d2 = dist2(p.x, p.y, v.x, v.y);
-          if (d2 < bd) { bd = d2; best = v; }
-        }
-        // Boats board from the Marina dock.
-        if (!best) {
-          for (const v of vehicles) {
-            if (!v.active || v.kind !== 'boat') continue;
-            if (dist2(p.x, p.y, v.x, v.y) < 90 * 90) { best = v; break; }
-          }
-        }
-        if (best) {
-          if (!best.everDriven) {
-            addWanted(1); best.everDriven = true;
-            if (best.driver === 'traffic') burst(best.x, best.y, '#ff4d6d', 6);
-          }
-          best.driver = 'player'; p.vehicle = best; p.onFoot = false;
-          events |= EVENT_CRIME;
-        }
-      }
-    } else {
-      // --- driving: throttle from W/S, steering from A/D, Space handbrake ---
-      const v = p.vehicle;
-      const throttle = cmd.y < 0 ? 1 : cmd.y > 0 ? -0.6 : 0;
-      const steer = cmd.x;
-      const wasWater = v.kind === 'boat';
-      stepVehicle(v, throttle, steer, cmd.handbrake, dt);
-      if (wasWater) {
-        if (!inWater(v.x, v.y) && v.x < BEACH.seaX - 40) { v.x -= v.vx * dt; v.y -= v.vy * dt; v.vx *= 0.5; v.vy *= 0.5; }
-      } else {
-        if (inWater(v.x, v.y)) { v.x -= v.vx * dt; v.y -= v.vy * dt; v.vx *= 0.4; v.vy *= 0.4; }
-        collideBuildings(v, 26);
-        if (v.damaged >= 100) {
-          burst(v.x, v.y, '#888888', 16);
-          p.vehicle = null; p.onFoot = true; p.x = v.x + 40; p.y = v.y;
-          v.driver = null;
-          state.banner = { title: 'YOUR CAR IS WRECKED', sub: 'Find another ride', t: 3 };
-        }
-      }
-      p.x = v.x; p.y = v.y; p.angle = v.angle; p.speed = Math.abs(v.speed);
-      if (cmd.interact) {
-        p.x = v.x + Math.cos(v.angle + Math.PI / 2) * 44;
-        p.y = v.y + Math.sin(v.angle + Math.PI / 2) * 44;
-        v.driver = null; p.vehicle = null; p.onFoot = true; p.vx = 0; p.vy = 0;
-      }
-    }
-
-    const bustEvent = stepPolice(dt);
-    if (bustEvent & EVENT_BUSTED) {
-      // Arrest: explicit cleanup — wanted clears, police stand down, the
-      // player wakes at the hospital with less cash. The caller shows Busted.
-      state.wanted = 0; state.wantedPhase = 'clear'; state.escapeProgress = 0;
-      for (const pol of police) pol.active = false;
-      heli.active = false;
-      player.money = Math.max(0, player.money - 200);
-      player.health = PLAYER.health; player.armor = 0;
-      if (player.vehicle) { player.vehicle.driver = null; player.vehicle = null; player.onFoot = true; }
-      player.x = 700; player.y = 750;
-      return EVENT_BUSTED;
-    }
-    stepWanted(dt);
-    stepTraffic(dt);
-    stepPeds(dt);
-    stepBullets(dt);
-
-    // Mode is a condition, not a screen: combat while shooting or chased,
-    // mission while a mission runs, arrest only via the bust above.
-    if (state.mode !== 'mission') {
-      state.mode = (state.wanted > 0 || state.shotCooldown > 0.05) ? 'combat' : 'free';
-    }
-    const d = districtAt(p.x, p.y);
-    if (d !== state.district) {
-      state.district = d; state.districtTimer = 3;
-      state.banner = { title: d.name, sub: d.sub, t: 2.5 };
-    } else if (state.districtTimer > 0) state.districtTimer -= dt;
-
-    return events;
-  }
-
-  reset();
-  return { state, reset, step, addWanted, inWater };
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvA, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 128;
+  const c2 = cv.getContext('2d');
+  c2.fillStyle = '#3a3a40'; c2.fillRect(0, 0, 128, 128);
+  c2.fillStyle = '#f7c948'; c2.fillRect(62, 0, 4, 128);
+  c2.fillStyle = '#e8e8e8'; c2.fillRect(2, 0, 3, 128); c2.fillRect(123, 0, 3, 128);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tex }));
 }

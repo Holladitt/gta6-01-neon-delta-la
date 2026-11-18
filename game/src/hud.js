@@ -1,198 +1,163 @@
-// DOM HUD: money, wanted stars, health/armour, speed, circular minimap,
-// mission bar, dialogue, district banner and the title/pause/busted screens.
-// The HUD is DOM (crisp at any resolution) while the 3D world is WebGL;
-// the minimap and the full city map are small 2D canvases drawn top-down.
-// Stars are SVG paths, never font glyphs, so a wanted level reads the same
-// in every font.
-import { AVENUES, BEACH, CANAL, DISTRICTS, STREETS, WEAPONS, WORLD } from './config.js';
-import { missionWaypoint } from './missions.js';
+// HUD: DOM overlay, circular minimap, city map, title + pause screens.
+// Matches the element ids in index.html.
+import { WORLD, DISTRICTS } from './config.js';
 
-const STAR_PATH = 'M12 1 L14.7 8.6 L22.8 8.9 L16.7 13.7 L18.8 21.5 L12 17.3 L5.2 21.5 L7.3 13.7 L1.2 8.9 L9.3 8.6 Z';
-
-function starSvg() {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', '26');
-  svg.setAttribute('height', '26');
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', STAR_PATH);
-  svg.appendChild(path);
-  return { svg, path };
-}
-
-function clockText(mins) {
-  const h = Math.floor(mins / 60) % 24;
-  const m = Math.floor(mins % 60);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-export function createHud() {
-  const $ = (id) => document.getElementById(id);
-  const els = {
-    clock: $('clock'), radio: $('radio'), money: $('money'), stars: $('stars'),
-    wantedLabel: $('wanted-label'), weapon: $('weapon'),
-    healthFill: $('health-fill'), armorFill: $('armor-fill'),
-    speed: $('speed'), speedUnit: $('speed-unit'), vehicleName: $('vehicle-name'),
-    districtTitle: $('district-title'), districtSub: $('district-sub'),
-    objective: $('objective'), dialogue: $('dialogue'),
-    bust: $('bust'), bustFill: $('bust-fill'), prompt: $('prompt'),
-    minimap: $('minimap'), mapOverlay: $('map-overlay'), mapCanvas: $('map-canvas'),
-    titleScreen: $('title-screen'), continueLine: $('continue-line'),
-    pauseScreen: $('pause-screen'), bustedScreen: $('busted-screen'),
-    crosshair: $('crosshair'), hud: $('hud'),
-  };
-  const starPaths = [];
-  for (let i = 0; i < 5; i += 1) {
-    const { svg, path } = starSvg();
-    els.stars.appendChild(svg);
-    starPaths.push(path);
-  }
-  const mm = els.minimap.getContext('2d');
-  const mapCtx = els.mapCanvas.getContext('2d');
-
-  function drawMap(ctx, size, state, showLabels) {
-    const s = size / WORLD.w;
-    ctx.clearRect(0, 0, size, size * (WORLD.h / WORLD.w));
-    ctx.fillStyle = '#1d2340';
-    ctx.fillRect(0, 0, size, size * (WORLD.h / WORLD.w));
-    ctx.fillStyle = '#19b8c9';
-    ctx.fillRect(BEACH.seaX * s, 0, size, size * (WORLD.h / WORLD.w));
-    ctx.fillStyle = '#f2d492';
-    ctx.fillRect(BEACH.x0 * s, 0, (BEACH.seaX - BEACH.x0) * s, size * (WORLD.h / WORLD.w));
-    ctx.fillStyle = '#1fb6c9';
-    ctx.fillRect(CANAL.x0 * s, CANAL.y0 * s, (CANAL.x1 - CANAL.x0) * s, (CANAL.y1 - CANAL.y0) * s);
-    ctx.strokeStyle = '#3a3a4d';
-    ctx.lineWidth = Math.max(2, size / 260);
-    for (const a of AVENUES) { ctx.beginPath(); ctx.moveTo(a * s, 0); ctx.lineTo(a * s, size * (WORLD.h / WORLD.w)); ctx.stroke(); }
-    for (const st of STREETS) { ctx.beginPath(); ctx.moveTo(0, st * s); ctx.lineTo(size, st * s); ctx.stroke(); }
-    if (showLabels) {
-      ctx.font = `bold ${Math.round(size / 34)}px system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      for (const d of DISTRICTS) {
-        ctx.fillStyle = d.color;
-        const w = ctx.measureText(d.name).width;
-        const cx = Math.max(w / 2 + 4, Math.min(size - w / 2 - 4, ((d.x0 + d.x1) / 2) * s));
-        ctx.fillText(d.name, cx, ((d.y0 + d.y1) / 2) * s);
-      }
-    }
-    const dot = (x, y, color, r) => {
-      ctx.fillStyle = color;
-      ctx.beginPath(); ctx.arc(x * s, y * s, r, 0, Math.PI * 2); ctx.fill();
+export class HUD {
+  constructor() {
+    const $ = (id) => document.getElementById(id);
+    this.el = {
+      clock: $('clock'), radio: $('radio'), weapon: $('weapon'), money: $('money'),
+      stars: $('stars'), healthFill: $('health-fill'), armorFill: $('armor-fill'),
+      district: $('district-name'), districtSub: $('district-sub'),
+      speedNum: $('speed-num'), vehName: $('veh-name'),
+      mission: $('mission-text'), dialog: $('dialog'), prompt: $('prompt'),
+      crosshair: $('crosshair'), vignette: $('vignette'),
+      title: $('title-screen'), titleContinue: $('btn-continue'), titleContinueLabel: $('continue-label'),
+      pause: $('pause-menu'), map: $('map-screen'), toast: $('toast'),
     };
-    for (const v of state.vehicles) if (v.active && v.driver === 'traffic') dot(v.x, v.y, '#9aa3b2', Math.max(1.5, size / 500));
-    for (const pol of state.police) if (pol.active) dot(pol.x, pol.y, '#2e6bff', Math.max(2, size / 260));
-    const wp = missionWaypoint(state) || (state.job ? { x: state.job.def.tx, y: state.job.def.ty } : null);
-    if (wp) {
-      dot(wp.x, wp.y, '#ffd23e', Math.max(3, size / 130));
-      ctx.strokeStyle = '#ffd23e'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(wp.x * s, wp.y * s, Math.max(5, size / 90), 0, Math.PI * 2); ctx.stroke();
-    }
-    // Player arrow.
-    const p = state.player;
-    ctx.save();
-    ctx.translate(p.x * s, p.y * s);
-    ctx.rotate(p.angle);
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(-5, -5); ctx.lineTo(-5, 5); ctx.closePath(); ctx.fill();
-    ctx.restore();
+    this.minimap = $('minimap').getContext('2d');
+    this.citymap = $('citymap').getContext('2d');
+    this.dialogTimer = null;
+    // stars: 5 slots
+    this.el.stars.innerHTML = '<span>★</span>'.repeat(5);
   }
-
-  function objectiveText(state) {
-    if (state.mode === 'mission') {
-      const titles = ['RETURN TO LA', 'MIDNIGHT CARGO', 'FESTIVAL OF LIGHTS', 'CANAL CROSSING', 'LAST BRIDGE', 'THE BURNING CITY'];
-      const t = titles[state.missionIndex] || '';
-      return `MISSION ${state.missionIndex + 1}: ${t} — follow the yellow waypoint`;
-    }
-    if (state.job) return `SIDE JOB: ${state.job.def.title} — reach the waypoint`;
-    return 'FREE ROAM — press M for the next mission, F to steal a car';
+  setMoney(n) { this.el.money.textContent = '$' + n.toLocaleString('en-US'); }
+  setWanted(level) {
+    const spans = this.el.stars.children;
+    for (let i = 0; i < spans.length; i++) spans[i].classList.toggle('on', i < level);
   }
-
-  function nearestCarPrompt(state) {
-    const p = state.player;
-    if (p.vehicle) return '';
-    let best = null, bd = 80 * 80;
-    for (const v of state.vehicles) {
-      if (!v.active) continue;
-      const dx = p.x - v.x, dy = p.y - v.y, d2 = dx * dx + dy * dy;
-      if (d2 < bd) { bd = d2; best = v; }
-    }
-    if (!best) return '';
-    return `F — Steal ${best.def.name}`;
+  setHealth(h, a) {
+    this.el.healthFill.style.width = Math.max(0, h) + '%';
+    this.el.armorFill.style.width = Math.max(0, a) + '%';
   }
-
-  function update(state, screen, save, extras) {
-    const p = state.player;
-    els.clock.textContent = `${clockText(state.clockMin)} · ${state.dayNight === 'night' ? 'NIGHT' : 'SUNSET'}`;
-    els.radio.textContent = `♪ ${state.radioName || 'NEON 88 — Sunset Drive'}`;
-    els.money.textContent = `$${Math.floor(p.money).toLocaleString('en-US')}`;
-    for (let i = 0; i < 5; i += 1) {
-      const on = i < state.wanted;
-      starPaths[i].setAttribute('fill', on ? (state.wanted >= 3 ? '#ff5e7a' : '#ffd23e') : 'rgba(255,255,255,0.25)');
-      starPaths[i].setAttribute('stroke', on ? 'none' : 'rgba(255,255,255,0.6)');
+  setWeapon(text) { this.el.weapon.textContent = text; }
+  setClock(hour) {
+    const h = Math.floor(hour) % 24, m = Math.floor((hour % 1) * 60);
+    this.el.clock.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+  setRadio(name) { this.el.radio.textContent = name; }
+  setDistrict(name, sub) {
+    if (this.el.district.textContent !== name) {
+      this.el.district.textContent = name;
+      this.el.districtSub.textContent = sub;
+      this.el.district.parentElement.classList.remove('pop');
+      void this.el.district.parentElement.offsetWidth;
+      this.el.district.parentElement.classList.add('pop');
     }
-    if (state.wanted > 0) {
-      const label = state.wantedPhase === 'search'
-        ? `SEARCHING — escape ${Math.floor(state.escapeProgress * 100)}%`
-        : state.wanted >= 3 ? 'HELICOPTER OVERHEAD' : 'IN SIGHT';
-      els.wantedLabel.textContent = label;
-      els.wantedLabel.style.display = 'block';
-    } else els.wantedLabel.style.display = 'none';
-    const w = WEAPONS[p.weapon];
-    els.weapon.textContent = `${w.name}  ${p.ammo[p.weapon]} / ${p.reserve[p.weapon]}`;
-    els.healthFill.style.width = `${Math.max(0, p.health)}%`;
-    els.armorFill.style.width = `${Math.max(0, p.armor)}%`;
-    if (p.vehicle) {
-      els.speed.style.display = 'block';
-      els.speedUnit.style.display = 'block';
-      els.vehicleName.style.display = 'block';
-      els.speed.textContent = String(Math.round(Math.abs(p.speed || 0) * 0.18));
-      els.vehicleName.textContent = p.vehicle.def.name.toUpperCase();
+  }
+  setSpeed(kmh, veh) {
+    this.el.speedNum.textContent = Math.round(kmh);
+    this.el.vehName.textContent = veh || '';
+  }
+  setMission(text) { this.el.mission.textContent = text; }
+  setDialog(text, ms = 5000) {
+    this.el.dialog.textContent = text;
+    this.el.dialog.style.opacity = '1';
+    clearTimeout(this.dialogTimer);
+    this.dialogTimer = setTimeout(() => { this.el.dialog.style.opacity = '0'; }, ms);
+  }
+  setPrompt(text) {
+    this.el.prompt.textContent = text || '';
+    this.el.prompt.style.display = text ? 'block' : 'none';
+  }
+  showCrosshair(on) { this.el.crosshair.style.display = on ? 'block' : 'none'; }
+  setVisible(on) { document.getElementById('hud').style.display = on ? 'block' : 'none'; }
+  flashDamage() {
+    this.el.vignette.style.opacity = '0.55';
+    setTimeout(() => { this.el.vignette.style.opacity = '0'; }, 180);
+  }
+  toast(text, ms = 3500) {
+    this.el.toast.textContent = text;
+    this.el.toast.style.opacity = '1';
+    setTimeout(() => { this.el.toast.style.opacity = '0'; }, ms);
+  }
+  showTitle(save) {
+    this.el.title.style.display = 'flex';
+    if (save) {
+      this.el.titleContinue.style.display = 'block';
+      this.el.titleContinueLabel.textContent = `CONTINUE — $${save.money.toLocaleString('en-US')}`;
     } else {
-      els.speed.style.display = 'none';
-      els.speedUnit.style.display = 'none';
-      els.vehicleName.style.display = 'none';
+      this.el.titleContinue.style.display = 'none';
     }
-    if (state.banner && state.banner.t > 0) {
-      els.districtTitle.style.opacity = Math.min(1, state.banner.t);
-      els.districtSub.style.opacity = Math.min(1, state.banner.t);
-      els.districtTitle.textContent = state.banner.title;
-      els.districtSub.textContent = state.banner.sub;
-    } else {
-      els.districtTitle.style.opacity = 0;
-      els.districtSub.style.opacity = 0;
+  }
+  hideTitle() { this.el.title.style.display = 'none'; }
+  showPause(on) { this.el.pause.style.display = on ? 'flex' : 'none'; }
+  showMap(on) { this.el.map.style.display = on ? 'flex' : 'none'; }
+
+  // ---- minimap (circular, 180px) ----
+  drawMinimap(d) {
+    const g = this.minimap, S = 180, C = S / 2;
+    const sc = (x) => ((x + WORLD.HALF) / (WORLD.HALF * 2)) * S;
+    g.clearRect(0, 0, S, S);
+    g.save();
+    g.beginPath(); g.arc(C, C, C - 2, 0, Math.PI * 2); g.clip();
+    g.fillStyle = '#0d1b2a'; g.fillRect(0, 0, S, S);
+    // water + beach
+    g.fillStyle = '#1e6f9e'; g.fillRect(0, 0, sc(-720), S);
+    g.fillStyle = '#e8cf9a'; g.fillRect(sc(-720), 0, sc(-660) - sc(-720), S);
+    // roads
+    g.strokeStyle = '#5a6a7a'; g.lineWidth = 3;
+    for (const x of WORLD.AVENUES) { g.beginPath(); g.moveTo(sc(x), 0); g.lineTo(sc(x), S); g.stroke(); }
+    for (const z of WORLD.STREETS) { g.beginPath(); g.moveTo(0, sc(z)); g.lineTo(S, sc(z)); g.stroke(); }
+    // waypoint
+    if (d.waypoint) {
+      const wx = sc(d.waypoint.x), wz = sc(d.waypoint.z);
+      g.fillStyle = '#ffd23d';
+      g.beginPath(); g.moveTo(wx, wz - 7); g.lineTo(wx + 6, wz); g.lineTo(wx, wz + 7); g.lineTo(wx - 6, wz); g.closePath(); g.fill();
     }
-    els.objective.textContent = objectiveText(state);
-    if (state.dialogue && state.dialogue.t > 0) {
-      els.dialogue.style.display = 'block';
-      els.dialogue.textContent = `${state.dialogue.who}: ${state.dialogue.text}`;
-    } else els.dialogue.style.display = 'none';
-    if (state.bust > 0.02) {
-      els.bust.style.display = 'block';
-      els.bustFill.style.width = `${Math.round(state.bust * 100)}%`;
-    } else els.bust.style.display = 'none';
-    const prompt = screen === 'play' ? nearestCarPrompt(state) : '';
-    els.prompt.textContent = prompt;
-    els.prompt.style.display = prompt ? 'block' : 'none';
-    // Crosshair follows the mouse while on foot.
-    if (screen === 'play' && !p.vehicle && extras) {
-      els.crosshair.style.display = 'block';
-      els.crosshair.style.left = `${extras.mouseX}px`;
-      els.crosshair.style.top = `${extras.mouseY}px`;
-    } else els.crosshair.style.display = 'none';
-    // Minimap + full map.
-    drawMap(mm, els.minimap.width, state, false);
-    if (extras && extras.showMap) {
-      els.mapOverlay.style.display = 'flex';
-      drawMap(mapCtx, els.mapCanvas.width, state, true);
-    } else els.mapOverlay.style.display = 'none';
-    // Screens.
-    els.titleScreen.style.display = screen === 'title' ? 'flex' : 'none';
-    els.pauseScreen.style.display = screen === 'paused' ? 'flex' : 'none';
-    els.bustedScreen.style.display = screen === 'busted' ? 'flex' : 'none';
-    els.hud.style.display = screen === 'play' || screen === 'paused' || screen === 'busted' ? 'block' : 'none';
-    if (save) els.continueLine.textContent = `CONTINUE  —  $${Math.floor(save.money).toLocaleString('en-US')}`;
-    else els.continueLine.textContent = 'CONTINUE  —  no save yet';
+    // traffic
+    g.fillStyle = '#9aa5b1';
+    for (const t of d.traffic || []) { g.fillRect(sc(t.x) - 1.5, sc(t.z) - 1.5, 3, 3); }
+    // police
+    g.fillStyle = '#ff4444';
+    for (const p of d.police || []) { g.beginPath(); g.arc(sc(p.x), sc(p.z), 3.5, 0, Math.PI * 2); g.fill(); }
+    // player arrow
+    const px = sc(d.px), pz = sc(d.pz);
+    g.save();
+    g.translate(px, pz); g.rotate(-d.heading);
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.moveTo(0, -7); g.lineTo(5, 6); g.lineTo(-5, 6); g.closePath(); g.fill();
+    g.restore();
+    // north tick
+    g.fillStyle = '#ffffff'; g.font = 'bold 11px Arial'; g.textAlign = 'center';
+    g.fillText('N', C, 14);
+    g.restore();
+    g.strokeStyle = '#2ec4b6'; g.lineWidth = 3;
+    g.beginPath(); g.arc(C, C, C - 2, 0, Math.PI * 2); g.stroke();
   }
 
-  return { update };
+  // ---- full city map (800x600) ----
+  drawCityMap(d) {
+    const g = this.citymap, W = 800, H = 600;
+    const sc = (x) => ((x + WORLD.HALF) / (WORLD.HALF * 2)) * W;
+    const sz = (z) => ((z + WORLD.HALF) / (WORLD.HALF * 2)) * H;
+    g.clearRect(0, 0, W, H);
+    g.fillStyle = '#12233d'; g.fillRect(0, 0, W, H);
+    g.fillStyle = '#1e6f9e'; g.fillRect(0, 0, sc(-720), H);
+    g.fillStyle = '#e8cf9a'; g.fillRect(sc(-720), 0, sc(-660) - sc(-720), H);
+    // districts
+    g.font = 'bold 13px Arial'; g.textAlign = 'center';
+    for (const dist of DISTRICTS) {
+      g.fillStyle = 'rgba(46,196,182,0.14)';
+      g.fillRect(sc(dist.x0), sz(dist.z0), sc(dist.x1) - sc(dist.x0), sz(dist.z1) - sz(dist.z0));
+      g.fillStyle = '#2ec4b6';
+      g.fillText(dist.name, (sc(dist.x0) + sc(dist.x1)) / 2, (sz(dist.z0) + sz(dist.z1)) / 2);
+    }
+    // roads
+    g.strokeStyle = '#8a9ab0'; g.lineWidth = 4;
+    for (const x of WORLD.AVENUES) { g.beginPath(); g.moveTo(sc(x), 0); g.lineTo(sc(x), H); g.stroke(); }
+    for (const z of WORLD.STREETS) { g.beginPath(); g.moveTo(0, sz(z)); g.lineTo(W, sz(z)); g.stroke(); }
+    if (d.waypoint) {
+      g.fillStyle = '#ffd23d';
+      const wx = sc(d.waypoint.x), wz = sz(d.waypoint.z);
+      g.beginPath(); g.moveTo(wx, wz - 10); g.lineTo(wx + 9, wz); g.lineTo(wx, wz + 10); g.lineTo(wx - 9, wz); g.closePath(); g.fill();
+    }
+    g.save();
+    g.translate(sc(d.px), sz(d.pz)); g.rotate(-d.heading);
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.moveTo(0, -10); g.lineTo(8, 9); g.lineTo(-8, 9); g.closePath(); g.fill();
+    g.restore();
+    g.fillStyle = '#ff4444';
+    for (const p of d.police || []) { g.beginPath(); g.arc(sc(p.x), sz(p.z), 5, 0, Math.PI * 2); g.fill(); }
+  }
 }
