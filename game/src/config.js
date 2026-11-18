@@ -7,12 +7,13 @@ export const WORLD = { w: 2600, h: 1900 };
 export const SAVE_KEY = 'neon-delta-la.save.v2';
 export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
 
-// Warm sunset palette: orange-pink sky, neon cyan-orange accents, flat
-// low-poly colours. The 3D scene reads these for sky, fog, sea and ground.
+// Warm golden-hour palette: bright orange horizon, golden-pink mid-sky,
+// soft rose above, and a gentle cyan on the horizon opposite the sun (east).
+// Nothing dark or gloomy at dusk — the top of the sky stays a light rose.
 export const PALETTE = {
-  skyTop: '#7a4a9e', skyMid: '#ff6b8a', skyHorizon: '#ff9a5c',
-  nightTop: '#141034', nightMid: '#3a2358', nightHorizon: '#ff7a5c',
-  fogDusk: '#e8907a', fogNight: '#4a3560',
+  skyTop: '#c98aa0', skyMid: '#ff9e7a', skyHorizon: '#ffb347', skyEast: '#a8dcd8',
+  nightTop: '#1c1440', nightMid: '#4a2a68', nightHorizon: '#ff8a6a', nightEast: '#2a3a5a',
+  fogDusk: '#f2a983', fogNight: '#5a4066',
   sea: '#19b8c9', sand: '#f2d492', land: '#8a7a5e', sidewalk: '#c9b8a3',
   road: '#2b2b3a', roadLine: '#ffd23e', crane: '#e5382e',
   text: '#fff7ea', muted: '#ffd9a0', panel: 'rgba(16,10,32,0.82)',

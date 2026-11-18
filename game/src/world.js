@@ -17,6 +17,9 @@ export const EVENT_CRIME = 4;
 
 const CAR_COLORS = ['#ff4d6d', '#2ee6d6', '#ffd23e', '#ff7a1a', '#b388ff', '#e8ecf5', '#7dffa8'];
 const PED_COLORS = ['#ff8fab', '#ffd23e', '#7fd4ff', '#b388ff', '#7dffa8', '#ff9a5c'];
+const PED_SKINS = ['#e8b48a', '#c98d5f', '#8a5a3a', '#f2c9a0'];
+const PED_PANTS = ['#2b2b3a', '#3a4a6b', '#5a3a2a', '#2e4a3a', '#6b6b7a'];
+const PED_HAIR = ['#3a2a1a', '#1a1a1a', '#6b4a2f', '#8a8a8a', '#e5382e', '#2e6bff'];
 
 function circleVsRect(px, py, r, b) {
   const cx = Math.max(b.x, Math.min(px, b.x + b.w)), cy = Math.max(b.y, Math.min(py, b.y + b.h));
@@ -35,40 +38,75 @@ function inWater(x, y) {
 }
 
 export function createWorld(rand) {
-  // ---- static city: buildings per block, port cranes and containers, pier ----
-  const buildings = [];
-  const containers = [];
-  const cranes = [];
-  for (let bi = 0; bi < AVENUES.length - 1; bi += 1) {
-    for (let si = 0; si < STREETS.length - 1; si += 1) {
-      const x0 = AVENUES[bi] + 55, x1 = AVENUES[bi + 1] - 55;
-      const y0 = STREETS[si] + 55, y1 = STREETS[si + 1] - 55;
-      if (x0 >= x1 || y0 >= y1) continue;
-      if (x0 > CANAL.x0 - 120 && x0 < CANAL.x1 + 120) continue; // canal corridor
-      const downtown = bi === 0 && si === 0;
-      const tall = downtown || (bi <= 1 && si <= 1);
-      const n = tall ? 3 : 3 + Math.floor(rand() * 3);
-      for (let k = 0; k < n; k += 1) {
-        const w = Math.min(x1 - x0 - 20, 70 + rand() * 100);
-        const h = Math.min(y1 - y0 - 20, 55 + rand() * 80);
-        const x = x0 + 10 + rand() * Math.max(1, x1 - x0 - w - 20);
-        const y = y0 + 10 + rand() * Math.max(1, y1 - y0 - h - 20);
-        const height = tall ? 130 + rand() * 130 : 34 + rand() * 60;
-        const glass = tall && rand() < 0.6;
-        buildings.push({
-          x, y, w, h, height,
-          color: tall ? pick(rand, ['#5f6fb0', '#3fd2e0', '#8f7fb8']) : pick(rand, ['#c96f4a', '#7fae5a', '#b08968', '#e0a458', '#9b7bb8']),
-          glass,
-        });
+// ---- static city: grid-based blocks, lots that never overlap, height
+// falling off from the downtown core to low beach hotels. Each block is
+// split into lots with alley margins, so buildings sit in tidy rows instead
+// of piling up at random. A few lots stay empty as plazas with a palm.
+const GLASS_COLORS = ['#5f6fb0', '#3fd2e0', '#8f7fb8', '#4a7fb8', '#6fb0c9'];
+const MID_COLORS = ['#c96f4a', '#b08968', '#a87a5a', '#8a6f8a', '#7fae5a'];
+const HILL_COLORS = ['#c9a06a', '#a8b08a', '#d9c49a', '#b08968', '#8a9a7a'];
+const BEACH_COLORS = ['#f2d8c9', '#ffd9a0', '#ffb3a0', '#c9e8e0', '#f2e8d5'];
+const buildings = [];
+const containers = [];
+const cranes = [];
+const palms = [];
+for (let bi = 0; bi < AVENUES.length - 1; bi += 1) {
+  for (let si = 0; si < STREETS.length - 1; si += 1) {
+    const x0 = AVENUES[bi] + 55, x1 = AVENUES[bi + 1] - 55;
+    const y0 = STREETS[si] + 55, y1 = STREETS[si + 1] - 55;
+    if (x0 >= x1 || y0 >= y1) continue;
+    if (x0 > CANAL.x0 - 120 && x0 < CANAL.x1 + 120) continue; // canal corridor
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const d = districtAt(cx, cy);
+    const distDowntown = Math.hypot(cx - 675, cy - 370);
+    let minH, maxH, colors, glass;
+    if (d.name === 'DOWNTOWN' || distDowntown < 550) {
+      minH = 140; maxH = 260; colors = GLASS_COLORS; glass = true;
+    } else if (cx > 1900) {
+      minH = 26; maxH = 55; colors = BEACH_COLORS; glass = false;
+    } else if (d.name === 'HOLLYWOOD HILLS') {
+      minH = 24; maxH = 46; colors = HILL_COLORS; glass = false;
+    } else if (distDowntown < 1100) {
+      minH = 60; maxH = 130; colors = MID_COLORS; glass = rand() < 0.3;
+    } else {
+      minH = 30; maxH = 60; colors = MID_COLORS; glass = false;
+    }
+    const cols = (x1 - x0) > 260 ? 3 : 2;
+    const rows = 2;
+    const lotW = (x1 - x0) / cols, lotH = (y1 - y0) / rows;
+    const margin = 14; // alley around every lot, so nothing ever touches
+    for (let c = 0; c < cols; c += 1) {
+      for (let r = 0; r < rows; r += 1) {
+        if (rand() < 0.1) {
+          palms.push({ x: x0 + c * lotW + lotW / 2, y: y0 + r * lotH + lotH / 2 });
+          continue; // plaza lot: open space, no building
+        }
+        const bw = lotW - margin * 2, bh = lotH - margin * 2;
+        const shrink = 0.75 + rand() * 0.25;
+        const w = bw * shrink, h = bh * shrink;
+        const x = x0 + c * lotW + margin + (bw - w) / 2 + (rand() - 0.5) * 6;
+        const y = y0 + r * lotH + margin + (bh - h) / 2 + (rand() - 0.5) * 6;
+        const height = minH + rand() * (maxH - minH);
+        const color = pick(rand, colors);
+        const roof = height < 70 && rand() < 0.45; // rooftop AC box
+        buildings.push({ x, y, w, h, height, color, glass, roof, z0: 0 });
+        if (glass && rand() < 0.5) {
+          // Stepped crown: a smaller box on top, so towers vary in silhouette.
+          const cw = w * 0.55, ch = h * 0.55;
+          buildings.push({
+            x: x + (w - cw) / 2, y: y + (h - ch) / 2, w: cw, h: ch,
+            height: height * 0.28, color, glass: true, roof: false, z0: height,
+          });
+        }
       }
     }
   }
+}
   for (let i = 0; i < 10; i += 1) {
     containers.push({ x: PORT.x0 + 40 + i * 90, y: PORT.y0 + 40 + (i % 2) * 70, w: 64, h: 30, color: pick(rand, ['#f2a541', '#19b8c9', '#e5382e', '#7dffa8']) });
   }
   for (let i = 0; i < 4; i += 1) cranes.push({ x: PORT.x0 + 120 + i * 240, y: PORT.y0 + 8, h: 190 });
   // Palm trees along the beach and the Coral Strip boulevard.
-  const palms = [];
   for (let y = 140; y < 1700; y += 130) palms.push({ x: 2280 + (rand() < 0.5 ? -14 : 14), y });
   for (let x = 1950; x < 2250; x += 120) palms.push({ x, y: 300 });
   // Beach umbrellas on the sand.
@@ -138,7 +176,13 @@ export function createWorld(rand) {
     const slot = freeFrom(peds);
     if (!slot) return;
     const x = 150 + rand() * 2100, y = 150 + rand() * 1550;
-    Object.assign(slot, { active: true, x, y, tx: x, ty: y, speed: 40 + rand() * 30, color: pick(rand, PED_COLORS), flee: 0, wait: rand() * 3, walkPhase: rand() * 6 });
+    const shirt = pick(rand, PED_COLORS);
+    Object.assign(slot, {
+      active: true, x, y, tx: x, ty: y, speed: 40 + rand() * 30,
+      color: shirt, shirt, skin: pick(rand, PED_SKINS), pants: pick(rand, PED_PANTS),
+      hair: pick(rand, PED_HAIR), pack: rand() < 0.3, face: rand() * Math.PI * 2,
+      flee: 0, wait: rand() * 3, walkPhase: rand() * 6,
+    });
   }
 
   function reset() {
@@ -414,6 +458,7 @@ export function createWorld(rand) {
       if (p.flee > 0) {
         p.flee -= dt;
         const a = Math.atan2(p.y - player.y, p.x - player.x);
+        p.face = a;
         p.x += Math.cos(a) * 130 * dt; p.y += Math.sin(a) * 130 * dt;
         p.walkPhase += dt * 9;
       } else {
@@ -421,6 +466,7 @@ export function createWorld(rand) {
         if (p.wait <= 0) { p.tx = 150 + rand() * 2100; p.ty = 150 + rand() * 1550; p.wait = 4 + rand() * 5; }
         const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
         if (d > 12) {
+          p.face = Math.atan2(dy, dx);
           p.x += (dx / d) * p.speed * dt; p.y += (dy / d) * p.speed * dt;
           p.walkPhase += dt * 7;
         }

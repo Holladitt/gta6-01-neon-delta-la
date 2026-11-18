@@ -34,6 +34,9 @@ function announce(message) { status.textContent = message; }
 
 function runShot(name) {
   const scene = stageShot(name, world);
+  // Debug handle (same spirit as __ndState in runGame): lets QA map a
+  // screen point back to a world position via screenToGround.
+  window.__ndScene = scene3d;
   world.state.radioName = audio.stations[0];
   let painted = 0;
   function paint() {
@@ -42,7 +45,7 @@ function runShot(name) {
     scene3d.update(world.state, 1 / 60, scene.screen);
     hud.update(world.state, scene.screen, scene.save, { showMap: false, mouseX: window.innerWidth / 2, mouseY: window.innerHeight / 2 });
     painted += 1;
-    if (painted < 70) requestAnimationFrame(paint);
+    if (painted < 45) requestAnimationFrame(paint);
     else window.__shotReady = true;
   }
   requestAnimationFrame(paint);

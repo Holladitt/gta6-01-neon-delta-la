@@ -48,8 +48,14 @@ export function stageShot(name, world) {
   if (name === 'sunset') {
     // Coral Strip at sunset: pink sedan fleeing east toward the sea and the
     // setting sun, police cutting in ahead, 3 stars, heli overhead.
+    // Player staged at x 2200 (not 2100): the chase camera sits ~125 units
+    // behind it, and at 2100 it stood ~30 units from the avenue-1900 /
+    // street-650 traffic-light pole, which filled a third of the frame as a
+    // black slab. At 2200 the pole is behind the camera; the whole staging
+    // (car, heli, police) shifts east by the same 100 so the composition is
+    // unchanged.
     const car = state.vehicles.find((v) => v.active && v.kind === 'sedan');
-    state.player.x = 2100; state.player.y = 650; state.player.angle = 0; state.player.speed = 560;
+    state.player.x = 2200; state.player.y = 650; state.player.angle = 0; state.player.speed = 560;
     state.player.money = 14250; state.player.ammo = [12, 30, 6]; state.player.reserve = [72, 120, 36];
     state.wanted = 3; state.wantedPhase = 'pursuit';
     state.dayNight = 'dusk';
@@ -60,10 +66,16 @@ export function stageShot(name, world) {
     if (car) {
       car.driver = 'player'; state.player.vehicle = car; state.player.onFoot = false;
       car.color = '#ff4d6d'; car.roof = '#ffd23e';
-      car.x = 2100; car.y = 650; car.angle = 0; car.vx = 560; car.vy = 0; car.speed = 560;
+      car.x = 2200; car.y = 650; car.angle = 0; car.vx = 560; car.vy = 0; car.speed = 560;
     }
-    state.heli.active = true; state.heli.x = 2300; state.heli.y = 450;
-    stagePolice(state, [[2230, 630, 0], [2160, 672, 0]]);
+    state.heli.active = true; state.heli.x = 2400; state.heli.y = 450;
+    stagePolice(state, [[2330, 630, 0], [2260, 672, 0]]);
+    // Keep the hero frame clear: a pedestrian wandering onto the road
+    // between the chase camera and the player's car blocks the car.
+    // Staging only — gameplay untouched.
+    for (const ped of state.peds) {
+      if (ped.active && Math.hypot(ped.x - state.player.x, ped.y - state.player.y) < 220) ped.active = false;
+    }
     return { screen: 'play', save: null };
   }
   // Default: 'chase' — beach chase up the Coral Strip avenue, helicopter
