@@ -47,8 +47,8 @@
   #title-screen h1 .neon { color: #2ec4b6; text-shadow: 0 0 12px rgba(255,255,255,.7), 0 0 42px rgba(46,196,182,.95), 0 0 90px rgba(46,196,182,.6), 0 4px 0 #1a7a72, 0 10px 30px rgba(0,0,0,.8); animation: neonPulse 3.2s ease-in-out infinite; }
   @keyframes neonPulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
   #title-screen h2 { position: relative; z-index: 2; font-size: 20px; color: #ffd23d; letter-spacing: 6px; margin: 8px 0 30px; text-shadow: 0 0 18px rgba(255,210,61,.7), 0 2px 8px rgba(0,0,0,.8); }
-  #press-enter { position: relative; z-index: 2; margin-top: 22px; font-size: 15px; font-weight: 900; letter-spacing: 4px; color: #7fe3d8; text-shadow: 0 0 14px rgba(46,196,182,.8); animation: blinkHint 1.6s steps(2) infinite; }
-  @keyframes blinkHint { 0%, 60% { opacity: 1; } 61%, 100% { opacity: .15; } }
+  #press-enter { position: relative; z-index: 2; margin-top: 22px; font-size: 20px; font-weight: 900; letter-spacing: 4px; color: #ffffff; background: rgba(8, 14, 24, .88); border: 2px solid rgba(255, 201, 60, .9); border-radius: 8px; padding: 12px 22px; text-shadow: 0 2px 6px #000, 0 0 14px rgba(0, 0, 0, .9); box-shadow: 0 4px 18px rgba(0, 0, 0, .65); animation: blinkHint 1.6s steps(2) infinite; }
+  @keyframes blinkHint { 0%, 60% { opacity: 1; } 61%, 100% { opacity: .55; } }
   #title-dust { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 1; }
   #title-dust i { position: absolute; bottom: -12px; width: 5px; height: 5px; border-radius: 50%; background: rgba(255,220,150,.55); filter: blur(1px); animation: dustRise 16s linear infinite; }
   #title-dust i:nth-child(odd) { background: rgba(150,220,255,.4); }

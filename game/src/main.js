@@ -167,6 +167,7 @@ const gameApi = {
   enterCar(v) { enterCar(v); },
   setWanted(n) { game.wanted.level = n; police.setLevel(n); hud.setWanted(n); },
   spawnPolice(x, z, heading) { return police.spawnAt(x, z, heading || 0); },
+  spawnTraffic(kind, axis, road, along, dir, speed) { return traffic.spawnAt(kind, axis, road, along, dir, speed); },
   setHour(h) { game.hour = h; rig.setTimeOfDay(h); hud.setClock(h); },
   startMission(i) { startMission(i); },
   setCamera(yaw, pitch) { rig.yaw = yaw; rig.pitch = pitch; },

@@ -36,6 +36,16 @@ export class Traffic {
     this.scene.add(v.group);
     return car;
   }
+  // Place one traffic car at an exact spot on a road (screenshot staging).
+  spawnAt(kind, axis, road, along, dir, speed, color) {
+    const v = createVehicle(kind, 0, 0, 0, color ?? pick(rng, CAR_COLORS));
+    const lane = dir > 0 ? 5.5 : -5.5;
+    const car = { v, axis, road, dir, along, speed };
+    this.place(car, along, lane);
+    this.cars.push(car);
+    this.scene.add(v.group);
+    return car;
+  }
   // Extra traffic confined to the port roads (trucks + cars around the terminal).
   spawnPortCars(n) {
     for (let i = 0; i < n; i++) {

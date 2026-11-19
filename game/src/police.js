@@ -102,6 +102,24 @@ export class Police {
       });
     }
     for (const c of this.cars) {
+      if (c.script) {
+        // Staged chase (screenshot only): hold a fixed offset ahead of the
+        // player, so the cruiser stays in the chase camera's frame instead
+        // of A* flanking away from the road ahead. The light bar keeps
+        // flashing. Only shot staging sets c.script; normal play never does.
+        const s = c.script;
+        const rx = s.dirZ, rz = -s.dirX; // right vector of the travel direction
+        c.x = px + s.dirX * s.ahead + rx * s.lane;
+        c.z = pz + s.dirZ * s.ahead + rz * s.lane;
+        c.group.position.set(c.x, 0, c.z);
+        c.group.rotation.y = c.heading;
+        const on = Math.sin(t * 12) > 0;
+        if (c.lightBar) {
+          c.lightBar.red.emissiveIntensity = on ? 2.2 : 0.1;
+          c.lightBar.blue.emissiveIntensity = on ? 0.1 : 2.2;
+        }
+        continue;
+      }
       // steer toward current path node (or straight at the player when close)
       let tx = px, tz = pz;
       if (c.path && c.pathI < c.path.length) {

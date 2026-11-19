@@ -82,21 +82,46 @@ export function groundTexture() {
   const pz = (z) => ((z + WORLD.HALF) / W) * S;
   return canvasTex(S, S, (g) => {
     g.fillStyle = '#8aa86b'; g.fillRect(0, 0, S, S); // grass base
-    // port concrete
-    g.fillStyle = '#9a9a92'; g.fillRect(px(340), pz(340), px(720) - px(340), pz(720) - pz(340));
-    // port yard detail: concrete panel seams every 40u, oil stains, and
-    // painted yellow container-slot outlines in the yard lanes, so the
-    // terminal floor reads as worked ground instead of flat gray.
-    g.strokeStyle = 'rgba(0,0,0,0.16)'; g.lineWidth = 2;
-    for (let x = 340; x <= 720; x += 40) { g.beginPath(); g.moveTo(px(x), pz(340)); g.lineTo(px(x), pz(720)); g.stroke(); }
-    for (let z = 340; z <= 720; z += 40) { g.beginPath(); g.moveTo(px(340), pz(z)); g.lineTo(px(720), pz(z)); g.stroke(); }
-    g.fillStyle = 'rgba(52,52,46,0.28)';
-    for (const [sx, sz, sw, sh] of [[380, 420, 70, 26], [520, 640, 90, 30], [640, 380, 50, 22], [430, 560, 60, 24], [660, 600, 46, 20]]) {
+    // port concrete: darker asphalt so the yard reads from the avenue
+    g.fillStyle = '#6f6f68'; g.fillRect(px(340), pz(340), px(720) - px(340), pz(720) - pz(340));
+    // Wide dark border band around the whole yard.
+    g.strokeStyle = 'rgba(20,20,16,0.55)'; g.lineWidth = 14;
+    g.strokeRect(px(340) + 7, pz(340) + 7, px(720) - px(340) - 14, pz(720) - pz(340) - 14);
+    // Thick white yard lanes every 20u + a painted coral center block.
+    g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 6;
+    for (let x = 360; x <= 700; x += 20) { g.beginPath(); g.moveTo(px(x), pz(340)); g.lineTo(px(x), pz(720)); g.stroke(); }
+    for (let z = 360; z <= 700; z += 20) { g.beginPath(); g.moveTo(px(340), pz(z)); g.lineTo(px(720), pz(z)); g.stroke(); }
+    g.fillStyle = 'rgba(255,46,77,0.20)';
+    g.fillRect(px(460), pz(460), px(620) - px(460), pz(620) - pz(460));
+    g.strokeStyle = 'rgba(255,46,77,0.75)'; g.lineWidth = 6;
+    g.strokeRect(px(460), pz(460), px(620) - px(460), pz(620) - pz(460));
+    // Painted container bays across the central apron: thick yellow outline
+    // with a dark interior, so each bay reads from the avenue.
+    g.strokeStyle = '#f7c948'; g.lineWidth = 9;
+    for (let x = 400; x <= 600; x += 40) {
+      for (let z = 400; z <= 600; z += 40) {
+        g.fillStyle = 'rgba(0,0,0,0.14)';
+        g.fillRect(px(x), pz(z), px(x + 32) - px(x), pz(z + 28) - pz(z));
+        g.strokeRect(px(x), pz(z), px(x + 32) - px(x), pz(z + 28) - pz(z));
+      }
+    }
+    // Yellow underlay under each real stack bay (12 x 2.6 footprint) with a
+    // dark top, so a yellow painted border frames every stack.
+    for (const [sx, sz] of [[654, 438.7], [654, 478.7], [654, 518.7], [654, 558.7], [434, 658.7], [474, 658.7], [514, 658.7], [554, 658.7]]) {
+      g.fillStyle = '#f7c948';
+      g.fillRect(px(sx - 0.8), pz(sz - 0.8), px(sx + 12.8) - px(sx - 0.8), pz(sz + 3.4) - pz(sz - 0.8));
+      g.fillStyle = 'rgba(0,0,0,0.22)';
+      g.fillRect(px(sx), pz(sz), px(sx + 12) - px(sx), pz(sz + 2.6) - pz(sz));
+    }
+    // Big oil stains + a hazard chevron band along the yard entrance.
+    g.fillStyle = 'rgba(52,52,46,0.42)';
+    for (const [sx, sz, sw, sh] of [[380, 420, 70, 26], [520, 640, 90, 30], [640, 380, 50, 22], [430, 560, 60, 24], [660, 600, 46, 20], [400, 660, 80, 28], [580, 420, 60, 26]]) {
       g.fillRect(px(sx), pz(sz), px(sx + sw) - px(sx), pz(sz + sh) - pz(sz));
     }
-    g.strokeStyle = 'rgba(247,201,72,0.85)'; g.lineWidth = 3;
-    for (const [sx, sz] of [[654, 438.7], [654, 478.7], [654, 518.7], [654, 558.7], [434, 658.7], [474, 658.7], [514, 658.7], [554, 658.7]]) {
-      g.strokeRect(px(sx), pz(sz), px(sx + 12) - px(sx), pz(sz + 2.6) - pz(sz));
+    for (let i = 0; i < 24; i++) {
+      g.fillStyle = i % 2 ? '#f7c948' : '#22221e';
+      g.save(); g.translate(px(340 + i * 16), pz(706)); g.rotate(Math.PI / 4);
+      g.fillRect(0, 0, px(11) - px(0), px(11) - px(0)); g.restore();
     }
     // canal water (Venice Canals district)
     g.fillStyle = '#2f7fa8';
