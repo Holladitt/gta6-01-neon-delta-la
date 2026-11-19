@@ -1112,7 +1112,10 @@ export function buildWorld(scene) {
     // coaster train
     if (pier.train) {
       pier.trainT = (pier.trainT + dt * 0.02) % 1;
-      const idx = Math.floor(pier.trainT * 48);
+      // Defensive clamp: a negative trainT (see tick's dt clamp) would make
+      // idx -1 and coasterPath[-1] undefined — the v11 shoot's first-tick
+      // "reading '0'" throw. Belt and suspenders with the dt clamp above.
+      const idx = Math.min(47, Math.max(0, Math.floor(pier.trainT * 48)));
       const p = coasterPath[idx], q = coasterPath[(idx + 1) % 48];
       pier.train.position.set(p[0], p[1] + 1.2, p[2]);
       pier.train.rotation.y = -Math.atan2(q[2] - p[2], q[0] - p[0]);

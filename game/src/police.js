@@ -6,6 +6,7 @@ import * as THREE from '../vendor/three.module.min.js';
 import { createVehicle, updateVehicle } from './vehicles.js';
 import { astar, nearestNode } from './astar.js';
 import { WANTED } from './wanted.js';
+import { CALLSIGNS } from './config.js';
 
 const CRUISER_PAINT = 0x141414;
 
@@ -32,21 +33,32 @@ export class Police {
     this.heliSpot = null;
     this.repathT = 0;
     this.level = 0;
+    this.callIdx = 0; // cycles the callsign pool so each unit keeps its own callsign
   }
+
+  nextCallsign() { return CALLSIGNS[this.callIdx++ % CALLSIGNS.length]; }
 
   // Grow/shrink the patrol to the count the wanted level demands.
   ensureCount(level, px, pz) {
     const want = WANTED.policeFor(level);
     while (this.cars.length < want) {
       const c = createVehicle('police', px + (Math.random() - 0.5) * 200, pz + (Math.random() - 0.5) * 200, 0, CRUISER_PAINT);
+      c.callsign = this.nextCallsign();
       c.targetNode = null;
       c.path = [];
       c.pathI = 0;
       this.cars.push(c);
       this.scene.add(c.group);
     }
+    // Never trim a scripted (staged) cruiser: screenshot staging pins it to
+    // a fixed offset ahead of the player, and ensureCount used to pop it the
+    // moment wanted dropped to 0 (v11 shot 2 lost its pinned cruiser this
+    // way). Scripted cars only exist under ?shot= staging, so normal play
+    // is unaffected; the grow loop still counts them toward `want`.
     while (this.cars.length > want) {
-      const c = this.cars.pop();
+      const idx = this.cars.findIndex((c) => !c.script);
+      if (idx < 0) break; // only scripted cruisers remain — keep them
+      const [c] = this.cars.splice(idx, 1);
       this.scene.remove(c.group);
     }
     if (WANTED.heliFor(level) && !this.heli) this.spawnHeli();
@@ -63,6 +75,7 @@ export class Police {
 
   spawnAt(x, z, heading = 0) {
     const c = createVehicle('police', x, z, heading, CRUISER_PAINT);
+    c.callsign = this.nextCallsign();
     c.targetNode = null;
     c.path = [];
     c.pathI = 0;

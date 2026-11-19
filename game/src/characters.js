@@ -44,6 +44,24 @@ export function buildHuman(opt = {}) {
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.66 * s * wide, 0.68 * s, 0.38 * s), mat(shirt));
   torso.position.y = 1.18 * s;
   g.add(torso);
+  // jacket details: collar + zipper line + backpack straps
+  if (opt.collar) {
+    const collar = new THREE.Mesh(new THREE.BoxGeometry(0.4 * s, 0.12 * s, 0.42 * s), mat(opt.collar));
+    collar.position.y = 1.56 * s;
+    g.add(collar);
+  }
+  if (opt.zipper) {
+    const zip = new THREE.Mesh(new THREE.BoxGeometry(0.05 * s, 0.62 * s, 0.02 * s), mat(0x222222));
+    zip.position.set(0, 1.18 * s, 0.2 * s);
+    g.add(zip);
+  }
+  if (opt.straps) {
+    for (const sx of [-0.18, 0.18]) {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.08 * s, 0.5 * s, 0.02 * s), mat(0x1a1a2e));
+      strap.position.set(sx * s, 1.28 * s, 0.2 * s);
+      g.add(strap);
+    }
+  }
   // chest stripe: a bright band across the jacket, readable from behind
   if (opt.stripe) {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.5 * s * wide, 0.1 * s, 0.06 * s), mat(opt.stripe));
@@ -63,23 +81,54 @@ export function buildHuman(opt = {}) {
     arm.add(hand);
   }
   g.add(armL, armR);
-  // head + hair
+  // head + hair + face (readable at chase-cam distance and in dialog busts)
   const head = new THREE.Group();
   head.position.y = 1.68 * s;
   const skull = new THREE.Mesh(new THREE.BoxGeometry(0.36 * s, 0.36 * s, 0.34 * s), mat(skin));
   head.add(skull);
+  // face: brows, eyes, nose, mouth on the +z (front) face
+  const dark = mat(0x14100c);
+  for (const ex of [-0.085, 0.085]) {
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.07 * s, 0.02 * s, 0.02 * s), dark);
+    brow.position.set(ex * s, 0.07 * s, 0.18 * s);
+    head.add(brow);
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.05 * s, 0.07 * s, 0.02 * s), dark);
+    eye.position.set(ex * s, 0.01 * s, 0.18 * s);
+    head.add(eye);
+  }
+  const nose = new THREE.Mesh(new THREE.BoxGeometry(0.04 * s, 0.08 * s, 0.03 * s), mat(skin));
+  nose.position.set(0, -0.03 * s, 0.18 * s);
+  head.add(nose);
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.02 * s, 0.02 * s), mat(0x7a2a20));
+  mouth.position.set(0, -0.12 * s, 0.18 * s);
+  head.add(mouth);
   const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.38 * s, 0.14 * s, 0.36 * s), mat(hair));
   hairTop.position.y = 0.18 * s;
   head.add(hairTop);
   const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.38 * s, 0.3 * s, 0.1 * s), mat(hair));
   hairBack.position.set(0, 0.06 * s, -0.18 * s);
   head.add(hairBack);
+  // front fringe for a fuller hairline
+  if (opt.fringe) {
+    const fringe = new THREE.Mesh(new THREE.BoxGeometry(0.38 * s, 0.1 * s, 0.06 * s), mat(hair));
+    fringe.position.set(0, 0.14 * s, 0.17 * s);
+    head.add(fringe);
+  }
+  if (opt.sunglasses) {
+    const sg = new THREE.Mesh(new THREE.BoxGeometry(0.3 * s, 0.07 * s, 0.03 * s), mat(0x111111));
+    sg.position.set(0, 0.01 * s, 0.19 * s);
+    head.add(sg);
+  }
   g.add(head);
   // accessories
   if (opt.ponytail) {
+    // two-segment ponytail with a swing pivot, coral tie
     const pony = new THREE.Mesh(new THREE.BoxGeometry(0.12 * s, 0.55 * s, 0.12 * s), mat(hair));
     pony.position.set(0, -0.1 * s, -0.26 * s);
     head.add(pony);
+    const ponyTip = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.3 * s, 0.1 * s), mat(hair));
+    ponyTip.position.set(0, -0.48 * s, -0.3 * s);
+    head.add(ponyTip);
     const tie = new THREE.Mesh(new THREE.BoxGeometry(0.14 * s, 0.08 * s, 0.14 * s), mat(0xff2e4d));
     tie.position.set(0, 0.14 * s, -0.26 * s);
     head.add(tie);
@@ -108,17 +157,24 @@ export function buildHuman(opt = {}) {
     g.add(hood);
   }
   g.scale.setScalar(opt.scale ?? 1);
+  // seated pose: legs swung forward (bench / stool sitters, never animated)
+  if (opt.seated) {
+    legL.rotation.x = -1.45;
+    legR.rotation.x = -1.45;
+    armL.rotation.x = -0.25;
+    armR.rotation.x = -0.25;
+  }
   return { group: g, parts: { legL, legR, armL, armR, head, torso }, height: h };
 }
 
 // Mara Solano: coral jacket (no NPC wears it), white chest stripe, blue
 // backpack, ponytail, yellow shoes, tallest in the crowd. Instantly
-// recognizable from behind.
+// recognizable from behind. v11: face, fringe, collar, zipper, straps.
 export function buildMara() {
   return buildHuman({
     skin: 0xe0ac69, shirt: 0xff2e4d, pants: 0x2c3e50, hair: 0x2c1a0a,
     shoes: 0xffc53d, ponytail: true, backpack: 0x2471a3, scale: 1.12, height: 1.8,
-    stripe: 0xf4f4f0, wide: 1.05,
+    stripe: 0xf4f4f0, wide: 1.05, fringe: true, collar: 0xd41e3a, zipper: true, straps: true,
   });
 }
 
@@ -132,6 +188,7 @@ export function buildNPC(rng) {
   else if (acc < 0.4) opt.bandana = pick(rng, [0xff2e4d, 0x2ec4b6, 0xffc53d]);
   else if (acc < 0.55) opt.hood = true;
   if (rng() < 0.3) opt.backpack = pick(rng, [0x7d3c98, 0x2471a3, 0xd4ac0d, 0x333333]);
+  if (rng() < 0.15) opt.sunglasses = true;
   return buildHuman(opt);
 }
 

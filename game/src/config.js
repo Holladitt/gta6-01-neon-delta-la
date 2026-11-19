@@ -50,13 +50,35 @@ export const WEAPONS = [
 ];
 
 export const VEHICLE_DEFS = {
-  sedan: { name: 'SEDAN', accel: 14, top: 34, reverse: 10, turn: 1.9, grip: 6.5, brake: 26, len: 4.6, wid: 2.0 },
-  suv: { name: 'SUV', accel: 11, top: 30, reverse: 9, turn: 1.6, grip: 6.0, brake: 24, len: 5.0, wid: 2.2 },
-  pickup: { name: 'PICKUP', accel: 12, top: 31, reverse: 9, turn: 1.7, grip: 6.2, brake: 24, len: 5.2, wid: 2.1 },
-  sport: { name: 'SPORT', accel: 19, top: 42, reverse: 8, turn: 2.3, grip: 7.2, brake: 30, len: 4.4, wid: 2.0 },
-  bike: { name: 'BIKE', accel: 18, top: 38, reverse: 6, turn: 2.6, grip: 5.0, brake: 22, len: 2.4, wid: 0.8 },
-  police: { name: 'PATROL', accel: 15, top: 36, reverse: 10, turn: 2.0, grip: 7.0, brake: 28, len: 4.8, wid: 2.1 },
+  sedan: { name: 'SEDAN', model: 'MERIDIAN S', accel: 14, top: 34, reverse: 10, turn: 1.9, grip: 6.5, brake: 26, len: 4.6, wid: 2.0 },
+  suv: { name: 'SUV', model: 'TERRA X', accel: 11, top: 30, reverse: 9, turn: 1.6, grip: 6.0, brake: 24, len: 5.0, wid: 2.2 },
+  pickup: { name: 'PICKUP', model: 'HARROW P', accel: 12, top: 31, reverse: 9, turn: 1.7, grip: 6.2, brake: 24, len: 5.2, wid: 2.1 },
+  sport: { name: 'SPORT', model: 'SOLSTICE GT', accel: 19, top: 42, reverse: 8, turn: 2.3, grip: 7.2, brake: 30, len: 4.4, wid: 2.0 },
+  bike: { name: 'BIKE', model: 'SPARROW R', accel: 18, top: 38, reverse: 6, turn: 2.6, grip: 5.0, brake: 22, len: 2.4, wid: 0.8 },
+  police: { name: 'PATROL', model: 'NDPD INTERCEPTOR', accel: 15, top: 36, reverse: 10, turn: 2.0, grip: 7.0, brake: 28, len: 4.8, wid: 2.1 },
 };
+
+// Rank ladder: RP = payout / 10, accumulated from missions + side jobs.
+// Titles are original (checked against the top-5 leaderboard findings).
+export const RANKS = [
+  { letter: 'D', title: 'GREENHORN', minRp: 0 },
+  { letter: 'C', title: 'RUNNER', minRp: 100 },
+  { letter: 'B', title: 'NIGHTHAWK', minRp: 300 },
+  { letter: 'A', title: 'OUTLAW', minRp: 600 },
+  { letter: 'S', title: 'DELTA LEGEND', minRp: 1000 },
+];
+
+// Crew: three named members. Only ONE ability is real — CLEAN PLATES
+// (driver Juno): swap plates, wanted -1, 45s cooldown. The other two
+// members have no ability shown, by design (no fake abilities).
+export const CREW = [
+  { id: 'juno', name: 'JUNO REYES', role: 'DRIVER', ability: { id: 'plates', label: 'CLEAN PLATES', key: 'KeyC', cooldown: 45, desc: 'Swap plates — wanted -1' } },
+  { id: 'petra', name: 'PETRA HALE', role: 'MECHANIC', ability: null },
+  { id: 'cassia', name: 'CASSIA WREN', role: 'LOOKOUT', ability: null },
+];
+
+// NDPD unit callsigns (original; pool is cycled by unit index).
+export const CALLSIGNS = ['DELTA-7', 'DELTA-12', 'CORAL-3', 'CORAL-9', 'PIER-5', 'HARBOR-2', 'VENICE-8', 'DELTA-21', 'MARINA-4', 'FREEWAY-6'];
 
 export const PLAYER = {
   walkSpeed: 5.2, runSpeed: 9.5, health: 100, armor: 50, money: 250,
@@ -66,36 +88,70 @@ export const PLAYER = {
 export const SAVE_KEY = 'neon-delta-la.save.v3';
 
 // Mission + side-job data. Steps: goto | steal | deliver | chase | escape | survive | visit | talk
+// stages: groups of step indices with a title. Stages only VIEW the steps —
+// they never change step order, step content, or the reward.
 export const MISSIONS = [
   { id: 1, name: 'RETURN TO LA', brief: 'Mara is back. Steal a sedan and get to the safehouse.',
+    contact: { name: 'EDEN VOSS', role: 'SAFEHOUSE KEEPER', skin: 0xc68642, hair: 0x777777, hairStyle: 'short', shirt: 0x2c3e50 },
+    stages: [
+      { title: 'GET WHEELS', steps: [0, 1] },
+      { title: 'REACH THE SAFEHOUSE', steps: [2] },
+    ],
     steps: [
       { type: 'goto', x: 600, z: 560, r: 10, text: 'Get to the parked sedan on Coral Avenue.' },
       { type: 'steal', kind: 'sedan', text: 'Take the sedan. Press F next to it.' },
       { type: 'goto', x: 100, z: -500, r: 14, text: 'Drive to the Downtown safehouse.', inCar: true },
     ], reward: 400 },
   { id: 2, name: 'MIDNIGHT CARGO', brief: 'A crate at the port needs to reach the Marina. No questions.',
+    contact: { name: 'HARLAN DRAY', role: 'DOCK FIXER', skin: 0x8d5524, hair: 0x1a1a1a, hairStyle: 'cap', cap: 0x2471a3, shirt: 0x5d6d7e },
+    stages: [
+      { title: 'PICK UP THE CRATE', steps: [0] },
+      { title: 'DELIVER TO THE MARINA', steps: [1] },
+    ],
     steps: [
       { type: 'goto', x: 520, z: 560, r: 12, text: 'Pick up the crate at Long Beach Port.' },
       { type: 'deliver', x: -480, z: -560, r: 14, text: 'Deliver the crate to the Marina. Keep it quiet.', inCar: true },
     ], reward: 650 },
   { id: 3, name: 'FESTIVAL OF LIGHTS', brief: 'Something is hidden at Coral Pier. Visit the stalls.',
+    contact: { name: 'LUCIA MARLOW', role: 'PIER VENDOR', skin: 0xe0ac69, hair: 0x4a2c0a, hairStyle: 'bun', shirt: 0xff7e5f },
+    stages: [
+      { title: 'REACH THE PIER', steps: [0] },
+      { title: 'CHECK THE STALLS', steps: [1] },
+      { title: 'GET BACK TO THE ROAD', steps: [2] },
+    ],
     steps: [
       { type: 'goto', x: -700, z: 300, r: 16, text: 'Go to Coral Pier.' },
       { type: 'visit', points: [[-740, 260], [-760, 340], [-730, 420]], r: 8, text: 'Check the three game stalls on the pier.' },
       { type: 'goto', x: -600, z: 300, r: 12, text: 'Get back to the beach road.' },
     ], reward: 700 },
   { id: 4, name: 'CANAL CROSSING', brief: 'A courier is running the canals. Stay on his tail.',
+    contact: { name: 'DANTE KOVAC', role: 'CANAL RUNNER', skin: 0xf1c27d, hair: 0x2c2c2c, hairStyle: 'short', shirt: 0x229954 },
+    stages: [
+      { title: 'FIND THE COURIER', steps: [0] },
+      { title: 'STAY ON HIS TAIL', steps: [1] },
+      { title: 'LOSE HIM AT MIDTOWN', steps: [2] },
+    ],
     steps: [
       { type: 'goto', x: -400, z: 500, r: 12, text: 'Find the courier near the canals.' },
       { type: 'chase', seconds: 20, text: 'Stay close to the courier for 20 seconds.' },
       { type: 'goto', x: 0, z: 100, r: 14, text: 'Lose him at the Midtown crossing.', inCar: true },
     ], reward: 800 },
   { id: 5, name: 'LAST BRIDGE', brief: 'The whole force is after you. Break the line, then cross.',
+    contact: { name: 'SABLE OKONKWO', role: 'FREEWAY CONTACT', skin: 0xa06a3a, hair: 0x1a1a1a, hairStyle: 'bandana', bandana: 0x2ec4b6, shirt: 0x1a1a2e },
+    stages: [
+      { title: 'BREAK THE LINE', steps: [0] },
+      { title: 'CROSS THE BRIDGE', steps: [1] },
+    ],
     steps: [
       { type: 'escape', text: 'Lose the police. Break line of sight, swap cars, or change clothes.' },
       { type: 'goto', x: 700, z: -300, r: 14, text: 'Cross the Freeway bridge, clean.', inCar: true },
     ], reward: 1000, startWanted: 4 },
   { id: 6, name: 'THE BURNING CITY', brief: 'The proof is in three places. Get it all, then vanish.',
+    contact: { name: 'VERA LINDQVIST', role: 'CITY HALL SOURCE', skin: 0xffdbac, hair: 0xd4a017, hairStyle: 'bun', shirt: 0x7d3c98 },
+    stages: [
+      { title: 'COLLECT THE PROOF', steps: [0] },
+      { title: 'VANISH AT THE SOUTH GATE', steps: [1] },
+    ],
     steps: [
       { type: 'visit', points: [[100, -500], [-480, -560], [520, 560]], r: 10, text: 'Collect the proof: safehouse, marina, port.' },
       { type: 'goto', x: 0, z: 700, r: 16, text: 'Reach the south gate and disappear.', inCar: true },

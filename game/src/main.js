@@ -1,16 +1,16 @@
 // Neon Delta LA — main orchestrator. State machine, player, missions, wanted,
 // combat, save/load, HUD wiring, screenshot staging. All original content.
 import * as THREE from '../vendor/three.module.min.js';
-import { WORLD, DISTRICTS, PLAYER, SAVE_KEY, MISSIONS, SIDE_JOBS, KEYS, WEAPONS, districtAt } from './config.js';
+import { WORLD, DISTRICTS, PLAYER, SAVE_KEY, MISSIONS, SIDE_JOBS, KEYS, WEAPONS, CREW, districtAt } from './config.js';
 import { mulberry32 } from './rng.js';
 import { buildWorld, groundY, inWater } from './world.js';
-import { buildMara, animateWalk, animateIdle } from './characters.js';
+import { buildMara, buildHuman, animateWalk, animateIdle } from './characters.js';
 import { createVehicle, updateVehicle, setHeadlights } from './vehicles.js';
 import { Traffic, Peds } from './traffic.js';
 import { Police } from './police.js';
 import { Officers } from './officers.js';
 import { Combat, rayHit } from './combat.js';
-import { startMission as engineStartMission, updateMission, startSideJob, currentStep } from './missions.js';
+import { startMission as engineStartMission, updateMission, startSideJob, currentStep, stageOf } from './missions.js';
 import { newWantedState, WANTED } from './wanted.js';
 import { loadGame, saveGame, hasSave, memoryStore } from './save.js';
 import { SceneRig } from './scene.js';
@@ -18,6 +18,10 @@ import { HUD } from './hud.js';
 import { Input } from './input.js';
 import { AudioSys } from './audio.js';
 import { applyShot } from './shots.js';
+import { buildDispatch } from './dispatch.js';
+import { rankFor, rpForReward, addStanding, getStanding, standingLabel } from './rank.js';
+import { newCrewState, canSwap, applySwap, tickCooldown } from './crew.js';
+import { makePortraits } from './portraits.js';
 
 const rng = mulberry32(4242);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -55,9 +59,16 @@ const game = {
   inCar: null,
   bustT: 0, deadT: 0,
   fps: 0, frames: 0, fpsT: 0, errors: [],
+  day: 1, rp: 0, standing: {}, // rank/respect: RP from real payouts only
+  crime: 'EVADING POLICE', // last crime label shown on the dispatch panel
+  witnessT: 0, // witness report countdown (0 = none pending)
+  shotT: -99, // time of the last gunshot (drives NPC panic)
+  crewState: newCrewState(), // CLEAN PLATES cooldown
+  portraits: null,
 };
 
 let rig, world, traffic, peds, police, officers, hud, input, audio, combat;
+let scooters = [];
 let mara, maraParts, parked = [];
 let waypointMarker, waypointBeam, tracers = [];
 let player = { x: PLAYER.spawn.x, z: PLAYER.spawn.z, heading: PLAYER.spawn.heading, speed: 0, phase: 0, moving: false };
@@ -85,6 +96,59 @@ function boot() {
   maraParts = m.parts;
   mara.position.set(player.x, 0, player.z);
   rig.scene.add(mara);
+
+  // Named contacts + street life (individual humans, not instanced peds):
+  // Lucia tends the CANDY stall, two more vendors behind other stalls,
+  // three sitters on pier benches, Eden at the safehouse, Harlan at the port.
+  const addNamed = (opt, x, z, heading, y = 0, seated = false) => {
+    const b = buildHuman({ ...opt, seated });
+    b.group.position.set(x, y, z);
+    b.group.rotation.y = heading;
+    rig.scene.add(b.group);
+    return b;
+  };
+  addNamed({ skin: 0xe0ac69, hair: 0x4a2c0a, shirt: 0xff7e5f, pants: 0x2c3e50, height: 1.72 }, -702, 327, Math.PI, 2.5); // Lucia Marlow, CANDY stall
+  addNamed({ skin: 0xc68642, hair: 0x1a1a1a, shirt: 0xf4f4f0, pants: 0x4a3728, height: 1.78, cap: 0x2ec4b6 }, -724, 272.5, 0, 2.5);
+  addNamed({ skin: 0x8d5524, hair: 0x777777, shirt: 0xf4f4f0, pants: 0x2c3e50, height: 1.7, bandana: 0xffc53d }, -680, 327, Math.PI, 2.5);
+  addNamed({ skin: 0xf1c27d, hair: 0xd4a017, shirt: 0x2471a3, pants: 0x5d6d7e, height: 1.75 }, -750, 300, 0, 2.3, true);
+  addNamed({ skin: 0xa06a3a, hair: 0x1a1a1a, shirt: 0xff6b9d, pants: 0x1a1a2e, height: 1.68, cap: 0xc0392b }, -724, 268, 0, 2.3, true);
+  addNamed({ skin: 0xe0ac69, hair: 0xb5651d, shirt: 0x7d3c98, pants: 0x7b7b7b, height: 1.8 }, -698, 332, Math.PI, 2.3, true);
+  addNamed({ skin: 0xc68642, hair: 0x777777, shirt: 0x2c3e50, pants: 0x1a1a2e, height: 1.8 }, 104, -492, Math.PI / 2); // Eden Voss, safehouse
+  addNamed({ skin: 0x8d5524, hair: 0x1a1a1a, shirt: 0x5d6d7e, pants: 0x4a3728, height: 1.82, cap: 0x2471a3 }, 524, 552, -Math.PI / 2); // Harlan Dray, port gate
+
+  // Scooter riders cruise the -200 avenue (rider seated, legs/arms forward).
+  scooters = [];
+  const scooterColors = [0xff2e4d, 0x2ec4b6, 0xffc53d];
+  const riderSkins = [0xf1c27d, 0xc68642, 0xe0ac69];
+  const riderShirts = [0xffc53d, 0x2ec4b6, 0x7d3c98];
+  const riderCaps = [0xc0392b, 0x2471a3, 0xdddddd];
+  for (let i = 0; i < 3; i++) {
+    const rider = buildHuman({ skin: riderSkins[i], shirt: riderShirts[i], pants: 0x2c3e50, hair: 0x1a1a1a, height: 1.75, cap: riderCaps[i] });
+    rider.parts.legL.rotation.x = -1.1;
+    rider.parts.legR.rotation.x = -1.1;
+    rider.parts.armL.rotation.x = -0.9;
+    rider.parts.armR.rotation.x = -0.9;
+    const sc = new THREE.Group();
+    const bodyMat = new THREE.MeshLambertMaterial({ color: scooterColors[i] });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.35, 0.7), bodyMat);
+    body.position.y = 0.55;
+    sc.add(body);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.15, 0.55), new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
+    seat.position.set(-0.4, 0.8, 0);
+    sc.add(seat);
+    for (const wx of [0.7, -0.7]) {
+      const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.08, 8, 14), new THREE.MeshLambertMaterial({ color: 0x141414 }));
+      wheel.rotation.y = Math.PI / 2;
+      wheel.position.set(wx, 0.3, 0);
+      sc.add(wheel);
+    }
+    rider.group.position.set(0, 0.1, 0);
+    sc.add(rider.group);
+    sc.position.set(-200 + (i % 2 ? 5.5 : -5.5), 0, -500 + i * 350);
+    sc.rotation.y = i % 2 ? 0 : Math.PI;
+    rig.scene.add(sc);
+    scooters.push({ g: sc, dir: i % 2 ? 1 : -1, speed: 11 + i * 2 });
+  }
 
   for (const spot of world.parkedSpots) {
     const v = createVehicle(spot.kind, spot.x, spot.z, spot.heading, spot.color);
@@ -131,10 +195,16 @@ function boot() {
   hud.setMoney(game.money);
   hud.setWanted(0);
   hud.setHealth(100, 0);
-  hud.setWeapon(combat.hudText());
-  hud.setClock(game.hour);
-  hud.setDistrict('DOWNTOWN', 'Glassline Towers');
+  hud.setWeaponSlots(combat);
+  hud.setClock(game.hour, game.day);
+  hud.setDistrict('DOWNTOWN', 'Glassline Towers', 'NEUTRAL · 50');
   hud.setMission('Press M to start the next mission.');
+  hud.setMissionStage('', null);
+  // Procedural portraits (Mara, crew, mission contacts) + rank/crew panels.
+  game.portraits = makePortraits(MISSIONS.map((m) => m.contact));
+  hud.setPortraits(game.portraits);
+  hud.setRank(rankFor(0));
+  hud.setCrewAbility(0, 0);
   rig.setTimeOfDay(game.hour);
 
   // Screenshot staging (?shot=1..4).
@@ -155,11 +225,13 @@ function boot() {
     ammo: combat.ammo[combat.current],
     mission: game.mission ? game.mission.idx : -1,
     missionStep: game.mission ? game.mission.step : -1,
+    missionStage: game.mission ? stageOf(game.mission) : null,
     pos: [Math.round(player.x), Math.round(player.z)],
     inCar: game.inCar ? game.inCar.kind : null,
     speedKmh: game.inCar ? Math.round(Math.abs(game.inCar.speed) * 3.6) : 0,
     health: game.health,
     fps: Math.round(game.fps),
+    frames: game.frames,
     errors: game.errors,
     waypoint: game.waypoint,
     officers: officers.list.length,
@@ -171,6 +243,14 @@ function boot() {
     siren: police.cars.length && police.cars[0].lightBar ? police.cars[0].lightBar.red.emissiveIntensity : null,
     port: world.port,
     pierStats: world.pier.stats || null,
+    day: game.day,
+    rp: game.rp,
+    rank: rankFor(game.rp),
+    crime: game.crime,
+    witnessT: +game.witnessT.toFixed(2),
+    plateCooldown: +game.crewState.cooldownT.toFixed(1),
+    dispatchUnits: police.cars.length + (police.heli ? 1 : 0),
+    scooters: scooters.length,
   });
   window.addEventListener('error', (e) => game.errors.push(String(e.message)));
 
@@ -220,6 +300,42 @@ const gameApi = {
     game.money = n;
     hud.setMoney(n);
   },
+  setRp(n) {
+    game.rp = n;
+    hud.setRank(rankFor(n));
+  },
+  setDay(n) {
+    game.day = n;
+    hud.setClock(game.hour, n);
+  },
+  parkedNear(x, z) {
+    let best = null, bd = Infinity;
+    for (const v of parked) {
+      const d = Math.hypot(v.x - x, v.z - z);
+      if (d < bd) { bd = d; best = v; }
+    }
+    return best;
+  },
+  // Pin the nearest sidewalk ped next to (x, z) (screenshot staging: the
+  // witness for the steal shot). Returns the ped or null.
+  placePedNear(x, z) {
+    let best = null, bd = Infinity;
+    for (const n of peds.npcs) {
+      if (n.zone === 'pier') continue;
+      const nx = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
+      const nz = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
+      const d = Math.hypot(nx - x, nz - z);
+      if (d < bd) { bd = d; best = n; }
+    }
+    if (!best) return null;
+    best.axis = 'z';
+    best.road = x - 15.5;
+    best.side = 1;
+    best.along = z;
+    best.dir = 1;
+    return best;
+  },
+  portrait(name) { return game.portraits ? game.portraits[name] : null; },
   setHealth(h) {
     game.health = h;
     hud.setHealth(h, game.armor);
@@ -237,6 +353,12 @@ function newGame() {
   game.sideJob = null;
   game.waypoint = null;
   game.courier = null;
+  game.day = 1;
+  game.rp = 0;
+  game.standing = {};
+  game.crime = 'EVADING POLICE';
+  game.witnessT = 0;
+  game.crewState = newCrewState();
   WANTED.clear(game.wanted);
   police.setLevel(0);
   game.inCar = null;
@@ -248,8 +370,13 @@ function newGame() {
   hud.setMoney(game.money);
   hud.setWanted(0);
   hud.setHealth(100, 0);
-  hud.setDialog('MARA: Back in Neon Delta. My sister is out there — and so are the answers.', 6000);
+  hud.setRank(rankFor(0));
+  hud.setClock(game.hour, game.day);
+  hud.setCrewAbility(0, 0);
+  hud.setDispatch(null);
+  hud.setDialog('Back in Neon Delta. My sister is out there — and so are the answers.', 6000);
   hud.setMission('MISSION 1 — RETURN TO LA: Steal a sedan.');
+  hud.setMissionStage('', null);
   hud.toast('WASD move · F enter car · M mission');
   lockPointer();
 }
@@ -265,6 +392,10 @@ function continueGame() {
   if (Array.isArray(s.weapons)) combat.owned = s.weapons;
   if (Array.isArray(s.ammo)) combat.ammo = s.ammo;
   if (Array.isArray(s.reserves)) combat.reserves = s.reserves;
+  game.day = s.day || 1;
+  game.rp = s.rp || 0;
+  game.standing = s.standing || {};
+  game.crewState.cooldownT = s.plateT || 0;
   game.hour = s.hour;
   gameApi.teleport(s.x, s.z, s.heading);
   game.state = 'playing';
@@ -274,7 +405,9 @@ function continueGame() {
   hud.setMoney(game.money);
   hud.setWanted(0);
   hud.setHealth(game.health, game.armor);
-  hud.setClock(game.hour);
+  hud.setClock(game.hour, game.day);
+  hud.setRank(rankFor(game.rp));
+  hud.setCrewAbility(game.crewState.cooldownT, 0);
   rig.setTimeOfDay(game.hour);
   hud.toast('Save loaded.');
   lockPointer();
@@ -316,8 +449,10 @@ function startMission(i) {
     hud.setWanted(game.wanted.level);
   }
   if (i === 3) game.courier = traffic.cars[0] || null; // mission 4: tail the courier
-  hud.setDialog(`MISSION ${i + 1} — ${def.name}: ${def.brief}`, 6000);
+  hud.setDialog(`MISSION ${i + 1} — ${def.name}: ${def.brief}`, 6000,
+    { name: def.contact.name, img: game.portraits[def.contact.name] });
   hud.setMission(`MISSION ${i + 1} — ${def.name}: ${m.dialog}`);
+  hud.setMissionStage(`MISSION ${i + 1} — ${def.name}`, stageOf(m));
   audio.blip(660, 0.12, 'triangle', 0.2);
 }
 
@@ -341,14 +476,40 @@ function enterCar(v) {
   audio.setRadio(true);
   audio.blip(440, 0.08, 'square', 0.15);
   if (v.kind === 'police') {
+    game.crime = 'GRAND THEFT AUTO';
     WANTED.add(game.wanted, 2);
-    hud.setDialog('MARA: Stole a police cruiser. That was loud.', 4000);
+    hud.setDialog('Stole a police cruiser. That was loud.', 4000);
   } else if (wasParked && !v.stolen) {
-    // Stealing a parked car raises heat once.
+    // Stealing a parked car: a ped within 25u sees it. No instant heat —
+    // the witness reports after a real 3s delay, then dispatch sends a unit.
     v.stolen = true;
-    WANTED.add(game.wanted, 1);
-    hud.setDialog(`MARA: ${v.def.name} is mine now.`, 3500);
+    game.crime = 'VEHICLE THEFT';
+    if (nearestPed(25)) {
+      game.witnessT = 3;
+      hud.setDialog('Someone saw that. They are calling it in.', 3500);
+      hud.toast('A WITNESS SAW YOU — 3s');
+    } else {
+      WANTED.add(game.wanted, 1);
+      hud.setDialog(`The ${v.def.model} is mine now.`, 3500);
+    }
   }
+}
+
+// Nearest pedestrian to the player (last-frame positions, same formula as
+// the combat target list). Used by the witness mechanic.
+function nearestPed(maxD) {
+  let best = null, bd = maxD;
+  for (const n of peds.npcs) {
+    let x, z;
+    if (n.zone === 'pier') { x = n.along; z = 300 + n.lane; }
+    else {
+      x = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
+      z = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
+    }
+    const d = Math.hypot(x - player.x, z - player.z);
+    if (d < bd) { bd = d; best = n; }
+  }
+  return best;
 }
 
 function exitCar() {
@@ -371,6 +532,7 @@ function fireWeapon() {
     if (combat.ammo[combat.current] === 0) hud.setPrompt('R — RELOAD');
     return;
   }
+  game.shotT = game.time; // nearby NPCs panic for a few seconds after gunfire
   audio.shot(res.weapon.name);
   const cam = rig.camera;
   const dir = new THREE.Vector3();
@@ -402,12 +564,14 @@ function fireWeapon() {
         t.ref.health -= res.weapon.dmg;
         if (t.ref.health <= 0 && !t.ref.wrecked) {
           t.ref.wrecked = true;
+          game.crime = 'EVADING POLICE';
           WANTED.add(game.wanted, 1);
           hud.toast('Police cruiser wrecked.');
         }
       } else if (t.type === 'officer') {
         if (officers.damage(t.ref, res.weapon.dmg)) {
           officers.remove(officers.list.indexOf(t.ref));
+          game.crime = 'ASSAULT ON OFFICER';
           WANTED.add(game.wanted, 1);
           hud.toast('Officer down. The heat rises.');
         }
@@ -415,11 +579,13 @@ function fireWeapon() {
         t.ref.v.health -= res.weapon.dmg;
         if (t.ref.v.health <= 0 && !t.ref.v.wrecked) {
           t.ref.v.wrecked = true;
+          game.crime = 'EVADING POLICE';
           WANTED.add(game.wanted, 1);
         }
         t.ref.speed = 0;
       } else if (t.type === 'ped') {
         peds.assignRoad(t.ref, player.x, player.z); // flees
+        game.crime = 'ASSAULT';
         WANTED.add(game.wanted, 1);
       }
       break;
@@ -430,13 +596,17 @@ function fireWeapon() {
   tr.line.geometry.setFromPoints([muzzle, end]);
   tr.line.material.opacity = 0.9;
   tr.t = 0.08;
-  hud.setWeapon(combat.hudText());
+  hud.setWeaponSlots(combat);
 }
 
 // ---------- main loop ----------
 let last = performance.now();
 function tick(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  // dt is clamped to [0, 0.05]: the first rAF timestamp can precede the
+  // module-load performance.now() under load, giving a NEGATIVE dt — which
+  // once drove the coaster trainT below 0 (JS % keeps the sign) and made
+  // coasterPath[-1] throw "reading '0'" on the first tick (v11 shoot).
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
   game.time += dt;
   const t = game.time;
@@ -444,11 +614,16 @@ function tick(now) {
   // Settle frames for screenshots: run the world but keep player still.
   if (game.settleFrames > 0) game.settleFrames--;
 
-  if (game.state === 'playing') {
+  // One bad frame must never freeze the game: three.js only schedules the
+  // next animation frame if tick() returns, so an uncaught throw here used
+  // to brick the whole game into a black screen (v11 shoot, shots 3/4).
+  // Record the error (capped) and keep looping instead.
+  try {
+    if (game.state === 'playing') {
     // Day cycle: 1 game hour per 6 real minutes.
     game.hour = (game.hour + dt / 360) % 24;
     rig.setTimeOfDay(game.hour);
-    hud.setClock(game.hour);
+    hud.setClock(game.hour, game.day);
     const dusk = game.hour >= 17.5 || game.hour < 6;
     for (const v of parked) setHeadlights(v, dusk);
     for (const tc of traffic.cars) setHeadlights(tc.v, dusk);
@@ -464,6 +639,8 @@ function tick(now) {
 
     updateMissions(dt, t);
     updateWanted(dt, t);
+    updateWitness(dt);
+    tickCooldown(game.crewState, dt);
     updateBustedWasted(dt, t);
     updateHotkeys(dt, t);
     updateWorld(dt, t);
@@ -477,6 +654,7 @@ function tick(now) {
     world.update(dt, t);
     traffic.update(dt, t);
     peds.update(dt, 0, 0);
+    updateScooters(dt);
     if (input.wasPressed('Enter')) newGame();
   } else if (game.state === 'map') {
     hud.drawCityMap({
@@ -490,6 +668,13 @@ function tick(now) {
     }
   } else if (game.state === 'paused') {
     if (input.wasPressed('Escape')) resumeGame();
+  }
+  } catch (err) {
+    // Record the message + stack (capped) so the cause is diagnosable from
+    // __ndState instead of a frozen black screen.
+    if (game.errors.length < 10) {
+      game.errors.push(String(err && err.stack || err && err.message || err));
+    }
   }
 
   // FPS.
@@ -548,22 +733,30 @@ function updateOnFoot(dt, t) {
   else animateIdle(maraParts, t);
   // Prompt: enter car.
   const nc = nearestCar(4.5);
-  if (nc) hud.setPrompt(`F — ${nc.parked && !nc.stolen ? 'STEAL' : 'ENTER'} ${nc.def.name}`);
+  if (nc) hud.setPrompt(`F — ${nc.parked && !nc.stolen ? 'STEAL' : 'ENTER'} ${nc.def.model}`);
   else hud.setPrompt('');
   // Combat.
   combat.update(dt);
-  if (input.wasPressed('Digit1')) { combat.switchTo(0); hud.setWeapon(combat.hudText()); }
-  if (input.wasPressed('Digit2')) { combat.switchTo(1); hud.setWeapon(combat.hudText()); }
-  if (input.wasPressed('Digit3')) { combat.switchTo(2); hud.setWeapon(combat.hudText()); }
+  if (input.wasPressed('Digit1')) { combat.switchTo(0); hud.setWeaponSlots(combat); }
+  if (input.wasPressed('Digit2')) { combat.switchTo(1); hud.setWeaponSlots(combat); }
+  if (input.wasPressed('Digit3')) { combat.switchTo(2); hud.setWeaponSlots(combat); }
   if (input.wasPressed('KeyR')) {
     if (combat.reload()) {
-      hud.setWeapon(combat.hudText());
+      hud.setWeaponSlots(combat);
       audio.blip(1200, 0.05, 'square', 0.1);
     }
   }
   if (input.mouseDown && input.locked) fireWeapon();
   if (input.wasPressed('KeyF') && nc) enterCar(nc);
   if (input.wasPressed('KeyE')) tryInteract();
+}
+
+// Gear from the speed band (real speed ratio, not a fake gear number).
+function gearFor(v) {
+  const s = Math.abs(v.speed);
+  if (s < 0.5) return 'N';
+  const r = s / v.def.top;
+  return r < 0.3 ? 'G1' : r < 0.55 ? 'G2' : r < 0.8 ? 'G3' : 'G4';
 }
 
 // --- driving: throttle/steer/handbrake, chase cam, horn, engine hum ---
@@ -583,7 +776,7 @@ function updateDriving(dt, t) {
   if (input.wasPressed('KeyF')) exitCar();
   if (input.wasPressed('KeyH')) audio.blip(220, 0.35, 'square', 0.2);
   audio.setEngine(Math.abs(inCar.speed) / inCar.def.top, true);
-  hud.setSpeed(Math.abs(inCar.speed) * 3.6, inCar.def.name);
+  hud.setSpeed(Math.abs(inCar.speed) * 3.6, inCar.def.model, `CONDITION ${Math.round(inCar.health)}%`, gearFor(inCar));
   if (inCar.wrecked) hud.setPrompt('Vehicle wrecked — press F to get out.');
 }
 
@@ -608,13 +801,23 @@ function updateMissions(dt, t) {
       if (ev.type === 'dialog') hud.setDialog(ev.text, 5000);
       if (ev.type === 'complete') {
         game.money += ev.reward;
+        // Rank/respect: RP comes only from the real payout. A new day dawns
+        // after each completed main mission (side jobs pay RP, not a new day).
+        game.rp += rpForReward(ev.reward);
+        if (active === game.mission) game.day += 1;
+        const dist = districtAt(player.x, player.z);
+        addStanding(game.standing, dist.id, 8);
+        hud.setRank(rankFor(game.rp));
+        hud.setClock(game.hour, game.day);
         hud.setMoney(game.money);
         hud.setDialog(`MISSION COMPLETE — ${ev.name}: +$${ev.reward}`, 6000);
         hud.setMission('Press M for the next mission.');
+        hud.setMissionStage('', null);
         audio.jingle();
         WANTED.clear(game.wanted);
         police.setLevel(0);
         hud.setWanted(0);
+        hud.setDispatch(null);
         game.waypoint = null;
         if (active === game.sideJob) game.sideJob = null;
       }
@@ -625,6 +828,14 @@ function updateMissions(dt, t) {
       hud.setDialog('MISSION FAILED — Car wrecked. Press M to retry.', 6000);
       game.waypoint = null;
     }
+  }
+  // Stage tracker follows the live mission (or side job) every frame.
+  if (game.mission && game.mission.status === 'active') {
+    hud.setMissionStage(`MISSION ${game.mission.idx + 1} — ${game.mission.def.name}`, stageOf(game.mission));
+  } else if (game.sideJob && game.sideJob.status === 'active') {
+    hud.setMissionStage(`SIDE JOB — ${game.sideJob.def.name}`, stageOf(game.sideJob));
+  } else {
+    hud.setMissionStage('', null);
   }
   // Waypoint from the current step.
   game.waypoint = null;
@@ -648,8 +859,32 @@ function updateWanted(dt, t) {
   WANTED.update(game.wanted, dt, seen);
   police.setLevel(game.wanted.level);
   hud.setWanted(game.wanted.level);
+  hud.setWantedStatus(seen ? 'IN PURSUIT' : 'SEARCHING');
+  hud.setDispatch(buildDispatch({
+    cars: police.cars,
+    heli: police.heli ? { x: police.heli.position.x, z: police.heli.position.z } : null,
+    px: player.x, pz: player.z, wanted: game.wanted.level, crime: game.crime, seen,
+  }));
+  hud.setCrewAbility(game.crewState.cooldownT, game.wanted.level);
   const nearPolice = police.cars.length ? Math.min(...police.cars.map((c) => Math.hypot(c.x - player.x, c.z - player.z))) : 999;
   audio.setSiren(game.wanted.level > 0, nearPolice / 300);
+}
+
+// --- witness report: the 3s timer set when a steal is seen. When it fires,
+// dispatch sends a unit (wanted +1) — the heat arrives late, not instantly.
+function updateWitness(dt) {
+  if (game.witnessT > 0) {
+    game.witnessT -= dt;
+    if (game.witnessT <= 0) {
+      game.witnessT = 0;
+      WANTED.add(game.wanted, 1);
+      police.setLevel(game.wanted.level);
+      hud.setWanted(game.wanted.level);
+      hud.toast('NDPD DISPATCHED — witness report confirmed.');
+      hud.setDialog('NDPD DISPATCH: Unit responding to a vehicle theft.', 4000,
+        { name: 'NDPD DISPATCH', img: null });
+    }
+  }
 }
 
 // --- busted (arrested on foot at wanted 3+) / wasted (health 0) ---
@@ -701,9 +936,30 @@ function updateHotkeys(dt, t) {
       step: game.mission ? game.mission.step : 0,
       hour: game.hour, x: player.x, z: player.z, heading: player.heading,
       weapons: combat.owned, ammo: combat.ammo, reserves: combat.reserves,
+      day: game.day, rp: game.rp, standing: game.standing, plateT: game.crewState.cooldownT,
     });
     hud.toast('Game saved.');
     audio.blip(880, 0.1, 'sine', 0.15);
+  }
+  // C — CLEAN PLATES (Juno, the only real crew ability): swap plates,
+  // wanted -1, 45s cooldown. Fails honestly when there is no heat or the
+  // ability is still recharging.
+  if (input.wasPressed('KeyC')) {
+    const res = applySwap(game.crewState, game.wanted.level, CREW[0].ability.cooldown);
+    if (res.ok) {
+      game.wanted.level = res.wanted;
+      police.setLevel(res.wanted);
+      hud.setWanted(res.wanted);
+      hud.setCrewAbility(game.crewState.cooldownT, res.wanted);
+      hud.toast('CLEAN PLATES — Juno swapped the plates. Heat down.');
+      hud.setDialog('Plates swapped. They lost the tag on us.', 4000,
+        { name: 'JUNO REYES', img: game.portraits.juno });
+      audio.blip(520, 0.12, 'triangle', 0.2);
+    } else if (game.wanted.level <= 0) {
+      hud.toast('No heat to lose.');
+    } else {
+      hud.toast(`CLEAN PLATES recharging — ${Math.ceil(game.crewState.cooldownT)}s.`);
+    }
   }
   if (input.wasPressed('KeyQ')) {
     const n = audio.nextStation();
@@ -722,10 +978,21 @@ function updateHotkeys(dt, t) {
 }
 
 // --- world simulation: traffic, peds, police, officers, tracers, ramming ---
+function updateScooters(dt) {
+  for (const s of scooters) {
+    s.g.position.z += s.dir * s.speed * dt;
+    if (s.g.position.z > 760) s.g.position.z = -760;
+    if (s.g.position.z < -760) s.g.position.z = 760;
+  }
+}
+
 function updateWorld(dt, t) {
   world.update(dt, t);
   traffic.update(dt, t);
-  peds.update(dt, player.x, player.z);
+  // NPC panic: gunfire in the last 5s or wanted 3+ makes nearby peds run.
+  const panic = game.wanted.level >= 3 || (game.time - game.shotT) < 5;
+  peds.update(dt, player.x, player.z, panic);
+  updateScooters(dt);
   police.update(dt, t, player.x, player.z, game.inCar ? Math.abs(game.inCar.speed) : 0);
   officers.update(dt, t, player.x, player.z, !game.inCar, game.wanted.level, police.cars, (dmg) => {
     game.health -= dmg;
@@ -774,7 +1041,8 @@ function updateCameraHud(dt, t) {
   camTarget = { x: player.x, y: gy + 2.2, z: player.z };
   rig.updateCamera(dt, camTarget.x, camTarget.y, camTarget.z, player.heading, speed01, !!game.inCar, world.colliders);
   const dist = districtAt(player.x, player.z);
-  hud.setDistrict(dist.name, dist.sub);
+  const st = getStanding(game.standing, dist.id);
+  hud.setDistrict(dist.name, dist.sub, `${standingLabel(st)} · ${st}`);
   if (!game.inCar) hud.setSpeed(0, 'ON FOOT');
   hud.drawMinimap({
     px: player.x, pz: player.z, heading: rig.yaw,

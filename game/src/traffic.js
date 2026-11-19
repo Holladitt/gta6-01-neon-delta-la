@@ -184,6 +184,13 @@ export class Peds {
     this.legR = mk(partGeo([[0.24, 0.82, 0.26, 0, -0.41, 0, 0xffffff]]));
     this.armL = mk(partGeo([[0.2, 0.66, 0.22, 0, -0.33, 0, 0xffffff], [0.18, 0.16, 0.2, 0, -0.68, 0, 0xffffff]]));
     this.armR = mk(partGeo([[0.2, 0.66, 0.22, 0, -0.33, 0, 0xffffff], [0.18, 0.16, 0.2, 0, -0.68, 0, 0xffffff]]));
+    // Faces: two eyes + mouth, baked dark in vertex colors (no per-instance
+    // color, so every NPC reads as having a face at chase distance).
+    this.face = mk(partGeo([
+      [0.05, 0.07, 0.02, -0.085, 0.01, 0.18, 0x14100c],
+      [0.05, 0.07, 0.02, 0.085, 0.01, 0.18, 0x14100c],
+      [0.1, 0.02, 0.02, 0, -0.12, 0.18, 0x7a2a20],
+    ]));
     this.cap = mk(partGeo([[0.4, 0.12, 0.38, 0, 0, 0, 0xffffff], [0.4, 0.05, 0.2, 0, -0.04, 0.26, 0xffffff]]));
     this.pack = mk(partGeo([[0.44, 0.5, 0.2, 0, 0, 0, 0xffffff]]));
     this.npcs = [];
@@ -255,7 +262,7 @@ export class Peds {
     }
   }
 
-  update(dt, px, pz) {
+  update(dt, px, pz, panic = false) {
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
     const sv = new THREE.Vector3(), pos = new THREE.Vector3();
     this.npcs.forEach((n, i) => {
@@ -275,6 +282,12 @@ export class Peds {
         const wx = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
         const wz = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
         if ((wx - px) ** 2 + (wz - pz) ** 2 > 420 * 420) this.assignRoad(n, px, pz);
+        // Panic: when the player is shooting or the heat is high, nearby
+        // NPCs run away from the player at 2.5x speed instead of strolling.
+        if (panic && (wx - px) ** 2 + (wz - pz) ** 2 < 45 * 45) {
+          n.dir = (n.axis === 'z' ? (wz - pz) : (wx - px)) >= 0 ? 1 : -1;
+          n.along += n.dir * n.speed * 1.5 * dt; // burst on top of the stroll step = 2.5x
+        }
         x = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
         z = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
         heading = n.axis === 'z' ? (n.dir > 0 ? 0 : Math.PI) : (n.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
@@ -293,6 +306,7 @@ export class Peds {
       set(this.torso, x, 1.18 * s + yb, z, 0, heading, 0, s, wd);
       set(this.head, x, 1.68 * s + yb, z);
       set(this.hair, x, 1.68 * s + yb, z);
+      set(this.face, x, 1.68 * s + yb, z);
       set(this.cap, x, 1.9 * s + yb, z, 0, heading, 0, n.cap ? s : 0.0001);
       set(this.pack, x - Math.sin(heading) * 0.3, 1.2 * s + yb, z - Math.cos(heading) * 0.3, 0, heading, 0, n.pack ? s : 0.0001);
       set(this.legL, x - Math.cos(heading) * 0.15 * s * wd, 0.84 * s + yb, z + Math.sin(heading) * 0.15 * s * wd, sw, heading, 0);
@@ -300,7 +314,7 @@ export class Peds {
       set(this.armL, x - Math.cos(heading) * 0.44 * s * wd, 1.46 * s + yb, z + Math.sin(heading) * 0.44 * s * wd, -sw * 0.8, heading, 0.18, s, wd);
       set(this.armR, x + Math.cos(heading) * 0.44 * s * wd, 1.46 * s + yb, z - Math.sin(heading) * 0.44 * s * wd, sw * 0.8, heading, -0.18, s, wd);
     });
-    for (const m of [this.head, this.hair, this.torso, this.legL, this.legR, this.armL, this.armR, this.cap, this.pack]) {
+    for (const m of [this.head, this.hair, this.face, this.torso, this.legL, this.legR, this.armL, this.armR, this.cap, this.pack]) {
       m.instanceMatrix.needsUpdate = true;
     }
   }

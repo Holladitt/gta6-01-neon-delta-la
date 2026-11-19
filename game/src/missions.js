@@ -10,6 +10,37 @@ export function startMission(idx) {
 export function currentStep(m) { return m.def.steps[m.step]; }
 export function stepText(m) { const s = currentStep(m); return s ? s.text : ''; }
 
+// Stage view over the mission's steps (pure grouping — never changes the
+// engine). Returns {index (0-based), total, title, done, totalSteps, next}.
+// done counts completed steps inside the current stage; for a visit step it
+// counts visited points. next = text of the following step, or null.
+export function stageOf(m) {
+  const stages = m.def.stages || [{ title: m.def.name, steps: m.def.steps.map((_, i) => i) }];
+  let si = 0;
+  for (let i = 0; i < stages.length; i++) {
+    if (stages[i].steps.includes(m.step)) { si = i; break; }
+    si = i;
+  }
+  const stage = stages[si];
+  let done = 0, totalSteps = stage.steps.length;
+  for (const sIdx of stage.steps) {
+    if (sIdx < m.step) done++;
+    else if (sIdx === m.step) {
+      const s = m.def.steps[sIdx];
+      if (s.type === 'visit') {
+        done += m.visited.size;
+        totalSteps = stage.steps.length - 1 + s.points.length;
+      }
+    }
+  }
+  const nextStep = m.def.steps[m.step + 1];
+  return {
+    index: si, total: stages.length, title: stage.title,
+    done, totalSteps,
+    next: nextStep ? nextStep.text : null,
+  };
+}
+
 function dist(ax, az, bx, bz) { const dx = ax - bx, dz = az - bz; return Math.sqrt(dx * dx + dz * dz); }
 
 export function updateMission(m, dt, ctx) {

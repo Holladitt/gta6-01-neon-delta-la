@@ -7,6 +7,8 @@ export function makeSave(data) {
     health: data.health | 0, armor: data.armor | 0,
     x: +data.x.toFixed(2), z: +data.z.toFixed(2), heading: +data.heading.toFixed(3),
     hour: +data.hour.toFixed(2), weapons: data.weapons, ammo: data.ammo, reserves: data.reserves,
+    day: data.day | 0 || 1, rp: data.rp | 0, standing: data.standing || {},
+    plateT: +(data.plateT || 0).toFixed(1),
     savedAt: Date.now(),
   };
 }
@@ -18,6 +20,11 @@ export function decodeSave(text) {
   if (!o || o.v !== 3 || typeof o.money !== 'number' || typeof o.mission !== 'number') return null;
   if (typeof o.x !== 'number' || typeof o.z !== 'number') return null;
   if (!Array.isArray(o.weapons) || !Array.isArray(o.ammo)) return null;
+  // v11 fields are optional: old (v10) saves load with safe defaults.
+  if (typeof o.day !== 'number' || o.day < 1) o.day = 1;
+  if (typeof o.rp !== 'number' || o.rp < 0) o.rp = 0;
+  if (!o.standing || typeof o.standing !== 'object') o.standing = {};
+  if (typeof o.plateT !== 'number' || o.plateT < 0) o.plateT = 0;
   return o;
 }
 export function memoryStore() {

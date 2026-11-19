@@ -34,11 +34,52 @@
   #speed-num + span { font-size: 16px; font-weight: bold; color: #ffd23d; margin-left: 6px; }
   #veh-name { font-size: 15px; font-weight: bold; color: #7fe3d8; letter-spacing: 2px; }
   #mission-bar { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); max-width: 46vw; text-align: center; font-size: 16px; font-weight: bold; color: #ffe9a0; }
-  #dialog { position: absolute; left: 50%; top: 74px; transform: translateX(-50%); max-width: 60vw; text-align: center; font-size: 18px; font-weight: bold; background: rgba(8,14,24,.92); border: 1px solid rgba(255,210,61,.35); border-radius: 8px; padding: 10px 18px; opacity: 0; transition: opacity .3s; text-shadow: 0 2px 6px rgba(0,0,0,.95); }
-  #prompt { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); font-size: 19px; font-weight: 900; letter-spacing: 1px; color: #ffd23d; display: none; }
+  #mission-stage { font-size: 14px; font-weight: 900; color: #ffd23d; letter-spacing: 1px; }
+  #stage-bar { height: 7px; background: rgba(0,0,0,.6); border-radius: 4px; overflow: hidden; margin: 5px 0; border: 1px solid rgba(255,255,255,.3); }
+  #stage-fill { height: 100%; background: #ffd23d; width: 0%; }
+  #mission-next { font-size: 13px; color: #7fe3d8; font-weight: bold; margin-top: 3px; }
+  #dialog { position: absolute; left: 50%; top: 74px; transform: translateX(-50%); max-width: 60vw; font-size: 18px; font-weight: bold; background: rgba(8,14,24,.92); border: 1px solid rgba(255,210,61,.35); border-radius: 8px; padding: 10px 18px; opacity: 0; transition: opacity .3s; text-shadow: 0 2px 6px rgba(0,0,0,.95); display: flex; align-items: center; gap: 12px; text-align: left; }
+  #dialog-portrait { width: 56px; height: 56px; border-radius: 8px; border: 2px solid rgba(255,210,61,.5); flex: none; }
+  #dialog-name { font-size: 13px; font-weight: 900; color: #7fe3d8; letter-spacing: 2px; }
+  #dialog-text { font-size: 18px; font-weight: bold; }
+  #prompt { position: absolute; left: 50%; bottom: 132px; transform: translateX(-50%); font-size: 19px; font-weight: 900; letter-spacing: 1px; color: #ffd23d; display: none; }
   #crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 26px; font-weight: bold; color: rgba(255,255,255,.9); display: none; }
   #vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(255,0,0,.55) 100%); opacity: 0; transition: opacity .15s; }
-  #toast { position: absolute; left: 50%; top: 140px; transform: translateX(-50%); font-size: 17px; font-weight: bold; background: rgba(10,20,35,.75); padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .3s; }
+  #toast { position: absolute; left: 50%; top: 220px; transform: translateX(-50%); font-size: 17px; font-weight: bold; background: rgba(10,20,35,.75); padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .3s; }
+  /* v11 panels: dispatch, rank, crew, wanted banner, weapon slots */
+  #day { color: #ffd23d; }
+  #wanted-banner { position: absolute; left: 50%; top: 152px; transform: translateX(-50%); text-align: center; display: none; }
+  #wanted-banner-text { font-size: 44px; font-weight: 900; letter-spacing: 4px; color: #ff4444; text-shadow: 0 0 12px rgba(255,60,60,.8), 0 2px 6px #000; }
+  #wanted-banner-sub { font-size: 15px; font-weight: bold; color: #ffd23d; letter-spacing: 3px; }
+  #dispatch { position: absolute; left: 16px; top: 66px; width: 290px; font-size: 14px; }
+  #dispatch-head { font-weight: 900; color: #ff6b6b; letter-spacing: 1px; margin-bottom: 4px; }
+  .disp-row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.12); }
+  .disp-call { font-weight: 900; color: #7fe3d8; width: 90px; }
+  .disp-role { color: #ffe9a0; flex: 1; }
+  .disp-dist { color: #fff; font-weight: bold; }
+  .disp-status { margin-top: 4px; font-weight: 900; color: #ffd23d; letter-spacing: 1px; }
+  .disp-more { color: #9aa5b1; font-size: 12px; }
+  #rank-panel { margin-top: 8px; text-align: left; }
+  #rank-title { font-size: 14px; font-weight: 900; color: #7fe3d8; letter-spacing: 1px; }
+  .rank-bar { height: 7px; background: rgba(0,0,0,.6); border-radius: 4px; overflow: hidden; margin-top: 4px; border: 1px solid rgba(255,255,255,.3); }
+  #rank-bar { height: 100%; background: #2ec4b6; width: 0%; }
+  #rank-rp { font-size: 12px; font-weight: bold; color: #ffe9a0; margin-top: 3px; }
+  #crew-bar { position: absolute; right: 16px; top: 262px; width: 252px; }
+  .crew-head { font-size: 13px; font-weight: 900; letter-spacing: 2px; color: #7fe3d8; margin-bottom: 4px; }
+  .crew-row { display: flex; align-items: center; gap: 8px; background: rgba(10,20,35,.55); border-radius: 8px; padding: 5px 8px; margin-bottom: 5px; }
+  .crew-row img { width: 40px; height: 40px; border-radius: 6px; border: 2px solid rgba(255,255,255,.35); }
+  .crew-name { font-size: 13px; font-weight: 900; letter-spacing: 1px; }
+  .crew-role { font-size: 11px; color: #ffd23d; font-weight: bold; }
+  .crew-ability { font-size: 12px; font-weight: 900; letter-spacing: 1px; background: rgba(10,20,35,.55); border-radius: 8px; padding: 6px 8px; color: #9aa5b1; }
+  .crew-ability.ready { color: #7dffa8; border: 1px solid #7dffa8; }
+  #weapon-strip { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 4px; }
+  .wslot { font-size: 12px; font-weight: 900; background: rgba(10,20,35,.55); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; padding: 3px 7px; color: #cfd8e3; }
+  .wslot.active { color: #ffe9a0; border-color: #ffd23d; background: rgba(60,40,0,.6); }
+  #standing { font-size: 13px; color: #7fe3d8; font-weight: bold; }
+  #veh-cond { font-size: 14px; font-weight: bold; color: #ffd23d; letter-spacing: 1px; }
+  .bar-row { display: flex; align-items: center; gap: 6px; }
+  .bar-row .bar { flex: 1; }
+  .bar-num { font-size: 12px; font-weight: bold; width: 26px; text-align: right; }
   .overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; z-index: 10; pointer-events: auto; }
   #title-screen { display: flex; background: linear-gradient(180deg, rgba(16,10,46,.55) 0%, rgba(60,20,70,.30) 38%, rgba(255,126,95,.24) 68%, rgba(10,16,38,.88) 100%); backdrop-filter: blur(3px) saturate(1.25); -webkit-backdrop-filter: blur(3px) saturate(1.25); }
   #title-screen::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 42%, transparent 42%, rgba(5,8,20,.55) 100%); pointer-events: none; }
@@ -94,18 +135,25 @@
 <canvas id="c"></canvas>
 <div id="hud">
   <div id="vignette"></div>
-  <div id="hud-top-left" class="panel"><span id="clock">13:29</span><span id="radio">RADIO: NEON 88</span></div>
+  <div id="hud-top-left" class="panel"><span id="clock">13:29</span><span id="day">DAY 1</span><span id="radio">RADIO: NEON 88</span></div>
+  <div id="dispatch" class="panel" style="display:none"><div id="dispatch-head"></div><div id="dispatch-body"></div></div>
   <div id="hud-top-right">
-    <div id="weapon">PISTOL 12 / 120</div>
+    <div id="weapon-strip"></div>
     <div id="money">$250</div>
     <div id="stars"></div>
-    <div id="bars"><div class="bar"><div id="health-fill"></div></div><div class="bar"><div id="armor-fill"></div></div></div>
+    <div id="bars">
+      <div class="bar-row"><div class="bar"><div id="health-fill"></div></div><span class="bar-num" id="health-num">100</span></div>
+      <div class="bar-row"><div class="bar"><div id="armor-fill"></div></div><span class="bar-num" id="armor-num">0</span></div>
+    </div>
+    <div id="rank-panel" class="panel"><div id="rank-title">RANK D · GREENHORN</div><div class="rank-bar"><div id="rank-bar"></div></div><div id="rank-rp">0 / 100 RP</div></div>
   </div>
+  <div id="crew-bar"></div>
   <canvas id="minimap" width="180" height="180"></canvas>
-  <div id="district"><div id="district-name">DOWNTOWN</div><div id="district-sub">Glassline Towers</div></div>
-  <div id="speed"><span id="speed-num">0</span><span>KM/H</span><div id="veh-name">ON FOOT</div></div>
-  <div id="mission-bar" class="panel"><span id="mission-text">Press M to start the next mission.</span></div>
-  <div id="dialog"></div>
+  <div id="district"><div id="district-name">DOWNTOWN</div><div id="district-sub">Glassline Towers</div><div id="standing"></div></div>
+  <div id="speed"><span id="speed-num">0</span><span>KM/H</span><div id="veh-name">ON FOOT</div><div id="veh-cond"></div></div>
+  <div id="mission-bar" class="panel"><div id="mission-stage"></div><div id="stage-bar"><div id="stage-fill"></div></div><span id="mission-text">Press M to start the next mission.</span><div id="mission-next"></div></div>
+  <div id="dialog"><img id="dialog-portrait" alt=""><div id="dialog-body"><div id="dialog-name">MARA</div><div id="dialog-text"></div></div></div>
+  <div id="wanted-banner"><div id="wanted-banner-text">WANTED</div><div id="wanted-banner-sub">IN PURSUIT</div></div>
   <div id="prompt"></div>
   <div id="crosshair">+</div>
   <div id="toast"></div>

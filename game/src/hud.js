@@ -1,4 +1,7 @@
 // HUD: DOM overlay, circular minimap, city map, title + pause screens.
+// v11: NDPD dispatch panel, rank panel, crew bar, weapon slots, DAY counter,
+// WANTED banner, stage tracker, district standing, vehicle identity, dialog
+// portraits. Every panel shows only state the game actually tracks.
 // Matches the element ids in index.html.
 import { WORLD, DISTRICTS } from './config.js';
 
@@ -6,37 +9,93 @@ export class HUD {
   constructor() {
     const $ = (id) => document.getElementById(id);
     this.el = {
-      clock: $('clock'), radio: $('radio'), weapon: $('weapon'), money: $('money'),
+      clock: $('clock'), day: $('day'), radio: $('radio'),
+      weaponStrip: $('weapon-strip'), money: $('money'),
       stars: $('stars'), healthFill: $('health-fill'), armorFill: $('armor-fill'),
-      district: $('district-name'), districtSub: $('district-sub'),
-      speedNum: $('speed-num'), vehName: $('veh-name'),
-      mission: $('mission-text'), dialog: $('dialog'), prompt: $('prompt'),
+      healthNum: $('health-num'), armorNum: $('armor-num'),
+      district: $('district-name'), districtSub: $('district-sub'), standing: $('standing'),
+      speedNum: $('speed-num'), vehName: $('veh-name'), vehCond: $('veh-cond'),
+      mission: $('mission-text'), missionStage: $('mission-stage'), stageFill: $('stage-fill'),
+      missionNext: $('mission-next'),
+      dialog: $('dialog'), dialogPortrait: $('dialog-portrait'), dialogName: $('dialog-name'),
+      dialogText: $('dialog-text'),
+      prompt: $('prompt'),
       crosshair: $('crosshair'), vignette: $('vignette'),
       title: $('title-screen'), titleContinue: $('btn-continue'), titleContinueLabel: $('continue-label'),
       pause: $('pause-menu'), map: $('map-screen'), toast: $('toast'),
+      wantedBanner: $('wanted-banner'), wantedBannerText: $('wanted-banner-text'),
+      wantedBannerSub: $('wanted-banner-sub'),
+      dispatch: $('dispatch'), dispatchBody: $('dispatch-body'), dispatchHead: $('dispatch-head'),
+      rankPanel: $('rank-panel'), rankTitle: $('rank-title'), rankBar: $('rank-bar'), rankRp: $('rank-rp'),
+      crewBar: $('crew-bar'),
     };
     this.minimap = $('minimap').getContext('2d');
     this.citymap = $('citymap').getContext('2d');
     this.dialogTimer = null;
+    this.portraits = null;
     // stars: 5 slots
     this.el.stars.innerHTML = '<span>★</span>'.repeat(5);
+  }
+  setPortraits(map) {
+    this.portraits = map;
+    // crew bar is built once portraits exist
+    if (this.el.crewBar && map) {
+      const crew = [
+        { id: 'juno', name: 'JUNO REYES', role: 'DRIVER' },
+        { id: 'petra', name: 'PETRA HALE', role: 'MECHANIC' },
+        { id: 'cassia', name: 'CASSIA WREN', role: 'LOOKOUT' },
+      ];
+      this.el.crewBar.innerHTML = '<div class="crew-head">CREW</div>' + crew.map((c) => `
+        <div class="crew-row"><img src="${map[c.id]}" alt="">
+        <div><div class="crew-name">${c.name}</div><div class="crew-role">${c.role}</div></div></div>`).join('')
+        + '<div class="crew-ability" id="crew-ability">CLEAN PLATES [C] — READY</div>';
+      this.el.crewAbility = document.getElementById('crew-ability');
+    }
   }
   setMoney(n) { this.el.money.textContent = '$' + n.toLocaleString('en-US'); }
   setWanted(level) {
     const spans = this.el.stars.children;
     for (let i = 0; i < spans.length; i++) spans[i].classList.toggle('on', i < level);
+    // Big WANTED banner at wanted 3+: the "you are being hunted" read.
+    if (this.el.wantedBanner) {
+      this.el.wantedBanner.style.display = level >= 3 ? 'block' : 'none';
+      if (level >= 3) this.el.wantedBannerText.textContent = 'WANTED ' + '★'.repeat(level);
+    }
+  }
+  setWantedStatus(text) {
+    if (this.el.wantedBannerSub) this.el.wantedBannerSub.textContent = text;
   }
   setHealth(h, a) {
     this.el.healthFill.style.width = Math.max(0, h) + '%';
     this.el.armorFill.style.width = Math.max(0, a) + '%';
+    if (this.el.healthNum) this.el.healthNum.textContent = Math.round(Math.max(0, h));
+    if (this.el.armorNum) this.el.armorNum.textContent = Math.round(Math.max(0, a));
   }
-  setWeapon(text) { this.el.weapon.textContent = text; }
-  setClock(hour) {
-    const h = Math.floor(hour) % 24, m = Math.floor((hour % 1) * 60);
+  // 3 real weapon slots (pistol/SMG/shotgun) with live ammo — no LOCKED slots.
+  setWeaponSlots(combat) {
+    if (!this.el.weaponStrip) return;
+    const names = ['PISTOL', 'SMG', 'SHOTGUN'];
+    let html = '';
+    for (let i = 0; i < 3; i++) {
+      const active = combat.current === i;
+      html += `<span class="wslot${active ? ' active' : ''}">${i + 1} ${names[i]} ${combat.ammo[i]}/${combat.reserves[i]}</span>`;
+    }
+    this.el.weaponStrip.innerHTML = html;
+  }
+  setWeapon(text) {
+    // legacy shim: single-line fallback (main.js now uses setWeaponSlots)
+    if (this.el.weaponStrip) this.el.weaponStrip.textContent = text;
+  }
+  setClock(hour, day) {
+    // Round total minutes first: (hour % 1) * 60 floors 18.4 to 23
+    // (0.3999… * 60) — the clock must show the staged hour, not one less.
+    const tm = Math.round(hour * 60);
+    const h = Math.floor(tm / 60) % 24, m = tm % 60;
     this.el.clock.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    if (day != null && this.el.day) this.el.day.textContent = 'DAY ' + day;
   }
   setRadio(name) { this.el.radio.textContent = name; }
-  setDistrict(name, sub) {
+  setDistrict(name, sub, standingText) {
     if (this.el.district.textContent !== name) {
       this.el.district.textContent = name;
       this.el.districtSub.textContent = sub;
@@ -44,14 +103,42 @@ export class HUD {
       void this.el.district.parentElement.offsetWidth;
       this.el.district.parentElement.classList.add('pop');
     }
+    if (standingText != null && this.el.standing) this.el.standing.textContent = standingText;
   }
-  setSpeed(kmh, veh) {
+  // veh: model name; cond: "62% DENTED" (health); gear: "G2" / "N".
+  setSpeed(kmh, veh, cond, gear) {
     this.el.speedNum.textContent = Math.round(kmh);
     this.el.vehName.textContent = veh || '';
+    if (this.el.vehCond) this.el.vehCond.textContent = cond && gear ? `${cond} · ${gear}` : (cond || '');
   }
   setMission(text) { this.el.mission.textContent = text; }
-  setDialog(text, ms = 5000) {
-    this.el.dialog.textContent = text;
+  // Stage tracker: label + "TAHAP s/S: title", progress bar (done/total
+  // inside the stage), NEXT step text. stage comes from stageOf().
+  setMissionStage(label, stage) {
+    if (!this.el.missionStage) return;
+    if (!stage) {
+      this.el.missionStage.textContent = '';
+      this.el.stageFill.style.width = '0%';
+      this.el.missionNext.textContent = '';
+      return;
+    }
+    this.el.missionStage.textContent =
+      `${label} · TAHAP ${stage.index + 1}/${stage.total}: ${stage.title}`;
+    const pct = stage.totalSteps > 0 ? Math.min(1, stage.done / stage.totalSteps) * 100 : 0;
+    this.el.stageFill.style.width = pct + '%';
+    this.el.missionNext.textContent = stage.next ? 'NEXT: ' + stage.next : '';
+  }
+  // speaker: {name, img} or null (defaults to Mara). Portrait is a
+  // procedural canvas bust drawn at boot from the speaker's own colors.
+  setDialog(text, ms = 5000, speaker) {
+    const sp = speaker || { name: 'MARA', img: this.portraits ? this.portraits.mara : null };
+    if (this.el.dialogPortrait) {
+      if (sp.img) { this.el.dialogPortrait.src = sp.img; this.el.dialogPortrait.style.display = 'block'; }
+      else this.el.dialogPortrait.style.display = 'none';
+    }
+    if (this.el.dialogName) this.el.dialogName.textContent = sp.name;
+    if (this.el.dialogText) this.el.dialogText.textContent = text;
+    else this.el.dialog.textContent = text;
     this.el.dialog.style.opacity = '1';
     clearTimeout(this.dialogTimer);
     this.dialogTimer = setTimeout(() => { this.el.dialog.style.opacity = '0'; }, ms);
@@ -70,6 +157,36 @@ export class HUD {
     this.el.toast.textContent = text;
     this.el.toast.style.opacity = '1';
     setTimeout(() => { this.el.toast.style.opacity = '0'; }, ms);
+  }
+  // Dispatch panel: null hides it. Rows come from buildDispatch() — real
+  // units, real distances, real roles.
+  setDispatch(d) {
+    if (!this.el.dispatch) return;
+    if (!d) { this.el.dispatch.style.display = 'none'; return; }
+    this.el.dispatch.style.display = 'block';
+    this.el.dispatchHead.textContent = `NDPD DISPATCH · CODE ${d.code} — ${d.crime}`;
+    let html = '';
+    for (const u of d.units) {
+      html += `<div class="disp-row"><span class="disp-call">${u.callsign}</span><span class="disp-role">${u.role}</span><span class="disp-dist">${u.dist} m</span></div>`;
+    }
+    if (d.more > 0) html += `<div class="disp-more">+${d.more} more</div>`;
+    html += `<div class="disp-status">STATUS: ${d.status}</div>`;
+    this.el.dispatchBody.innerHTML = html;
+  }
+  setRank(r) {
+    if (!this.el.rankPanel) return;
+    this.el.rankTitle.textContent = `RANK ${r.letter} · ${r.title}`;
+    const pct = r.nextMin ? Math.min(1, r.rp / r.nextMin) * 100 : 100;
+    this.el.rankBar.style.width = pct + '%';
+    this.el.rankRp.textContent = r.nextMin ? `${r.rp.toLocaleString('en-US')} / ${r.nextMin.toLocaleString('en-US')} RP` : `${r.rp.toLocaleString('en-US')} RP · MAX`;
+  }
+  // Crew ability row: cooldown seconds or READY. Only the one real ability.
+  setCrewAbility(cooldownT, wanted) {
+    if (!this.el.crewAbility) return;
+    if (wanted <= 0) this.el.crewAbility.textContent = 'CLEAN PLATES [C] — NO HEAT';
+    else if (cooldownT > 0) this.el.crewAbility.textContent = `CLEAN PLATES [C] — ${Math.ceil(cooldownT)}s`;
+    else this.el.crewAbility.textContent = 'CLEAN PLATES [C] — READY';
+    this.el.crewAbility.classList.toggle('ready', wanted > 0 && cooldownT <= 0);
   }
   showTitle(save) {
     this.el.title.style.display = 'flex';
@@ -99,9 +216,20 @@ export class HUD {
     g.strokeStyle = '#5a6a7a'; g.lineWidth = 3;
     for (const x of WORLD.AVENUES) { g.beginPath(); g.moveTo(sc(x), 0); g.lineTo(sc(x), S); g.stroke(); }
     for (const z of WORLD.STREETS) { g.beginPath(); g.moveTo(0, sc(z)); g.lineTo(S, sc(z)); g.stroke(); }
-    // waypoint
+    // landmark icons: pier (wheel), port (crates), hospital (cross)
+    g.font = 'bold 10px Arial'; g.textAlign = 'center';
+    g.fillStyle = '#ffd23d';
+    g.fillText('◉', sc(-725), sc(300) + 3); // Coral Pier
+    g.fillStyle = '#ff7e5f';
+    g.fillText('▦', sc(530), sc(530) + 3); // Long Beach Port
+    g.fillStyle = '#ff5a5a';
+    g.fillText('+', sc(200), sc(-440) + 3); // Delta General Hospital
+    // route guide line: dashed from player to waypoint (direction aid)
     if (d.waypoint) {
       const wx = sc(d.waypoint.x), wz = sc(d.waypoint.z);
+      g.strokeStyle = '#ffd23d'; g.lineWidth = 2; g.setLineDash([5, 4]);
+      g.beginPath(); g.moveTo(sc(d.px), sc(d.pz)); g.lineTo(wx, wz); g.stroke();
+      g.setLineDash([]);
       g.fillStyle = '#ffd23d';
       g.beginPath(); g.moveTo(wx, wz - 7); g.lineTo(wx + 6, wz); g.lineTo(wx, wz + 7); g.lineTo(wx - 6, wz); g.closePath(); g.fill();
     }
