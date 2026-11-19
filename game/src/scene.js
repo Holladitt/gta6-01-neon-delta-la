@@ -5,8 +5,8 @@ import { groundY } from './world.js';
 
 function skyColors(hour) {
   if (hour < 16) return { top: '#3f7fd0', mid: '#7fb8e8', hor: '#cfe8f5', fog: 0xcfe0ea, sun: 0xfff2d8, sunI: 1.9, hemiI: 0.9 };
-  if (hour < 17.5) return { top: '#3a5a9a', mid: '#e88a4a', hor: '#ffc53d', fog: 0xf0b070, sun: 0xffb060, sunI: 1.7, hemiI: 0.7 };
-  if (hour < 19) return { top: '#2a2a4a', mid: '#c65a6a', hor: '#ff7e5f', fog: 0xd07060, sun: 0xff7e5f, sunI: 1.2, hemiI: 0.5 };
+  if (hour < 17.5) return { top: '#4a4a8a', mid: '#ff9a3d', hor: '#ffb347', fog: 0xf0a060, sun: 0xffa040, sunI: 1.9, hemiI: 0.65 };
+  if (hour < 19) return { top: '#2a2a4a', mid: '#d65a4a', hor: '#ff8a5f', fog: 0xd07060, sun: 0xff7e5f, sunI: 1.3, hemiI: 0.5 };
   return { top: '#0a0a1a', mid: '#1a1a3a', hor: '#2a2a4a', fog: 0x1a1a2a, sun: 0x8090ff, sunI: 0.7, hemiI: 0.35 };
 }
 
@@ -17,7 +17,7 @@ export class SceneRig {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.Fog(0xcfe0ea, 320, 1500);
+    this.scene.fog = new THREE.Fog(0xcfe0ea, 280, 1150); // thin distance haze for depth
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 3000);
     // sky dome with painted gradient
     this.skyCanvas = document.createElement('canvas');
@@ -36,6 +36,18 @@ export class SceneRig {
     this.scene.add(this.sun.target);
     this.hemi = new THREE.HemisphereLight(0xbfd8ff, 0x8a7a5a, 0.9);
     this.scene.add(this.hemi);
+    // visible sun disc + warm halo (golden hour / dusk only) — the sun sets
+    // over the ocean, so it sits in the pier shot's frame
+    this.sunDisc = new THREE.Mesh(
+      new THREE.CircleGeometry(55, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffe9a0, fog: false, transparent: true, opacity: 0 })
+    );
+    this.sunHalo = new THREE.Mesh(
+      new THREE.CircleGeometry(130, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffb347, fog: false, transparent: true, opacity: 0 })
+    );
+    this.scene.add(this.sunDisc);
+    this.scene.add(this.sunHalo);
     this.lastBand = -1;
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -59,10 +71,23 @@ export class SceneRig {
     this.scene.fog.color.set(c.fog);
     this.sun.color.set(c.sun); this.sun.intensity = c.sunI;
     this.hemi.intensity = c.hemiI;
-    // sun position: arcs east -> west through the day
+    // sun position: arcs east -> west through the day, lower at golden hour
+    // so the light rakes long across the streets
     const a = ((hour - 6) / 12) * Math.PI;
-    this.sun.position.set(Math.cos(a) * 600, Math.sin(a) * 500 + 80, 300);
+    this.sun.position.set(Math.cos(a) * 600, Math.sin(a) * 420 + 40, 300);
     this.sun.target.position.set(0, 0, 0);
+    // sun disc + halo track the light direction, far out over the ocean
+    const discOp = band === 1 ? 0.95 : band === 2 ? 0.7 : 0;
+    const dir = this.sun.position.clone().normalize();
+    this.sunDir = dir.clone();
+    const discPos = dir.multiplyScalar(1900);
+    discPos.y = Math.max(discPos.y, 60);
+    this.sunDisc.position.copy(discPos);
+    this.sunDisc.lookAt(this.camera.position);
+    this.sunDisc.material.opacity = discOp;
+    this.sunHalo.position.copy(discPos);
+    this.sunHalo.lookAt(this.camera.position);
+    this.sunHalo.material.opacity = discOp * 0.3;
   }
   // Third-person camera: mouse orbit, collision pulls the camera in.
   updateCamera(dt, tx, ty, tz, heading, speed01, inCar, colliders) {
@@ -93,6 +118,16 @@ export class SceneRig {
     this.camera.position.set(cx, cyv, cz);
     this.camera.lookAt(tx, ty + 1.2, tz);
     this.skyMesh.position.set(cx, 0, cz);
+    // sun disc follows the camera so it stays on the horizon in the right
+    // direction wherever the player drives
+    if (this.sunDir) {
+      const dp = this.camera.position.clone().addScaledVector(this.sunDir, 1900);
+      dp.y = Math.max(dp.y, 60);
+      this.sunDisc.position.copy(dp);
+      this.sunHalo.position.copy(dp);
+      this.sunDisc.lookAt(this.camera.position);
+      this.sunHalo.lookAt(this.camera.position);
+    }
   }
   render() { this.renderer.render(this.scene, this.camera); }
 }

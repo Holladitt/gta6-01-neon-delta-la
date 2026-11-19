@@ -62,18 +62,51 @@ function canvasTex(w, h, draw, repeatX = 1, repeatY = 1) {
   return t;
 }
 
-// Window-grid facade: light gray walls, dark windows, some lit warm.
-export function windowTexture(tint) {
+// Facade texture: walls with a varied window field — mixed window widths,
+// some floors mostly lit, some dark, a few cool-lit panes, and a vertical
+// accent column — so towers read as buildings, not flat grids.
+// style: 'tower' (dense, small panes), 'block' (mixed widths), 'brick'
+// (red-brown base, darker mortar, small cream-trimmed windows).
+export function windowTexture(tint, style = 'block') {
   return canvasTex(128, 256, (g, w, h) => {
     g.fillStyle = tint;
     g.fillRect(0, 0, w, h);
-    for (let y = 8; y < h - 8; y += 16) {
-      for (let x = 8; x < w - 8; x += 16) {
-        const lit = Math.random() < 0.22;
-        g.fillStyle = lit ? '#ffd98a' : '#1d2733';
-        g.fillRect(x, y, 10, 11);
-      }
+    if (style === 'brick') {
+      g.strokeStyle = 'rgba(0,0,0,0.22)';
+      g.lineWidth = 1;
+      for (let y = 0; y < h; y += 12) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
     }
+    const litFloor = Math.floor(Math.random() * 6); // one mostly-lit floor band
+    const accentCol = Math.floor(Math.random() * 6);
+    let y = 8;
+    let row = 0;
+    while (y < h - 10) {
+      const rh = style === 'tower' ? 12 : (Math.random() < 0.3 ? 18 : 14);
+      const mostlyLit = row % 6 === litFloor;
+      let x = 8;
+      let col = 0;
+      while (x < w - 10) {
+        const ww = style === 'brick' ? 9 : (Math.random() < 0.25 ? 18 : 10);
+        const litRoll = Math.random();
+        const lit = mostlyLit ? litRoll < 0.65 : litRoll < 0.2;
+        const cool = lit && Math.random() < 0.18;
+        g.fillStyle = lit ? (cool ? '#bfe8ff' : '#ffd98a') : '#1d2733';
+        g.fillRect(x, y, ww, rh - 3);
+        if (col === accentCol && style !== 'brick') {
+          g.fillStyle = 'rgba(255,255,255,0.14)';
+          g.fillRect(x - 2, y, ww + 4, rh - 3);
+        }
+        x += ww + 6;
+        col++;
+      }
+      y += rh + 4;
+      row++;
+    }
+    // dark ground-floor band (storefronts) + thin roofline strip
+    g.fillStyle = 'rgba(0,0,0,0.35)';
+    g.fillRect(0, h - 14, w, 14);
+    g.fillStyle = 'rgba(255,255,255,0.16)';
+    g.fillRect(0, 0, w, 4);
   });
 }
 
@@ -188,15 +221,62 @@ function paintRoads(g, px, pz) {
     g.fillRect(0, pz(z - WORLD.ROAD_W / 2 + 2), S, 3);
     g.fillRect(0, pz(z + WORLD.ROAD_W / 2 - 5), S, 3);
   }
-  // Crosswalks at every intersection.
+  // Crosswalks at every intersection — alternate style per intersection
+  // (stripes vs two thick continental bars) so crossings read differently.
   g.fillStyle = '#f2f2f2';
   for (const x of WORLD.AVENUES) for (const z of WORLD.STREETS) {
+    const bars = ((x + z) / 200) % 2 === 0;
     for (let i = -4; i <= 4; i++) {
-      g.fillRect(px(x + i * 4) - 2, pz(z - WORLD.ROAD_W / 2 - 4), 4, 8);
-      g.fillRect(px(x + i * 4) - 2, pz(z + WORLD.ROAD_W / 2 - 4), 4, 8);
-      g.fillRect(px(x - WORLD.ROAD_W / 2 - 4), pz(z + i * 4) - 2, 8, 4);
-      g.fillRect(px(x + WORLD.ROAD_W / 2 - 4), pz(z + i * 4) - 2, 8, 4);
+      if (bars) {
+        g.fillRect(px(x + i * 4) - 2, pz(z - WORLD.ROAD_W / 2 - 4), 4, 8);
+        g.fillRect(px(x + i * 4) - 2, pz(z + WORLD.ROAD_W / 2 - 4), 4, 8);
+        g.fillRect(px(x - WORLD.ROAD_W / 2 - 4), pz(z + i * 4) - 2, 8, 4);
+        g.fillRect(px(x + WORLD.ROAD_W / 2 - 4), pz(z + i * 4) - 2, 8, 4);
+      } else {
+        g.fillRect(px(x - WORLD.ROAD_W / 2 - 2), pz(z - WORLD.ROAD_W / 2 - 5), 4, 9);
+        g.fillRect(px(x + WORLD.ROAD_W / 2 - 2), pz(z - WORLD.ROAD_W / 2 - 5), 4, 9);
+        g.fillRect(px(x - WORLD.ROAD_W / 2 - 2), pz(z + WORLD.ROAD_W / 2 - 4), 4, 9);
+        g.fillRect(px(x + WORLD.ROAD_W / 2 - 2), pz(z + WORLD.ROAD_W / 2 - 4), 4, 9);
+      }
     }
+  }
+  // Sidewalk tile grid (faint seams every ~8u) + curb shadow line where the
+  // sidewalk meets the asphalt, so pavements read as paved, not flat tan.
+  g.strokeStyle = 'rgba(0,0,0,0.10)';
+  g.lineWidth = 2;
+  for (const x of WORLD.AVENUES) {
+    for (let z = -800; z <= 800; z += 8) {
+      g.beginPath(); g.moveTo(px(x - rw / 2), pz(z)); g.lineTo(px(x + rw / 2), pz(z)); g.stroke();
+    }
+  }
+  for (const z of WORLD.STREETS) {
+    for (let x = -800; x <= 800; x += 8) {
+      g.beginPath(); g.moveTo(px(x), pz(z - rw / 2)); g.lineTo(px(x), pz(z + rw / 2)); g.stroke();
+    }
+  }
+  g.fillStyle = 'rgba(0,0,0,0.28)';
+  for (const x of WORLD.AVENUES) {
+    g.fillRect(px(x - WORLD.ROAD_W / 2 - 1), 0, 2, S);
+    g.fillRect(px(x + WORLD.ROAD_W / 2 - 1), 0, 2, S);
+  }
+  for (const z of WORLD.STREETS) {
+    g.fillRect(0, pz(z - WORLD.ROAD_W / 2 - 1), S, 2);
+    g.fillRect(0, pz(z + WORLD.ROAD_W / 2 - 1), S, 2);
+  }
+  // Stop lines at every intersection approach + manhole covers mid-block.
+  g.fillStyle = '#f2f2f2';
+  for (const x of WORLD.AVENUES) for (const z of WORLD.STREETS) {
+    g.fillRect(px(x - 11), pz(z - WORLD.ROAD_W / 2 - 7), 22, 3);
+    g.fillRect(px(x - 11), pz(z + WORLD.ROAD_W / 2 + 4), 22, 3);
+    g.fillRect(px(x - WORLD.ROAD_W / 2 - 7), pz(z - 11), 3, 22);
+    g.fillRect(px(x + WORLD.ROAD_W / 2 + 4), pz(z - 11), 3, 22);
+  }
+  g.fillStyle = 'rgba(20,20,22,0.55)';
+  for (const x of WORLD.AVENUES) for (let z = -700; z <= 700; z += 140) {
+    g.beginPath(); g.arc(px(x + 6), pz(z), 5, 0, Math.PI * 2); g.fill();
+  }
+  for (const z of WORLD.STREETS) for (let x = -700; x <= 700; x += 140) {
+    g.beginPath(); g.arc(px(x), pz(z + 6), 5, 0, Math.PI * 2); g.fill();
   }
 }
 
@@ -233,10 +313,10 @@ export function policeDoorTexture() {
     g.fillStyle = '#f4f4f0';
     g.fillRect(0, 0, w, h);
     g.fillStyle = '#12233d';
-    g.font = 'bold 52px Arial';
+    g.font = 'bold 62px Arial';
     g.textAlign = 'center';
     g.fillText('NDPD', w / 2, h * 0.42);
-    g.font = 'bold 20px Arial';
+    g.font = 'bold 24px Arial';
     g.fillText('NEON DELTA POLICE', w / 2, h * 0.74);
     // Gold five-point star, left side.
     g.fillStyle = '#c8a028';

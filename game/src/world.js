@@ -43,21 +43,28 @@ export function buildWorld(scene) {
   ocean.position.set(-1020, -0.4, 0);
   scene.add(ocean);
 
-  // ---- facade materials (window-grid textures, repeated per building size) ----
+  // ---- facade materials (varied window fields per style, not flat grids) ----
   const fac = {
-    blue: new THREE.MeshLambertMaterial({ map: windowTexture('#8fb8d8') }),
-    tan: new THREE.MeshLambertMaterial({ map: windowTexture('#c9a876') }),
-    white: new THREE.MeshLambertMaterial({ map: windowTexture('#e8e4da') }),
-    dark: new THREE.MeshLambertMaterial({ map: windowTexture('#5a6a7a') }),
-    pink: new THREE.MeshLambertMaterial({ map: windowTexture('#e8a0a8') }),
-    gray: new THREE.MeshLambertMaterial({ map: windowTexture('#9a9a92') }),
-    teal: new THREE.MeshLambertMaterial({ map: windowTexture('#7fc4bd') }),
+    blue: new THREE.MeshLambertMaterial({ map: windowTexture('#8fb8d8', 'tower') }),
+    tan: new THREE.MeshLambertMaterial({ map: windowTexture('#c9a876', 'block') }),
+    white: new THREE.MeshLambertMaterial({ map: windowTexture('#e8e4da', 'block') }),
+    dark: new THREE.MeshLambertMaterial({ map: windowTexture('#5a6a7a', 'tower') }),
+    pink: new THREE.MeshLambertMaterial({ map: windowTexture('#e8a0a8', 'block') }),
+    gray: new THREE.MeshLambertMaterial({ map: windowTexture('#9a9a92', 'block') }),
+    teal: new THREE.MeshLambertMaterial({ map: windowTexture('#7fc4bd', 'tower') }),
+    brick: new THREE.MeshLambertMaterial({ map: windowTexture('#a85a44', 'brick') }),
   };
   const plain = new THREE.MeshLambertMaterial({ vertexColors: true });
-  const glassCurved = new THREE.MeshLambertMaterial({ map: windowTexture('#6fa8c8'), transparent: true, opacity: 0.92 });
+  const glassCurved = new THREE.MeshLambertMaterial({ map: windowTexture('#6fa8c8', 'tower'), transparent: true, opacity: 0.92 });
 
-  const byMat = { blue: [], tan: [], white: [], dark: [], pink: [], gray: [], teal: [] };
+  const byMat = { blue: [], tan: [], white: [], dark: [], pink: [], gray: [], teal: [], brick: [] };
   const plainItems = [];
+  // Detail rng: separate stream from the layout rng, so new roof/storefront
+  // props never shift existing building positions or sizes.
+  const drng = mulberry32(20261119);
+  const tallTowers = []; // {x,z,w,h,d} with h > 140, for sun-glint planes
+  const storefrontSigns = []; // {x,z,text} ground-floor shop signs, added after the merge
+  const SHOP_NAMES = ['DELTA TACOS', 'NEON LAUNDRY', 'SUNSET RECORDS', 'CORAL COFFEE', 'TIDE SURF SHOP', 'MARINA BAIT', 'VENICE GELATO', 'HARBOR DINER', 'SKYLINE GYM', 'DELTA PHARMACY', 'NEON MOTEL', 'PALM MARKET', 'GOLDEN HOUR BAR', 'DELTA BURGERS', 'CORAL FLORIST', 'NEON ARCADE'];
   const addBuilding = (x, z, w, h, d, mat, opts = {}) => {
     const it = boxItem(w, h, d, x, h / 2 + (opts.y || 0), z, 0xffffff, opts.ry || 0);
     it.uvScale = [Math.max(w, d) / 16, h / 30];
@@ -68,6 +75,34 @@ export function buildWorld(scene) {
     for (let i = 0; i < n; i++) {
       plainItems.push(boxItem(3, 1.6, 3, x + range(rng, -w / 4, w / 4), h + 0.8 + (opts.y || 0), z + range(rng, -d / 4, d / 4), 0x8a8a82));
     }
+    // parapet rim around the roof edge
+    plainItems.push(boxItem(w, 1.0, 0.8, x, h + 0.5 + (opts.y || 0), z + d / 2 - 0.4, 0x6a6a62));
+    plainItems.push(boxItem(w, 1.0, 0.8, x, h + 0.5 + (opts.y || 0), z - d / 2 + 0.4, 0x6a6a62));
+    plainItems.push(boxItem(0.8, 1.0, d, x + w / 2 - 0.4, h + 0.5 + (opts.y || 0), z, 0x6a6a62));
+    plainItems.push(boxItem(0.8, 1.0, d, x - w / 2 + 0.4, h + 0.5 + (opts.y || 0), z, 0x6a6a62));
+    // tall towers: stepped setback crown + helipad on the very tallest
+    if (h >= 120 && !opts.y) {
+      const cw = w * 0.68, cd = d * 0.68, ch = 8 + drng() * 8;
+      const crown = boxItem(cw, ch, cd, x, h + ch / 2, z, 0xffffff);
+      crown.uvScale = [Math.max(cw, cd) / 16, ch / 30];
+      byMat[mat].push(crown);
+      addCollider(x - cw / 2, z - cd / 2, x + cw / 2, z + cd / 2, h + ch);
+      if (h >= 170) {
+        plainItems.push(boxItem(12, 0.4, 12, x, h + ch + 0.2, z, 0x2a2a2e)); // helipad slab
+        plainItems.push(boxItem(12, 0.3, 0.8, x, h + ch + 0.45, z - 5.5, 0xf7c948));
+        plainItems.push(boxItem(12, 0.3, 0.8, x, h + ch + 0.45, z + 5.5, 0xf7c948));
+        tallTowers.push({ x, z, w, h: h + ch, d });
+      }
+    }
+    // low blocks: wooden water tower on some roofs
+    if (h <= 20 && drng() < 0.25) {
+      const wx = x + (drng() - 0.5) * w * 0.5, wz = z + (drng() - 0.5) * d * 0.5;
+      plainItems.push(cylItem(1.6, 1.9, 3.2, wx, h + 2.4 + (opts.y || 0), wz, 0x8a6a42, 8));
+      plainItems.push({ geo: new THREE.ConeGeometry(2.0, 1.6, 8), matrix: new THREE.Matrix4().makeTranslation(wx, h + 4.8 + (opts.y || 0), wz), color: 0x6a4a2a });
+      for (const [lx, lz] of [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]]) {
+        plainItems.push(boxItem(0.25, 1.6, 0.25, wx + lx, h + 0.8 + (opts.y || 0), wz + lz, 0x6a4a2a));
+      }
+    }
     if (opts.canopy) {
       plainItems.push(boxItem(w * 0.6, 0.5, 6, x, 4.2, z + d / 2 + 2.5, opts.canopyColor || 0xff2e4d));
       plainItems.push(boxItem(0.4, 4, 0.4, x - w * 0.28, 2, z + d / 2 + 5, 0x333333));
@@ -76,6 +111,11 @@ export function buildWorld(scene) {
     if (opts.antenna) {
       plainItems.push(cylItem(0.3, 0.3, 18, x, h + 9, z, 0x666666, 6));
       plainItems.push(boxItem(4, 0.3, 4, x, h + 16, z, 0x888888));
+    }
+    // ground-floor storefront: neon name sign on the street face + awning
+    if (opts.storefront) {
+      storefrontSigns.push({ x, z: z + d / 2 + 0.4, text: opts.storefront });
+      plainItems.push(boxItem(w * 0.55, 0.4, 4.5, x, 3.6, z + d / 2 + 2, opts.canopyColor || 0xff2e4d));
     }
     return { x, z, w, h, d };
   };
@@ -96,7 +136,7 @@ export function buildWorld(scene) {
     for (const d of DISTRICTS) if (x >= d.x0 && x <= d.x1 && z >= d.z0 && z <= d.z1) return d.kind;
     return 'mid';
   };
-  const matCycle = ['blue', 'tan', 'white', 'dark', 'teal', 'gray'];
+  const matCycle = ['blue', 'tan', 'white', 'dark', 'teal', 'gray', 'brick'];
   const portStats = { containers: 0, pallets: 0, trailers: 0, cranes: 0 };
   for (const [bx, bz] of blockCenters) {
     if (isClear(bx, bz)) continue;
@@ -112,13 +152,13 @@ export function buildWorld(scene) {
       const n = rangeInt(rng, 2, 4);
       for (let i = 0; i < n; i++) {
         const w = range(rng, 22, 34), d = range(rng, 22, 34), h = range(rng, 22, 58);
-        addBuilding(bx + range(rng, -50, 50), bz + range(rng, -50, 50), w, h, d, pick(rng, matCycle), { canopy: chance(rng, 0.5), canopyColor: pick(rng, [0xff2e4d, 0x2ec4b6, 0xffc53d, 0xff7e5f]) });
+        addBuilding(bx + range(rng, -50, 50), bz + range(rng, -50, 50), w, h, d, pick(rng, matCycle), { canopy: chance(rng, 0.5), canopyColor: pick(rng, [0xff2e4d, 0x2ec4b6, 0xffc53d, 0xff7e5f]), storefront: drng() < 0.5 ? pick(drng, SHOP_NAMES) : undefined });
       }
     } else if (kind === 'low' || kind === 'canal') {
       const n = rangeInt(rng, 3, 5);
       for (let i = 0; i < n; i++) {
         const w = range(rng, 14, 22), d = range(rng, 14, 22), h = range(rng, 8, 16);
-        addBuilding(bx + range(rng, -55, 55), bz + range(rng, -55, 55), w, h, d, pick(rng, ['tan', 'white', 'pink', 'teal']));
+        addBuilding(bx + range(rng, -55, 55), bz + range(rng, -55, 55), w, h, d, pick(rng, ['tan', 'white', 'pink', 'teal', 'brick']), { storefront: drng() < 0.3 ? pick(drng, SHOP_NAMES) : undefined, canopyColor: pick(drng, [0xff2e4d, 0x2ec4b6, 0xffc53d]) });
       }
     } else if (kind === 'port') {
       addBuilding(bx, bz, range(rng, 50, 70), range(rng, 12, 18), range(rng, 30, 44), 'gray');
@@ -207,6 +247,22 @@ export function buildWorld(scene) {
   scene.add(new THREE.Mesh(mergeItems(plainItems), plain));
   plainItems.length = 0; // merged; reuse the array for sign posts below
 
+  // ---- sunset glint on the tallest west faces (the sun sets over the ocean)
+  const glintMat = new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false });
+  for (const t of tallTowers.slice(0, 10)) {
+    const glint = new THREE.Mesh(new THREE.PlaneGeometry(t.d * 0.8, t.h * 0.45), glintMat);
+    glint.position.set(t.x - t.w / 2 - 0.15, t.h * 0.58, t.z);
+    glint.rotation.y = -Math.PI / 2;
+    scene.add(glint);
+  }
+  // ---- ground-floor storefront signs (neon names on the street face)
+  for (const s of storefrontSigns) {
+    const tex = signTexture([s.text], { bg: '#12233d' });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(12, 3.5), new THREE.MeshLambertMaterial({ map: tex }));
+    m.position.set(s.x, 5.4, s.z);
+    scene.add(m);
+  }
+
   // ---- signs (billboards with original names) ----
   const signDefs = [
     { x: 200, z: -460, ry: 0, lines: ['DELTA GENERAL', 'HOSPITAL', 'EMERGENCY 24H'] },
@@ -267,12 +323,12 @@ export function buildWorld(scene) {
   for (const x of WORLD.AVENUES) for (let z = -700; z <= 700; z += 100) {
     lampPosts.push(cylItem(0.18, 0.22, 8, x + 13, 4, z, 0x2a2a2e, 6));
     lampPosts.push(boxItem(3, 0.3, 0.3, x + 11.5, 8, z, 0x2a2a2e));
-    lampHeads.push(boxItem(1.2, 0.5, 0.6, x + 10, 7.8, z, 0xfff2c0));
+    lampHeads.push(boxItem(1.6, 0.55, 0.7, x + 10, 7.8, z, 0xfff2c0));
   }
   scene.add(new THREE.Mesh(mergeItems(palmTrunks), plain));
   scene.add(new THREE.Mesh(mergeItems(palmFronds), plain));
   scene.add(new THREE.Mesh(mergeItems(lampPosts), plain));
-  const lampHeadMat = new THREE.MeshLambertMaterial({ color: 0xfff2c0, emissive: 0xffdf80, emissiveIntensity: 0.15 });
+  const lampHeadMat = new THREE.MeshLambertMaterial({ color: 0xfff2c0, emissive: 0xffdf80, emissiveIntensity: 0.5 });
   scene.add(new THREE.Mesh(mergeItems(lampHeads), lampHeadMat));
   scene.add(new THREE.Mesh(mergeItems(treeItems), plain));
 
@@ -402,14 +458,14 @@ export function buildWorld(scene) {
     }
   }
   scene.add(new THREE.Mesh(mergeItems(buntItems), plain));
-  // festival string lights (bigger bulbs, thicker poles — readable in frame),
+  // festival string lights (lower + closer so they hang into the frame),
   // benches, and trash bins along the boardwalk
   const festPoleItems = [];
   const bulbItems = [];
   const bulbColors = [0xffd98a, 0xff5a6e, 0x2ec4b6, 0xffc53d];
   for (const bz of [263, 337]) {
     for (let x = -786; x <= -664; x += 13.5) {
-      festPoleItems.push(cylItem(0.2, 0.24, 6, x, 5.5, bz, 0x333333, 6));
+      festPoleItems.push(cylItem(0.2, 0.24, 5, x, 5.0, bz, 0x333333, 6));
     }
     for (let x = -786; x < -664; x += 13.5) {
       for (let i = 0; i <= 4; i++) {
@@ -417,7 +473,7 @@ export function buildWorld(scene) {
         const sag = Math.sin((i / 4) * Math.PI) * 1.4;
         bulbItems.push({
           geo: new THREE.BoxGeometry(0.55, 0.55, 0.55),
-          matrix: new THREE.Matrix4().makeTranslation(fx, 8.3 - sag, bz),
+          matrix: new THREE.Matrix4().makeTranslation(fx, 7.0 - sag, bz),
           color: bulbColors[(Math.floor(x) + i) % 4],
         });
       }
@@ -435,12 +491,51 @@ export function buildWorld(scene) {
       benchItems.push(boxItem(0.2, 0.5, 0.7, bx + 1.4, 2.75, bz, 0x333333));
     }
   }
-  for (const [tx, tz] of [[-760, 266], [-712, 334], [-688, 266]]) {
+  // center-line benches facing the wheel, so the front deck is not empty
+  for (const bx of [-780, -750, -720, -690]) {
+    benchItems.push(boxItem(3.4, 0.2, 0.9, bx, 3.05, 300, 0x8a6a42));
+    benchItems.push(boxItem(3.4, 1.1, 0.15, bx, 3.6, 299.5, 0x8a6a42));
+    benchItems.push(boxItem(0.2, 0.5, 0.7, bx - 1.4, 2.75, 300, 0x333333));
+    benchItems.push(boxItem(0.2, 0.5, 0.7, bx + 1.4, 2.75, 300, 0x333333));
+  }
+  for (const [tx, tz] of [[-760, 266], [-712, 334], [-688, 266], [-740, 266], [-700, 334], [-676, 266]]) {
     benchItems.push(cylItem(0.8, 0.75, 1.5, tx, 3.25, tz, 0x2f7a3a, 10));
     benchItems.push(cylItem(0.9, 0.9, 0.18, tx, 4.05, tz, 0x444444, 10));
   }
   scene.add(new THREE.Mesh(mergeItems(benchItems), plain));
-  const pierStats = { stringLights: bulbItems.length, benches: 10, bins: 3 };
+  const pierStats = { stringLights: bulbItems.length, benches: 14, bins: 6 };
+  // foreground carnival props near the deck center (in the pier shot's frame):
+  // popcorn cart, balloon bunch, ring-toss table, cotton-candy cart
+  const carnivalItems = [];
+  // popcorn cart: red cart + striped canopy + popcorn boxes
+  carnivalItems.push(boxItem(2.6, 1.4, 1.6, -706, 3.2, 288, 0xc0392b));
+  carnivalItems.push(boxItem(2.8, 0.3, 1.8, -706, 4.0, 288, 0xf4f4f0));
+  for (let s = 0; s < 4; s++) carnivalItems.push(boxItem(0.7, 0.25, 1.9, -707.2 + s * 0.8, 4.6, 288, s % 2 ? 0xf4f4f0 : 0xc0392b));
+  carnivalItems.push(boxItem(1.0, 0.8, 0.8, -706.8, 4.5, 288, 0xffc53d));
+  carnivalItems.push(boxItem(1.0, 0.8, 0.8, -705.2, 4.5, 288, 0xf4f4f0));
+  carnivalItems.push(cylItem(0.5, 0.5, 0.25, -706.8, 2.6, 289.2, 0x141414, 10));
+  carnivalItems.push(cylItem(0.5, 0.5, 0.25, -705.2, 2.6, 289.2, 0x141414, 10));
+  // balloon bunch: pole + 6 colored balloons
+  carnivalItems.push(cylItem(0.12, 0.12, 4.5, -724, 4.7, 306, 0x333333, 6));
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    carnivalItems.push({ geo: new THREE.SphereGeometry(0.85, 10, 8), matrix: new THREE.Matrix4().makeTranslation(-724 + Math.cos(a) * 1.1, 7.4 + (i % 2) * 0.5, 306 + Math.sin(a) * 1.1), color: [0xff2e4d, 0xffc53d, 0x2ec4b6, 0x7d3c98, 0xff7e5f, 0x2471a3][i] });
+  }
+  // ring-toss table: table + pegs + rings
+  carnivalItems.push(boxItem(3.0, 0.25, 1.4, -700, 3.4, 304, 0x8a6a42));
+  carnivalItems.push(boxItem(0.2, 1.0, 0.2, -701.2, 2.9, 304, 0x333333));
+  carnivalItems.push(boxItem(0.2, 1.0, 0.2, -698.8, 2.9, 304, 0x333333));
+  for (let i = 0; i < 4; i++) {
+    carnivalItems.push(cylItem(0.1, 0.1, 0.9, -701.1 + i * 0.75, 3.9, 304, 0xffc53d, 6));
+    carnivalItems.push({ geo: new THREE.TorusGeometry(0.35, 0.08, 6, 12), matrix: new THREE.Matrix4().makeTranslation(-701.1 + i * 0.75, 4.35, 304), color: i % 2 ? 0xff2e4d : 0x2ec4b6 });
+  }
+  // cotton-candy cart: teal cart + pink fluff dome
+  carnivalItems.push(boxItem(2.4, 1.3, 1.5, -730, 3.15, 290, 0x2ec4b6));
+  carnivalItems.push(boxItem(2.6, 0.25, 1.7, -730, 3.85, 290, 0xf4f4f0));
+  carnivalItems.push({ geo: new THREE.SphereGeometry(0.9, 10, 8), matrix: new THREE.Matrix4().makeTranslation(-730, 4.4, 290), color: 0xff7eb6 });
+  carnivalItems.push(cylItem(0.45, 0.45, 0.25, -730.8, 2.55, 291.2, 0x141414, 10));
+  carnivalItems.push(cylItem(0.45, 0.45, 0.25, -729.2, 2.55, 291.2, 0x141414, 10));
+  scene.add(new THREE.Mesh(mergeItems(carnivalItems), plain));
   // soft light particles drifting around the ferris wheel
   const glowCount = 140;
   const glowBase = new Float32Array(glowCount * 3);
@@ -613,7 +708,7 @@ export function buildWorld(scene) {
 
   // ---- Midtown street props: fire hydrants at intersections + crates by the shops
   const streetItems = [];
-  for (const [hx, hz] of [[216, 216], [-184, 16], [16, -184], [416, 216]]) {
+  for (const [hx, hz] of [[216, 216], [-184, 16], [16, -184], [416, 216], [-216, -216], [16, 416], [616, -184], [-584, 416]]) {
     streetItems.push(cylItem(0.5, 0.55, 1.4, hx, 0.7, hz, 0xc0392b, 8));
     streetItems.push({ geo: new THREE.SphereGeometry(0.45, 8, 6), matrix: new THREE.Matrix4().makeTranslation(hx, 1.6, hz), color: 0xc0392b });
   }
@@ -622,7 +717,58 @@ export function buildWorld(scene) {
     streetItems.push(boxItem(1.6, 1.6, 1.6, cx + 0.3, 2.8, cz, 0x8f6f42));
     addCollider(cx - 1.1, cz - 1.1, cx + 1.4, cz + 1.1, 3.8);
   }
+  // bus shelters (bench + roof + posts) at four avenue stops
+  const busSignDefs = [];
+  for (const [bx, bz] of [[-186, 200], [214, -200], [14, 400], [-414, -200]]) {
+    streetItems.push(boxItem(4.5, 0.25, 1.1, bx, 0.65, bz, 0x8a6a42));
+    streetItems.push(boxItem(4.5, 1.0, 0.18, bx, 1.2, bz - 0.5, 0x8a6a42));
+    streetItems.push(boxItem(5.2, 0.25, 2.2, bx, 2.9, bz, 0x2ec4b6));
+    streetItems.push(boxItem(0.25, 2.9, 0.25, bx - 2.4, 1.45, bz - 0.9, 0x333333));
+    streetItems.push(boxItem(0.25, 2.9, 0.25, bx + 2.4, 1.45, bz - 0.9, 0x333333));
+    addCollider(bx - 2.6, bz - 1.1, bx + 2.6, bz + 1.1, 3.2);
+    busSignDefs.push({ x: bx, z: bz + 0.2 });
+  }
+  // benches along the avenues + extra street trees
+  for (const [bx, bz] of [[-186, -200], [14, 200], [214, 400], [414, -200], [-414, 200], [614, 200], [-586, -200], [14, -400], [414, 400], [-214, 400]]) {
+    streetItems.push(boxItem(3.4, 0.2, 0.9, bx, 0.55, bz, 0x8a6a42));
+    streetItems.push(boxItem(3.4, 1.0, 0.15, bx, 1.05, bz - 0.4, 0x8a6a42));
+    streetItems.push(boxItem(0.2, 0.5, 0.7, bx - 1.4, 0.25, bz, 0x333333));
+    streetItems.push(boxItem(0.2, 0.5, 0.7, bx + 1.4, 0.25, bz, 0x333333));
+  }
+  for (let i = 0; i < 20; i++) {
+    const x = pick(drng, WORLD.AVENUES) + (drng() < 0.5 ? 16 : -16);
+    const z = -680 + drng() * 1360;
+    streetItems.push(cylItem(0.4, 0.5, 3, x, 1.5, z, 0x6a4a2a, 6));
+    streetItems.push({ geo: new THREE.SphereGeometry(2.5 + drng() * 1.5, 8, 6), matrix: new THREE.Matrix4().makeTranslation(x, 5.5, z), color: 0x4a8a3a });
+  }
+  // traffic cones at roadwork spots
+  for (const [cx, cz] of [[184, 184], [-216, 216], [216, -216], [-16, -216], [416, 16], [-416, -16]]) {
+    for (let i = 0; i < 2; i++) {
+      streetItems.push({ geo: new THREE.ConeGeometry(0.7, 1.6, 8), matrix: new THREE.Matrix4().makeTranslation(cx + i * 2.4, 0.8, cz), color: 0xe67e22 });
+    }
+  }
   scene.add(new THREE.Mesh(mergeItems(streetItems), plain));
+  // billboards (original art + text) on tall posts at three junctions + BUS signs
+  const billboardDefs = [
+    { x: -200, z: -200, lines: ['VISIT CORAL PIER', 'GAMES • RIDES • CAFES'], bg: '#c0392b' },
+    { x: 400, z: 200, lines: ['DELTA COLA', 'TASTE THE NEON'], bg: '#2471a3' },
+    { x: -400, z: 400, lines: ['NEON DELTA LA', 'GOLDEN HOUR CITY'], bg: '#7d3c98' },
+  ];
+  for (const b of billboardDefs) {
+    const tex = signTexture(b.lines, { bg: b.bg, fg: '#ffffff', sub: '#ffd98a' });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(24, 12), new THREE.MeshLambertMaterial({ map: tex }));
+    m.position.set(b.x, 14, b.z);
+    scene.add(m);
+    const postItems = [boxItem(0.8, 12, 0.8, b.x - 8, 6, b.z, 0x333333), boxItem(0.8, 12, 0.8, b.x + 8, 6, b.z, 0x333333)];
+    scene.add(new THREE.Mesh(mergeItems(postItems), plain));
+    addCollider(b.x - 9, b.z - 1, b.x + 9, b.z + 1, 14);
+  }
+  for (const b of busSignDefs) {
+    const tex = signTexture(['BUS'], { bg: '#2ec4b6', fg: '#ffffff' });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.5), new THREE.MeshLambertMaterial({ map: tex }));
+    m.position.set(b.x, 3.4, b.z);
+    scene.add(m);
+  }
 
   // ---- canal bridges ----
   const bridgeItems = [];
@@ -731,7 +877,7 @@ export function buildWorld(scene) {
       }
       pier.glowPts.geometry.attributes.position.needsUpdate = true;
     }
-    lampHeadMat.emissiveIntensity = 0.15;
+    lampHeadMat.emissiveIntensity = 0.5;
   }
 
   return { graph, colliders, trafficLights: lightGroups, groundY, parkedSpots, update, pier, port: portStats };

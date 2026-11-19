@@ -139,11 +139,12 @@ function buildPolice() {
   g.add(box(4.8, 0.75, 2.1, 0, 0.62, 0, black));
   g.add(box(2.4, 0.62, 1.9, -0.2, 1.28, 0, glassMat));
   g.add(box(2.2, 0.1, 1.8, -0.2, 1.62, 0, lam(0xf4f4f0))); // white roof
-  // white doors with NDPD texture
+  // white doors with NDPD texture — wide planes so the livery reads at
+  // chase distance, not just in close-up.
   const doorTex = policeDoorTexture();
   const doorMat = new THREE.MeshLambertMaterial({ map: doorTex });
   for (const dz of [1.06, -1.06]) {
-    const door = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.7), doorMat);
+    const door = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 0.85), doorMat);
     door.position.set(0.1, 0.65, dz);
     if (dz < 0) door.rotation.y = Math.PI;
     g.add(door);

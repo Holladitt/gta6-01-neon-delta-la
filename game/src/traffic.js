@@ -132,10 +132,10 @@ export class Traffic {
 
 // ---------- pedestrians (instanced) ----------
 const SKINS = [0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0xffdbac, 0xa06a3a];
-const SHIRTS = [0x2ec4b6, 0xffc53d, 0xff7e5f, 0x7d3c98, 0x2471a3, 0x229954, 0xe8e8e8, 0x333333, 0xd4ac0d];
-const PANTS = [0x2c3e50, 0x5d6d7e, 0x7b7b7b, 0x4a3728, 0x1a1a2e];
-const HAIRS = [0x1a1a1a, 0x4a2c0a, 0x8a6a42, 0xd4a017, 0x777777, 0x5d4037];
-const CAPS = [0xc0392b, 0x2471a3, 0x229954, 0xdddddd];
+const SHIRTS = [0x2ec4b6, 0xffc53d, 0xff7e5f, 0x7d3c98, 0x2471a3, 0x229954, 0xe8e8e8, 0x333333, 0xd4ac0d, 0xff6b9d, 0x00c2a8, 0xff8c42, 0x9b59b6, 0x1abc9c];
+const PANTS = [0x2c3e50, 0x5d6d7e, 0x7b7b7b, 0x4a3728, 0x1a1a2e, 0x6e2c00, 0x1b4f72];
+const HAIRS = [0x1a1a1a, 0x4a2c0a, 0x8a6a42, 0xd4a017, 0x777777, 0x5d4037, 0xb5651d, 0xe8e8e8];
+const CAPS = [0xc0392b, 0x2471a3, 0x229954, 0xdddddd, 0xffc53d, 0x7d3c98];
 
 // boxes: [w,h,d, x,y,z, color] — merged with vertex colors.
 function partGeo(boxes) {
@@ -155,7 +155,8 @@ function randomNpc() {
     hair: pick(rng, HAIRS),
     cap: rng() < 0.25 ? pick(rng, CAPS) : null,
     pack: rng() < 0.3 ? pick(rng, [0x7d3c98, 0x2471a3, 0xd4ac0d]) : null,
-    scale: range(rng, 0.92, 1.08),
+    scale: range(rng, 0.88, 1.16), // taller/shorter silhouettes
+    wide: range(rng, 0.85, 1.25), // narrow/broad builds
     phase: range(rng, 0, 6.28),
   };
 }
@@ -211,8 +212,11 @@ export class Peds {
     }
     // Pier festival crowd: walks the boardwalk deck (y 2.5), never leaves it.
     // road/side are set so the shared ped-position formula lands on the deck.
+    // Four lanes spread the crowd across the deck instead of two files
+    // (kept within |lane| <= 5 so the crowd stays on the deck center).
+    const pierLanes = [-4.5, -1.5, 1.5, 4.5];
     for (let i = 0; i < pierCount; i++) {
-      const lane = (i % 2 === 0 ? 4 : -4) + range(rng, -1, 1);
+      const lane = pierLanes[i % 4] + range(rng, -0.5, 0.5);
       const npc = {
         ...randomNpc(),
         speed: range(rng, 1.0, 1.8),
@@ -276,25 +280,25 @@ export class Peds {
         heading = n.axis === 'z' ? (n.dir > 0 ? 0 : Math.PI) : (n.dir > 0 ? Math.PI / 2 : -Math.PI / 2);
       }
       n.phase += dt * n.speed * 2.4;
-      const sw = Math.sin(n.phase) * 0.55;
-      const s = n.scale, yb = n.y || 0;
-      const set = (mesh, px2, py, pz2, rx = 0, ry = heading, rz = 0, sc = s) => {
+      const sw = Math.sin(n.phase) * 0.75; // bigger limb swing — walk reads at distance
+      const s = n.scale, wd = n.wide || 1, yb = n.y || 0;
+      const set = (mesh, px2, py, pz2, rx = 0, ry = heading, rz = 0, sc = s, swd = 1) => {
         e.set(rx, ry, rz);
         q.setFromEuler(e);
         pos.set(px2, py, pz2);
-        sv.set(sc, sc, sc);
+        sv.set(sc * swd, sc, sc);
         m4.compose(pos, q, sv);
         mesh.setMatrixAt(i, m4);
       };
-      set(this.torso, x, 1.18 * s + yb, z);
+      set(this.torso, x, 1.18 * s + yb, z, 0, heading, 0, s, wd);
       set(this.head, x, 1.68 * s + yb, z);
       set(this.hair, x, 1.68 * s + yb, z);
       set(this.cap, x, 1.9 * s + yb, z, 0, heading, 0, n.cap ? s : 0.0001);
       set(this.pack, x - Math.sin(heading) * 0.3, 1.2 * s + yb, z - Math.cos(heading) * 0.3, 0, heading, 0, n.pack ? s : 0.0001);
-      set(this.legL, x - Math.cos(heading) * 0.15 * s, 0.84 * s + yb, z + Math.sin(heading) * 0.15 * s, sw, heading, 0);
-      set(this.legR, x + Math.cos(heading) * 0.15 * s, 0.84 * s + yb, z - Math.sin(heading) * 0.15 * s, -sw, heading, 0);
-      set(this.armL, x - Math.cos(heading) * 0.44 * s, 1.46 * s + yb, z + Math.sin(heading) * 0.44 * s, -sw * 0.8, heading, 0.12);
-      set(this.armR, x + Math.cos(heading) * 0.44 * s, 1.46 * s + yb, z - Math.sin(heading) * 0.44 * s, sw * 0.8, heading, -0.12);
+      set(this.legL, x - Math.cos(heading) * 0.15 * s * wd, 0.84 * s + yb, z + Math.sin(heading) * 0.15 * s * wd, sw, heading, 0);
+      set(this.legR, x + Math.cos(heading) * 0.15 * s * wd, 0.84 * s + yb, z - Math.sin(heading) * 0.15 * s * wd, -sw, heading, 0);
+      set(this.armL, x - Math.cos(heading) * 0.44 * s * wd, 1.46 * s + yb, z + Math.sin(heading) * 0.44 * s * wd, -sw * 0.8, heading, 0.18, s, wd);
+      set(this.armR, x + Math.cos(heading) * 0.44 * s * wd, 1.46 * s + yb, z - Math.sin(heading) * 0.44 * s * wd, sw * 0.8, heading, -0.18, s, wd);
     });
     for (const m of [this.head, this.hair, this.torso, this.legL, this.legR, this.armL, this.armR, this.cap, this.pack]) {
       m.instanceMatrix.needsUpdate = true;

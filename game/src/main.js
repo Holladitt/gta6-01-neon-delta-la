@@ -70,7 +70,7 @@ function boot() {
   world = buildWorld(rig.scene);
   traffic = new Traffic(rig.scene, world.colliders, world.trafficLights);
   traffic.spawnPortCars(6); // denser truck + car traffic around the terminal
-  peds = new Peds(rig.scene, 48, 12); // 48 sidewalk NPCs + 12 pier festival crowd
+  peds = new Peds(rig.scene, 48, 20); // 48 sidewalk NPCs + 20 pier festival crowd
   police = new Police(rig.scene, world.graph, world.colliders);
   officers = new Officers(rig.scene, null); // audio wired below once AudioSys exists
   hud = new HUD();
