@@ -15,13 +15,19 @@ const KINDS = ['sedan', 'sedan', 'suv', 'pickup', 'sport', 'sedan'];
 const PORT_ROADS = [400, 600];
 const PORT_KINDS = ['pickup', 'pickup', 'sedan', 'suv', 'pickup', 'sport'];
 
+// Right-hand traffic: a car going the positive direction sits on +5.5.
+const laneFor = (dir) => (dir > 0 ? 5.5 : -5.5);
+
 // ---------- traffic cars ----------
 export class Traffic {
   constructor(scene, colliders, lightGroups) {
-    this.scene = scene; this.colliders = colliders; this.lights = lightGroups;
+    this.scene = scene;
+    this.colliders = colliders;
+    this.lights = lightGroups;
     this.cars = [];
     for (let i = 0; i < 10; i++) this.spawnCar(true);
   }
+
   spawnCar(anywhere) {
     const kind = pick(rng, KINDS);
     const v = createVehicle(kind, 0, 0, 0, pick(rng, CAR_COLORS));
@@ -29,23 +35,23 @@ export class Traffic {
     const road = pick(rng, axis === 'x' ? WORLD.STREETS : WORLD.AVENUES);
     const dir = rng() < 0.5 ? 1 : -1;
     const along = range(rng, -700, 700);
-    const lane = dir > 0 ? 5.5 : -5.5; // right-hand traffic
     const car = { v, axis, road, dir, along, speed: range(rng, 9, 14) };
-    this.place(car, along, lane);
+    this.place(car, along, laneFor(dir));
     this.cars.push(car);
     this.scene.add(v.group);
     return car;
   }
+
   // Place one traffic car at an exact spot on a road (screenshot staging).
   spawnAt(kind, axis, road, along, dir, speed, color) {
     const v = createVehicle(kind, 0, 0, 0, color ?? pick(rng, CAR_COLORS));
-    const lane = dir > 0 ? 5.5 : -5.5;
     const car = { v, axis, road, dir, along, speed };
-    this.place(car, along, lane);
+    this.place(car, along, laneFor(dir));
     this.cars.push(car);
     this.scene.add(v.group);
     return car;
   }
+
   // Extra traffic confined to the port roads (trucks + cars around the terminal).
   spawnPortCars(n) {
     for (let i = 0; i < n; i++) {
@@ -55,20 +61,28 @@ export class Traffic {
       const road = pick(rng, PORT_ROADS);
       const dir = rng() < 0.5 ? 1 : -1;
       const along = range(rng, 340, 700);
-      const lane = dir > 0 ? 5.5 : -5.5;
       const car = { v, axis, road, dir, along, speed: range(rng, 8, 13), port: true };
-      this.place(car, along, lane);
+      this.place(car, along, laneFor(dir));
       this.cars.push(car);
       this.scene.add(v.group);
     }
     return n;
   }
+
   place(car, along, lane) {
-    if (car.axis === 'x') { car.v.x = along; car.v.z = car.road + lane; car.v.heading = car.dir > 0 ? Math.PI / 2 : -Math.PI / 2; }
-    else { car.v.x = car.road + lane; car.v.z = along; car.v.heading = car.dir > 0 ? 0 : Math.PI; }
+    if (car.axis === 'x') {
+      car.v.x = along;
+      car.v.z = car.road + lane;
+      car.v.heading = car.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
+    } else {
+      car.v.x = car.road + lane;
+      car.v.z = along;
+      car.v.heading = car.dir > 0 ? 0 : Math.PI;
+    }
     car.v.group.position.set(car.v.x, 0, car.v.z);
     car.v.group.rotation.y = car.v.heading;
   }
+
   nearestLight(x, z) {
     let best = null, bd = Infinity;
     for (const lg of this.lights) {
@@ -77,13 +91,14 @@ export class Traffic {
     }
     return bd < 60 * 60 ? best : null;
   }
+
   update(dt, t) {
     for (const car of this.cars) {
       car.along += car.dir * car.speed * dt;
-      // wrap at world edge
+      // Wrap at the world edge.
       if (car.along > 760) car.along = -760;
       if (car.along < -760) car.along = 760;
-      // next intersection
+      // Next intersection on this car's line.
       const lines = car.axis === 'x' ? WORLD.AVENUES : WORLD.STREETS;
       let next = null;
       for (const l of lines) {
@@ -98,18 +113,19 @@ export class Traffic {
           const axisKey = car.axis === 'x' ? 'ew' : 'ns';
           if (st[axisKey] !== 'green') want = next < 14 ? 0 : Math.max(0, (next - 14) * 0.8);
         }
-        // random turn at the intersection: swap axis, road = crossing line, along = current position
+        // Random turn at the intersection: swap axis, road = crossing line,
+        // along = current position.
         if (next < 2 && rng() < 0.3) {
           const newAxis = car.axis === 'x' ? 'z' : 'x';
           const newRoad = Math.round(car.along / 200) * 200;
           car.along = car.road;
-          car.axis = newAxis; car.road = newRoad;
+          car.axis = newAxis;
+          car.road = newRoad;
           car.dir = rng() < 0.5 ? 1 : -1;
         }
       }
       car.speed += (want - car.speed) * Math.min(1, 3 * dt);
-      const lane = car.dir > 0 ? 5.5 : -5.5;
-      this.place(car, car.along, lane);
+      this.place(car, car.along, laneFor(car.dir));
     }
   }
 }
@@ -121,8 +137,8 @@ const PANTS = [0x2c3e50, 0x5d6d7e, 0x7b7b7b, 0x4a3728, 0x1a1a2e];
 const HAIRS = [0x1a1a1a, 0x4a2c0a, 0x8a6a42, 0xd4a017, 0x777777, 0x5d4037];
 const CAPS = [0xc0392b, 0x2471a3, 0x229954, 0xdddddd];
 
+// boxes: [w,h,d, x,y,z, color] — merged with vertex colors.
 function partGeo(boxes) {
-  // boxes: [w,h,d, x,y,z, color] — merged with vertex colors.
   const items = boxes.map(([w, h, d, x, y, z, c]) => ({
     geo: new THREE.BoxGeometry(w, h, d),
     matrix: new THREE.Matrix4().makeTranslation(x, y, z),
@@ -131,10 +147,25 @@ function partGeo(boxes) {
   return mergeItems(items);
 }
 
+function randomNpc() {
+  return {
+    skin: pick(rng, SKINS),
+    shirt: pick(rng, SHIRTS),
+    pants: pick(rng, PANTS),
+    hair: pick(rng, HAIRS),
+    cap: rng() < 0.25 ? pick(rng, CAPS) : null,
+    pack: rng() < 0.3 ? pick(rng, [0x7d3c98, 0x2471a3, 0xd4ac0d]) : null,
+    scale: range(rng, 0.92, 1.08),
+    phase: range(rng, 0, 6.28),
+  };
+}
+
 export class Peds {
   // count = sidewalk NPCs; pierCount = festival crowd confined to the pier deck.
   constructor(scene, count = 48, pierCount = 0) {
-    this.scene = scene; this.count = count; this.pierCount = pierCount;
+    this.scene = scene;
+    this.count = count;
+    this.pierCount = pierCount;
     const total = count + pierCount;
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const mk = (geo) => {
@@ -144,7 +175,7 @@ export class Peds {
       scene.add(m);
       return m;
     };
-    // geometries are pre-offset so limb pivots sit at the joint
+    // Geometries are pre-offset so limb pivots sit at the joint.
     this.head = mk(partGeo([[0.36, 0.36, 0.34, 0, 0, 0, 0xffffff]]));
     this.hair = mk(partGeo([[0.38, 0.14, 0.36, 0, 0.18, 0, 0xffffff], [0.38, 0.3, 0.1, 0, 0.06, -0.18, 0xffffff]]));
     this.torso = mk(partGeo([[0.66, 0.68, 0.38, 0, 0, 0, 0xffffff]]));
@@ -157,41 +188,42 @@ export class Peds {
     this.npcs = [];
     for (let i = 0; i < count; i++) {
       const npc = {
-        skin: pick(rng, SKINS), shirt: pick(rng, SHIRTS), pants: pick(rng, PANTS),
-        hair: pick(rng, HAIRS), cap: rng() < 0.25 ? pick(rng, CAPS) : null,
-        pack: rng() < 0.3 ? pick(rng, [0x7d3c98, 0x2471a3, 0xd4ac0d]) : null,
-        scale: range(rng, 0.92, 1.08), phase: range(rng, 0, 6.28),
-        speed: range(rng, 1.2, 2.2), road: 0, side: 1, along: 0, dir: 1, axis: 'z',
+        ...randomNpc(),
+        speed: range(rng, 1.2, 2.2),
+        road: 0, side: 1, along: 0, dir: 1, axis: 'z',
       };
       this.assignRoad(npc, 0, 0);
       this.npcs.push(npc);
     }
-    // groups of 4-5 share a road: cluster them
+    // Groups of 4-5 share a road: cluster them.
     for (let g = 0; g < count; g += 5) {
       const road = pick(rng, WORLD.AVENUES);
       const side = rng() < 0.5 ? 1 : -1;
       const along = range(rng, -600, 600);
       for (let k = g; k < Math.min(g + 5, count); k++) {
         const n = this.npcs[k];
-        n.axis = 'z'; n.road = road; n.side = side; n.along = along + (k - g) * 6; n.dir = side > 0 ? 1 : -1;
+        n.axis = 'z';
+        n.road = road;
+        n.side = side;
+        n.along = along + (k - g) * 6;
+        n.dir = side > 0 ? 1 : -1;
       }
     }
-    // pier festival crowd: walks the boardwalk deck (y 2.5), never leaves it.
+    // Pier festival crowd: walks the boardwalk deck (y 2.5), never leaves it.
     // road/side are set so the shared ped-position formula lands on the deck.
     for (let i = 0; i < pierCount; i++) {
       const lane = (i % 2 === 0 ? 4 : -4) + range(rng, -1, 1);
       const npc = {
-        skin: pick(rng, SKINS), shirt: pick(rng, SHIRTS), pants: pick(rng, PANTS),
-        hair: pick(rng, HAIRS), cap: rng() < 0.25 ? pick(rng, CAPS) : null,
-        pack: rng() < 0.3 ? pick(rng, [0x7d3c98, 0x2471a3, 0xd4ac0d]) : null,
-        scale: range(rng, 0.92, 1.08), phase: range(rng, 0, 6.28),
-        speed: range(rng, 1.0, 1.8), road: 300, side: lane / 15.5, along: range(rng, -780, -670),
+        ...randomNpc(),
+        speed: range(rng, 1.0, 1.8),
+        road: 300, side: lane / 15.5, along: range(rng, -780, -670),
         dir: rng() < 0.5 ? 1 : -1, axis: 'x', zone: 'pier', y: 2.5, lane,
       };
       this.npcs.push(npc);
     }
     this.applyColors();
   }
+
   assignRoad(npc, px, pz) {
     if (npc.zone === 'pier') { npc.dir *= -1; return; } // festival crowd stays on the pier
     npc.axis = rng() < 0.5 ? 'z' : 'x';
@@ -200,6 +232,7 @@ export class Peds {
     npc.along = range(rng, -700, 700);
     npc.dir = rng() < 0.5 ? 1 : -1;
   }
+
   applyColors() {
     const c = new THREE.Color();
     this.npcs.forEach((n, i) => {
@@ -217,22 +250,24 @@ export class Peds {
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
   }
+
   update(dt, px, pz) {
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
     const sv = new THREE.Vector3(), pos = new THREE.Vector3();
     this.npcs.forEach((n, i) => {
       let x, z, heading;
       if (n.zone === 'pier') {
-        // festival crowd: stroll the deck between the gate and the wheel, bounce at the ends
+        // Festival crowd: stroll the deck between the gate and the wheel, bounce at the ends.
         n.along += n.dir * n.speed * dt;
         if (n.along > -668) { n.along = -668; n.dir = -1; }
         if (n.along < -782) { n.along = -782; n.dir = 1; }
-        x = n.along; z = 300 + n.lane;
+        x = n.along;
+        z = 300 + n.lane;
         heading = n.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
       } else {
         n.along += n.dir * n.speed * dt;
         if (n.along > 760 || n.along < -760) { this.assignRoad(n, px, pz); }
-        // respawn groups that drifted far from the player
+        // Respawn groups that drifted far from the player.
         const wx = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
         const wz = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
         if ((wx - px) ** 2 + (wz - pz) ** 2 > 420 * 420) this.assignRoad(n, px, pz);
@@ -244,8 +279,10 @@ export class Peds {
       const sw = Math.sin(n.phase) * 0.55;
       const s = n.scale, yb = n.y || 0;
       const set = (mesh, px2, py, pz2, rx = 0, ry = heading, rz = 0, sc = s) => {
-        e.set(rx, ry, rz); q.setFromEuler(e);
-        pos.set(px2, py, pz2); sv.set(sc, sc, sc);
+        e.set(rx, ry, rz);
+        q.setFromEuler(e);
+        pos.set(px2, py, pz2);
+        sv.set(sc, sc, sc);
         m4.compose(pos, q, sv);
         mesh.setMatrixAt(i, m4);
       };

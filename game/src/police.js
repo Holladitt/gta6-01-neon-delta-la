@@ -1,23 +1,47 @@
-// Police: wanted response — patrol cars pursue with A* over the road graph,
-// flanking from different approach nodes; helicopter joins at wanted 3+.
+// Police pursuit. Patrol cars chase with A* over the road graph and flank
+// from offset approach nodes; a helicopter joins at wanted 3 and up.
+// A staged (scripted) cruiser holds a fixed offset ahead of the player so
+// screenshot staging can keep a cruiser in the chase camera's frame.
 import * as THREE from '../vendor/three.module.min.js';
 import { createVehicle, updateVehicle } from './vehicles.js';
 import { astar, nearestNode } from './astar.js';
 import { WANTED } from './wanted.js';
 
+const CRUISER_PAINT = 0x141414;
+
+function lambert(color) {
+  return new THREE.MeshLambertMaterial({ color });
+}
+
+// Alternate the light bar between red and blue on a fast beat.
+function flashLightBar(car, t) {
+  if (!car.lightBar) return;
+  const redOn = Math.sin(t * 12) > 0;
+  car.lightBar.red.emissiveIntensity = redOn ? 2.2 : 0.1;
+  car.lightBar.blue.emissiveIntensity = redOn ? 0.1 : 2.2;
+}
+
 export class Police {
   constructor(scene, graph, colliders) {
-    this.scene = scene; this.graph = graph; this.colliders = colliders;
+    this.scene = scene;
+    this.graph = graph;
+    this.colliders = colliders;
     this.cars = [];
     this.heli = null;
     this.heliLight = null;
+    this.heliSpot = null;
     this.repathT = 0;
+    this.level = 0;
   }
+
+  // Grow/shrink the patrol to the count the wanted level demands.
   ensureCount(level, px, pz) {
     const want = WANTED.policeFor(level);
     while (this.cars.length < want) {
-      const c = createVehicle('police', px + (Math.random() - 0.5) * 200, pz + (Math.random() - 0.5) * 200, 0, 0x141414);
-      c.targetNode = null; c.path = []; c.pathI = 0;
+      const c = createVehicle('police', px + (Math.random() - 0.5) * 200, pz + (Math.random() - 0.5) * 200, 0, CRUISER_PAINT);
+      c.targetNode = null;
+      c.path = [];
+      c.pathI = 0;
       this.cars.push(c);
       this.scene.add(c.group);
     }
@@ -28,42 +52,44 @@ export class Police {
     if (WANTED.heliFor(level) && !this.heli) this.spawnHeli();
     if (!WANTED.heliFor(level) && this.heli) {
       this.scene.remove(this.heli);
-      this.heli = null; this.heliLight = null;
-      if (this.heliSpot) { this.scene.remove(this.heliSpot); this.heliSpot = null; }
+      this.heli = null;
+      this.heliLight = null;
+      if (this.heliSpot) {
+        this.scene.remove(this.heliSpot);
+        this.heliSpot = null;
+      }
     }
   }
+
   spawnAt(x, z, heading = 0) {
-    const c = createVehicle('police', x, z, heading, 0x141414);
-    c.targetNode = null; c.path = []; c.pathI = 0;
+    const c = createVehicle('police', x, z, heading, CRUISER_PAINT);
+    c.targetNode = null;
+    c.path = [];
+    c.pathI = 0;
     this.cars.push(c);
     this.scene.add(c.group);
     return c;
   }
+
   spawnHeli() {
     const g = new THREE.Group();
-    const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(5.5, 1.8, 2.2), lam(0xf4f4f0));
-    g.add(body);
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.4, 2.25), lam(0x2471a3));
-    g.add(stripe);
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.8, 0.8), lam(0xf4f4f0));
-    tail.position.set(-4.5, 0.5, 0);
-    g.add(tail);
-    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.8, 0.2), lam(0xc0392b));
-    fin.position.set(-6.5, 1.2, 0);
-    g.add(fin);
-    const rotor = new THREE.Mesh(new THREE.BoxGeometry(11, 0.15, 0.6), lam(0x222222));
-    rotor.position.y = 1.3;
-    g.add(rotor);
+    const addBox = (w, h, d, color, x = 0, y = 0, z = 0) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lambert(color));
+      m.position.set(x, y, z);
+      g.add(m);
+      return m;
+    };
+    addBox(5.5, 1.8, 2.2, 0xf4f4f0); // body
+    addBox(5.6, 0.4, 2.25, 0x2471a3); // blue stripe
+    addBox(4.5, 0.8, 0.8, 0xf4f4f0, -4.5, 0.5, 0); // tail boom
+    addBox(0.4, 1.8, 0.2, 0xc0392b, -6.5, 1.2, 0); // tail fin
+    const rotor = addBox(11, 0.15, 0.6, 0x222222, 0, 1.3, 0);
     const rotor2 = rotor.clone();
     rotor2.rotation.y = Math.PI / 2;
     g.add(rotor2);
-    const skids = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.15, 0.3), lam(0x333333));
-    skids.position.set(0, -1.2, 0.9);
-    g.add(skids);
-    const skids2 = skids.clone(); skids2.position.z = -0.9;
-    g.add(skids2);
-    // searchlight cone (translucent) — reaches the ground from the low orbit
+    addBox(4.5, 0.15, 0.3, 0x333333, 0, -1.2, 0.9); // skids
+    addBox(4.5, 0.15, 0.3, 0x333333, 0, -1.2, -0.9);
+    // Translucent searchlight cone reaching the ground from the low orbit.
     const cone = new THREE.Mesh(
       new THREE.ConeGeometry(5, 20, 12, 1, true),
       new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false })
@@ -71,8 +97,8 @@ export class Police {
     cone.position.y = -11;
     cone.rotation.x = Math.PI;
     g.add(cone);
-    // ground searchlight pool: a bright disc on the street under the heli, so
-    // the hunt reads even when the heli itself is near the frame edge.
+    // Bright disc on the street under the helicopter, so the hunt reads even
+    // when the helicopter itself sits near the frame edge.
     const spot = new THREE.Mesh(
       new THREE.CircleGeometry(8, 20),
       new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false })
@@ -81,9 +107,13 @@ export class Police {
     spot.position.set(0, 0.15, 0);
     this.heliSpot = spot;
     this.scene.add(spot);
-    this.heli = g; this.heliRotor = rotor; this.heliRotor2 = rotor2; this.heliLight = cone;
+    this.heli = g;
+    this.heliRotor = rotor;
+    this.heliRotor2 = rotor2;
+    this.heliLight = cone;
     this.scene.add(g);
   }
+
   update(dt, t, px, pz, playerSpeed) {
     const level = this.level || 0;
     this.ensureCount(level, px, pz);
@@ -92,7 +122,8 @@ export class Police {
       this.repathT = 1.0;
       const goal = nearestNode(this.graph, px, pz);
       this.cars.forEach((c, i) => {
-        // flank: alternate cars aim at a node offset from the player
+        if (c.script) return; // staged cruisers never repath
+        // Flank: alternate cars aim at a node offset from the player.
         const ox = i % 2 === 0 ? 200 : -200;
         const oz = i % 3 === 0 ? 200 : 0;
         const start = nearestNode(this.graph, c.x, c.z);
@@ -103,24 +134,19 @@ export class Police {
     }
     for (const c of this.cars) {
       if (c.script) {
-        // Staged chase (screenshot only): hold a fixed offset ahead of the
-        // player, so the cruiser stays in the chase camera's frame instead
-        // of A* flanking away from the road ahead. The light bar keeps
-        // flashing. Only shot staging sets c.script; normal play never does.
+        // Staged chase (screenshot only): pin the cruiser to a fixed offset
+        // ahead of the player. Only shot staging sets c.script; normal play
+        // never does. The light bar keeps flashing.
         const s = c.script;
         const rx = s.dirZ, rz = -s.dirX; // right vector of the travel direction
         c.x = px + s.dirX * s.ahead + rx * s.lane;
         c.z = pz + s.dirZ * s.ahead + rz * s.lane;
         c.group.position.set(c.x, 0, c.z);
         c.group.rotation.y = c.heading;
-        const on = Math.sin(t * 12) > 0;
-        if (c.lightBar) {
-          c.lightBar.red.emissiveIntensity = on ? 2.2 : 0.1;
-          c.lightBar.blue.emissiveIntensity = on ? 0.1 : 2.2;
-        }
+        flashLightBar(c, t);
         continue;
       }
-      // steer toward current path node (or straight at the player when close)
+      // Steer toward the current path node (or straight at the player when close).
       let tx = px, tz = pz;
       if (c.path && c.pathI < c.path.length) {
         const n = this.graph[c.path[c.pathI]];
@@ -135,16 +161,11 @@ export class Police {
       const dist = Math.hypot(dx, dz);
       const throttle = dist > 18 ? 1 : 0.4;
       updateVehicle(c, { throttle, steer: Math.max(-1, Math.min(1, dh * 1.6)), handbrake: Math.abs(dh) > 1.2 }, dt, this.colliders);
-      // flash light bar
-      const on = Math.sin(t * 12) > 0;
-      if (c.lightBar) {
-        c.lightBar.red.emissiveIntensity = on ? 2.2 : 0.1;
-        c.lightBar.blue.emissiveIntensity = on ? 0.1 : 2.2;
-      }
+      flashLightBar(c, t);
     }
     if (this.heli) {
-      // low orbit (y ~24, radius ~42): inside the chase camera's frame, so the
-      // helicopter is visible instead of circling 60 degrees overhead.
+      // Low orbit (y ~24, radius ~42): inside the chase camera's frame, so
+      // the helicopter is visible instead of circling high overhead.
       const hx = px + Math.sin(t * 0.25) * 42;
       const hz = pz + Math.cos(t * 0.2) * 42;
       this.heli.position.set(hx, 24 + Math.sin(t * 0.5) * 2, hz);
@@ -154,8 +175,10 @@ export class Police {
       if (this.heliSpot) this.heliSpot.position.set(hx, 0.15, hz);
     }
   }
+
   setLevel(l) { this.level = l; }
-  // line of sight: true when any police car is within 120 units of the player.
+
+  // Line of sight: true when any police car is within 120 units of the player.
   seesPlayer(px, pz) {
     return this.cars.some((c) => Math.hypot(c.x - px, c.z - pz) < 120);
   }
