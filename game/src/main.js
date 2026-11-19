@@ -58,13 +58,14 @@ const game = {
   waypoint: null,
   inCar: null,
   bustT: 0, deadT: 0,
-  fps: 0, frames: 0, fpsT: 0, errors: [],
+  fps: 0, frames: 0, fpsT: 0, ticks: 0, errors: [],
   day: 1, rp: 0, standing: {}, // rank/respect: RP from real payouts only
   crime: 'EVADING POLICE', // last crime label shown on the dispatch panel
   witnessT: 0, // witness report countdown (0 = none pending)
   shotT: -99, // time of the last gunshot (drives NPC panic)
   crewState: newCrewState(), // CLEAN PLATES cooldown
   portraits: null,
+  camHold: null, // staging-only chase-cam hold {az, pitch} via setCamHold; null = normal chase cam
 };
 
 let rig, world, traffic, peds, police, officers, hud, input, audio, combat;
@@ -232,6 +233,7 @@ function boot() {
     health: game.health,
     fps: Math.round(game.fps),
     frames: game.frames,
+    ticks: game.ticks,
     errors: game.errors,
     waypoint: game.waypoint,
     officers: officers.list.length,
@@ -295,6 +297,15 @@ const gameApi = {
   setCamera(yaw, pitch) {
     rig.yaw = yaw;
     rig.pitch = pitch;
+  },
+  setCamHold(az, pitch) {
+    // Staging-only camera hold (screenshot renders): pins the chase cam at a
+    // fixed azimuth offset from the player's heading + a fixed pitch,
+    // overriding the mouse-look/auto-realign every tick. Pass null to clear.
+    // Never set by gameplay. Mouse orbit cannot hold an angle in headless
+    // (it needs pointer lock, which the headless shell cannot engage), so
+    // staged angles go through this instead.
+    game.camHold = az === null ? null : { az, pitch };
   },
   setMoney(n) {
     game.money = n;
@@ -679,6 +690,7 @@ function tick(now) {
 
   // FPS.
   game.frames++;
+  game.ticks++; // cumulative tick count (staging gate: frames is per-second FPS and reads 0 under load)
   if (now - game.fpsT > 1000) {
     game.fps = game.frames * 1000 / (now - game.fpsT);
     game.frames = 0;
@@ -1039,6 +1051,12 @@ function updateCameraHud(dt, t) {
   const gy = groundY(player.x, player.z);
   const speed01 = game.inCar ? Math.abs(game.inCar.speed) / game.inCar.def.top : 0;
   camTarget = { x: player.x, y: gy + 2.2, z: player.z };
+  // Staging camera hold: pin yaw/pitch every tick (the chase cam would
+  // otherwise auto-realign to the car's heading within ~1.2s of no mouse).
+  if (game.camHold) {
+    rig.yaw = player.heading + game.camHold.az;
+    rig.pitch = Math.max(0.05, Math.min(1.15, game.camHold.pitch));
+  }
   rig.updateCamera(dt, camTarget.x, camTarget.y, camTarget.z, player.heading, speed01, !!game.inCar, world.colliders);
   const dist = districtAt(player.x, player.z);
   const st = getStanding(game.standing, dist.id);
