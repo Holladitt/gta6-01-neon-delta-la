@@ -214,14 +214,45 @@ export function buildWorld(scene) {
   // Civic Center (gray + tower) beside the freeway.
   addBuilding(560, -480, 52, 24, 38, 'gray');
   addBuilding(560, -520, 18, 62, 18, 'gray', { antenna: true });
+  // v10: water towers on three landmark roofs (the towers already carry
+  // antennas) — hospital slab, city-hall base, civic-center base.
+  plainItems.push(cylItem(2.2, 2.2, 4, 220, 26 + 2.4, -490, 0xa8875a, 10));
+  plainItems.push({ geo: new THREE.ConeGeometry(2.4, 2, 10), matrix: new THREE.Matrix4().makeTranslation(220, 26 + 5.4, -490), color: 0x8f6f42 });
+  for (const [lx, lz] of [[218.5, -491.5], [221.5, -491.5], [218.5, -488.5], [221.5, -488.5]]) {
+    plainItems.push(cylItem(0.18, 0.18, 2.4, lx, 26 + 1.2, lz, 0x555555, 6));
+  }
+  plainItems.push(cylItem(2.2, 2.2, 4, -155, 18 + 2.4, -490, 0xa8875a, 10));
+  plainItems.push({ geo: new THREE.ConeGeometry(2.4, 2, 10), matrix: new THREE.Matrix4().makeTranslation(-155, 18 + 5.4, -490), color: 0x8f6f42 });
+  for (const [lx, lz] of [[-156.5, -491.5], [-153.5, -491.5], [-156.5, -488.5], [-153.5, -488.5]]) {
+    plainItems.push(cylItem(0.18, 0.18, 2.4, lx, 18 + 1.2, lz, 0x555555, 6));
+  }
+  plainItems.push(cylItem(2.2, 2.2, 4, 580, 24 + 2.4, -470, 0xa8875a, 10));
+  plainItems.push({ geo: new THREE.ConeGeometry(2.4, 2, 10), matrix: new THREE.Matrix4().makeTranslation(580, 24 + 5.4, -470), color: 0x8f6f42 });
+  for (const [lx, lz] of [[578.5, -471.5], [581.5, -471.5], [578.5, -468.5], [581.5, -468.5]]) {
+    plainItems.push(cylItem(0.18, 0.18, 2.4, lx, 24 + 1.2, lz, 0x555555, 6));
+  }
   // Shophouses: bright colors, ground-floor stores with awnings + signs.
   const shopColors = ['pink', 'teal', 'tan', 'blue', 'white', 'pink'];
   const shopNames = ['CORAL TACOS', 'NEON DONUTS', 'PIER GIFTS', 'SUNSET CAFE', 'VINYL & CO', 'TIDE BOOKS'];
   const shopSigns = [];
   shopColors.forEach((m, i) => {
     const x = -80 + i * 34;
-    addBuilding(x, 100, 26, range(rng, 12, 18), 16, m, { canopy: true, canopyColor: pick(rng, [0xff2e4d, 0xffc53d, 0x2ec4b6]) });
+    const cc = pick(rng, [0xff2e4d, 0xffc53d, 0x2ec4b6]);
+    addBuilding(x, 100, 26, range(rng, 12, 18), 16, m, { canopy: true, canopyColor: cc });
     shopSigns.push({ x, z: 100, text: shopNames[i] });
+    // v10 shopfront detail: flower window box + striped awning valance +
+    // a display shelf with colorful goods on the street face.
+    plainItems.push(boxItem(2.2, 0.4, 0.5, x, 2.6, 108.5, 0x8a6a42));
+    for (let f = 0; f < 3; f++) {
+      plainItems.push({ geo: new THREE.SphereGeometry(0.25, 8, 6), matrix: new THREE.Matrix4().makeTranslation(x - 0.7 + f * 0.7, 2.95, 108.5), color: [0xff2e4d, 0xffc53d, 0x2ec4b6][f] });
+    }
+    for (let s = 0; s < 5; s++) {
+      plainItems.push(boxItem(1.1, 0.4, 0.2, x - 2.2 + s * 1.1, 3.9, 108.2, s % 2 ? 0xf4f4f0 : cc));
+    }
+    plainItems.push(boxItem(4.5, 0.25, 0.8, x, 3.0, 108.6, 0x6a4a2a));
+    for (let gIdx = 0; gIdx < 3; gIdx++) {
+      plainItems.push(boxItem(0.9, 0.7, 0.7, x - 1.5 + gIdx * 1.5, 3.45, 108.6, [0xff2e4d, 0xffc53d, 0x2ec4b6][(i + gIdx) % 3]));
+    }
   });
   // Curved-glass corner towers (Downtown landmarks).
   const curved = [];
@@ -310,10 +341,13 @@ export function buildWorld(scene) {
       palmFronds.push(boxItem(5.5, 0.25, 1.6, x + Math.cos(a) * 2.4, h + 0.4, z + Math.sin(a) * 2.4, 0x2f8f4e, a, 0, 0.5));
     }
   };
-  // beachfront drive palms + pier palms + boulevard palms
+  // beachfront drive palms + pier palms + boulevard palms. The boulevard
+  // palm at x=-208 stood right in front of the VISIT CORAL PIER billboard
+  // at (-200,-200) and hid its left half from the south, so that one palm
+  // grows 32u west instead (same rng draw order, layout unchanged).
   for (let z = -380; z <= 500; z += 44) addPalm(-640, z, range(rng, 0.9, 1.2));
   for (const z of [272, 328]) { addPalm(-680, z, 1); addPalm(-760, z, 1); } // off the center line: nothing blocks the wheel
-  for (let x = -560; x <= 560; x += 88) addPalm(x, -188, range(rng, 0.9, 1.15));
+  for (let x = -560; x <= 560; x += 88) addPalm(x === -208 ? -240 : x, -188, range(rng, 0.9, 1.15));
   for (let i = 0; i < 40; i++) {
     const x = range(rng, -640, 640), z = range(rng, -640, 640);
     if (Math.abs(x % 200) < 30 || Math.abs(z % 200) < 30) continue;
@@ -414,8 +448,8 @@ export function buildWorld(scene) {
   // pier shops / stalls: two-tone body, striped canopy, counter with goods,
   // and a big name sign on the deck-facing side (the old sign sat on the
   // back face, hidden behind the stall, so stalls read as plain color blocks).
-  const stallNames = ['RING TOSS', 'CORAL DOGS', 'POPCORN', 'CANDY', 'BALLOONS', 'FISHING', 'ARCADE', 'LEMONADE'];
-  const stallColors = [0xff2e4d, 0x2ec4b6, 0xffc53d, 0xff7e5f, 0x7d3c98, 0x2471a3, 0x229954, 0xd4ac0d];
+  const stallNames = ['RING TOSS', 'CORAL DOGS', 'POPCORN', 'CANDY', 'BALLOONS', 'FISHING', 'ARCADE', 'LEMONADE', 'SNO-CONES', 'CORAL POP'];
+  const stallColors = [0xff2e4d, 0x2ec4b6, 0xffc53d, 0xff7e5f, 0x7d3c98, 0x2471a3, 0x229954, 0xd4ac0d, 0x2ec4b6, 0xff7e5f];
   const goodsColors = [0xff2e4d, 0xffc53d, 0x2ec4b6, 0x7d3c98, 0xff7e5f, 0xf4f4f0];
   const stallItems = [];
   stallNames.forEach((name, i) => {
@@ -536,6 +570,54 @@ export function buildWorld(scene) {
   carnivalItems.push(cylItem(0.45, 0.45, 0.25, -730.8, 2.55, 291.2, 0x141414, 10));
   carnivalItems.push(cylItem(0.45, 0.45, 0.25, -729.2, 2.55, 291.2, 0x141414, 10));
   scene.add(new THREE.Mesh(mergeItems(carnivalItems), plain));
+  // v10: more pier life — two extra stalls (SNO-CONES, CORAL POP), three
+  // center benches + four more bins, a second balloon bunch by the wheel,
+  // eight flag poles along the deck edges, two more bunting strings, and
+  // the cotton-candy cart now reads as cotton candy (serving cone under
+  // the pink fluff + a COTTON CANDY sign on the camera-facing side).
+  const pierExtraItems = [];
+  for (const bx of [-766, -736, -706]) {
+    pierExtraItems.push(boxItem(3.4, 0.2, 0.9, bx, 3.05, 300, 0x8a6a42));
+    pierExtraItems.push(boxItem(3.4, 1.1, 0.15, bx, 3.6, 299.5, 0x8a6a42));
+    pierExtraItems.push(boxItem(0.2, 0.5, 0.7, bx - 1.4, 2.75, 300, 0x333333));
+    pierExtraItems.push(boxItem(0.2, 0.5, 0.7, bx + 1.4, 2.75, 300, 0x333333));
+  }
+  for (const [tx, tz] of [[-780, 334], [-730, 334], [-756, 266], [-690, 334]]) {
+    pierExtraItems.push(cylItem(0.8, 0.75, 1.5, tx, 3.25, tz, 0x2f7a3a, 10));
+    pierExtraItems.push(cylItem(0.9, 0.9, 0.18, tx, 4.05, tz, 0x444444, 10));
+  }
+  pierExtraItems.push(cylItem(0.12, 0.12, 4.5, -760, 4.7, 316, 0x333333, 6));
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    pierExtraItems.push({ geo: new THREE.SphereGeometry(0.85, 10, 8), matrix: new THREE.Matrix4().makeTranslation(-760 + Math.cos(a) * 1.1, 7.4 + (i % 2) * 0.5, 316 + Math.sin(a) * 1.1), color: [0xff2e4d, 0xffc53d, 0x2ec4b6, 0x7d3c98, 0xff7e5f, 0x2471a3][i] });
+  }
+  const flagColors = [0xff2e4d, 0xffc53d, 0x2ec4b6, 0x7d3c98];
+  for (let i = 0; i < 8; i++) {
+    const fx = [-780, -752, -724, -696, -668, -766, -738, -710][i];
+    const fz = i < 5 ? 262 : 338;
+    pierExtraItems.push(cylItem(0.15, 0.18, 4.5, fx, 4.75, fz, 0x333333, 6));
+    pierExtraItems.push(boxItem(1.2, 0.7, 0.1, fx + 0.6, 6.6, fz, flagColors[i % 4]));
+  }
+  pierExtraItems.push({ geo: new THREE.ConeGeometry(0.7, 1.6, 8), matrix: new THREE.Matrix4().makeRotationX(Math.PI).setPosition(-730, 4.0, 290), color: 0xd4ac0d });
+  pierExtraItems.push({ geo: new THREE.SphereGeometry(0.45, 8, 6), matrix: new THREE.Matrix4().makeTranslation(-730.6, 4.2, 289.2), color: 0xff7eb6 });
+  pierExtraItems.push({ geo: new THREE.SphereGeometry(0.45, 8, 6), matrix: new THREE.Matrix4().makeTranslation(-729.4, 4.2, 290.8), color: 0xff9ec7 });
+  scene.add(new THREE.Mesh(mergeItems(pierExtraItems), plain));
+  const candySign = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.2), new THREE.MeshLambertMaterial({ map: signTexture(['COTTON CANDY'], { bg: '#7d3c98', fg: '#ffffff' }) }));
+  candySign.position.set(-728.6, 3.4, 290);
+  candySign.rotation.y = Math.PI / 2;
+  scene.add(candySign);
+  const bunt2Items = [];
+  for (const bx of [-688, -760]) {
+    for (let i = 0; i < 12; i++) {
+      const z = 262 + i * 6.8;
+      const sag = Math.sin((i / 11) * Math.PI) * 1.2;
+      const tri = new THREE.BufferGeometry();
+      tri.setAttribute('position', new THREE.Float32BufferAttribute([bx, 8.4 - sag, z, bx + 1.6, 8.4 - sag, z, bx + 0.8, 7.2 - sag, z], 3));
+      tri.computeVertexNormals();
+      bunt2Items.push({ geo: tri, matrix: new THREE.Matrix4(), color: buntColors[i % 5] });
+    }
+  }
+  scene.add(new THREE.Mesh(mergeItems(bunt2Items), plain));
   // soft light particles drifting around the ferris wheel
   const glowCount = 140;
   const glowBase = new Float32Array(glowCount * 3);
@@ -704,6 +786,63 @@ export function buildWorld(scene) {
     yardItems.push(boxItem(2.0, 2.0, 2.0, cx + 0.4, 3.2, cz - 0.3, 0x8f6f42));
     addCollider(cx - 1.2, cz - 1.2, cx + 1.6, cz + 1.2, 4.5);
   }
+  // v10: two more cargo trailers, two forklifts, four more container
+  // stacks on the painted slots, four more pallet stacks, three more
+  // barrel clusters, a second cone line on the east dock road, and four
+  // more crates — the yard strips read dense from the dock roads.
+  addTrailer(700, 500, 0, 0xe67e22);
+  addTrailer(500, 700, Math.PI / 2, 0xc0392b);
+  const addForklift = (x, z, ry, color) => {
+    const m = new THREE.Matrix4().makeRotationY(ry);
+    const put = (w, h, d, ox, oy, oz, c) => {
+      const mm = m.clone();
+      mm.setPosition(x + ox * Math.cos(ry) - oz * Math.sin(ry), oy, z + ox * Math.sin(ry) + oz * Math.cos(ry));
+      yardItems.push({ geo: new THREE.BoxGeometry(w, h, d), matrix: mm, color: c });
+    };
+    put(2.2, 1.2, 1.4, 0, 0.9, 0, color); // body
+    put(2.0, 0.15, 1.3, 0, 1.6, 0, 0x333333); // overhead guard roof
+    put(0.15, 1.4, 0.15, -0.8, 1.0, 0.6, 0x333333);
+    put(0.15, 1.4, 0.15, -0.8, 1.0, -0.6, 0x333333);
+    put(0.15, 1.4, 0.15, 0.8, 1.0, 0.6, 0x333333);
+    put(0.15, 1.4, 0.15, 0.8, 1.0, -0.6, 0x333333);
+    put(0.25, 2.6, 0.25, 1.2, 1.5, 0.55, 0x555555); // mast uprights
+    put(0.25, 2.6, 0.25, 1.2, 1.5, -0.55, 0x555555);
+    put(0.25, 0.3, 1.35, 1.2, 2.7, 0, 0x555555); // mast crossbar
+    put(1.5, 0.12, 0.25, 2.0, 0.3, 0.4, 0x888888); // forks
+    put(1.5, 0.12, 0.25, 2.0, 0.3, -0.4, 0x888888);
+    put(0.5, 0.5, 0.3, 0.6, 0.4, 0.65, 0x141414); // wheels
+    put(0.5, 0.5, 0.3, 0.6, 0.4, -0.65, 0x141414);
+    put(0.5, 0.5, 0.3, -0.7, 0.4, 0.65, 0x141414);
+    put(0.5, 0.5, 0.3, -0.7, 0.4, -0.65, 0x141414);
+    const hx = ry === 0 ? 0 : 1;
+    addCollider(x - (hx ? 1.0 : 2.8), z - (hx ? 2.8 : 1.0), x + (hx ? 1.0 : 2.8), z + (hx ? 2.8 : 1.0), 3);
+  };
+  addForklift(470, 470, 0, 0xffc53d);
+  addForklift(600, 620, Math.PI / 2, 0x2ec4b6);
+  for (const [cx, cz, n] of [[690, 460, 2], [690, 540, 3], [460, 690, 2], [540, 690, 3]]) yardStack(cx, cz, n);
+  for (const [px, pz] of [[660, 420], [660, 580], [420, 660], [580, 660]]) {
+    const h = rangeInt(rng, 1, 2);
+    for (let s = 0; s < h; s++) {
+      yardItems.push(boxItem(2.4, 1.0, 2.4, px, 0.5 + s * 1.05, pz, 0xb08a5a));
+      yardItems.push(boxItem(2.2, 0.2, 2.2, px, 1.05 + s * 1.05, pz, 0x8a6a42));
+    }
+    portStats.pallets += h;
+  }
+  for (const [bx, bz] of [[660, 470], [470, 660], [670, 620]]) {
+    for (let i = 0; i < 3; i++) {
+      const ox = (i % 2) * 2.2, oz = Math.floor(i / 2) * 2.2;
+      yardItems.push(cylItem(0.9, 0.9, 2.2, bx + ox, 1.1, bz + oz, barrelColors[i % 3], 10));
+    }
+    addCollider(bx - 1, bz - 1, bx + 3.2, bz + 3.2, 2.5);
+  }
+  for (const cz of [440, 470, 500, 530, 560]) {
+    yardItems.push({ geo: new THREE.ConeGeometry(0.7, 1.6, 8), matrix: new THREE.Matrix4().makeTranslation(624, 0.8, cz), color: 0xe67e22 });
+  }
+  for (const [cx, cz] of [[690, 470], [690, 570], [470, 690], [570, 690]]) {
+    yardItems.push(boxItem(2.2, 2.2, 2.2, cx, 1.1, cz, 0xa8875a));
+    yardItems.push(boxItem(2.0, 2.0, 2.0, cx + 0.4, 3.2, cz - 0.3, 0x8f6f42));
+    addCollider(cx - 1.2, cz - 1.2, cx + 1.6, cz + 1.2, 4.5);
+  }
   scene.add(new THREE.Mesh(mergeItems(yardItems), plain));
 
   // ---- Midtown street props: fire hydrants at intersections + crates by the shops
@@ -717,9 +856,9 @@ export function buildWorld(scene) {
     streetItems.push(boxItem(1.6, 1.6, 1.6, cx + 0.3, 2.8, cz, 0x8f6f42));
     addCollider(cx - 1.1, cz - 1.1, cx + 1.4, cz + 1.1, 3.8);
   }
-  // bus shelters (bench + roof + posts) at four avenue stops
+  // bus shelters (bench + roof + posts) at six avenue stops
   const busSignDefs = [];
-  for (const [bx, bz] of [[-186, 200], [214, -200], [14, 400], [-414, -200]]) {
+  for (const [bx, bz] of [[-186, 200], [214, -200], [14, 400], [-414, -200], [-186, -400], [214, 200]]) {
     streetItems.push(boxItem(4.5, 0.25, 1.1, bx, 0.65, bz, 0x8a6a42));
     streetItems.push(boxItem(4.5, 1.0, 0.18, bx, 1.2, bz - 0.5, 0x8a6a42));
     streetItems.push(boxItem(5.2, 0.25, 2.2, bx, 2.9, bz, 0x2ec4b6));
@@ -748,6 +887,109 @@ export function buildWorld(scene) {
     }
   }
   scene.add(new THREE.Mesh(mergeItems(streetItems), plain));
+  // ---- v10: street clutter — mailboxes, newspaper boxes, bike racks
+  // (with parked bikes), planters, street bins, dumpsters, street-name
+  // signs, barriers, extra benches / hydrants / cones, and infill trees
+  // in the central blocks, so no sidewalk or lawn reads empty. Small
+  // props sit at mid-block z (-500..500, never on intersection corners)
+  // where no bench, hydrant, shelter or crate stands; benches, hydrants
+  // and cones take free intersection corners. All merged (one draw call);
+  // colliders only for chunky pieces. A separate vrng stream keeps every
+  // earlier layout draw untouched.
+  const vrng = mulberry32(20261120);
+  const clutterItems = [];
+  for (const av of WORLD.AVENUES) {
+    // mailboxes (blue, avenue-15) + newspaper boxes (avenue+15)
+    for (const z of [-300, 100]) {
+      clutterItems.push(boxItem(0.15, 0.5, 0.15, av - 15, 0.25, z, 0x333333));
+      clutterItems.push(boxItem(1.0, 1.0, 0.7, av - 15, 1.0, z, 0x2471a3));
+      clutterItems.push(boxItem(1.05, 0.2, 0.75, av - 15, 1.55, z, 0x1a5a8a));
+    }
+    for (const z of [-100, 300]) {
+      clutterItems.push(boxItem(0.15, 0.5, 0.15, av + 15, 0.25, z, 0x333333));
+      clutterItems.push(boxItem(0.8, 0.7, 0.5, av + 15, 0.85, z, [0xc0392b, 0xffc53d, 0x2ec4b6][Math.floor(vrng() * 3)]));
+    }
+    // street bins (green) at three more mid-block spots
+    for (const z of [500, -500, 300]) {
+      clutterItems.push(cylItem(0.7, 0.65, 1.3, av - 15, 0.65, z, 0x2f7a3a, 10));
+      clutterItems.push(cylItem(0.75, 0.75, 0.15, av - 15, 1.35, z, 0x444444, 10));
+    }
+    // wooden planters with a bush
+    for (const z of [-500, 500]) {
+      clutterItems.push(boxItem(1.6, 0.7, 1.6, av + 15, 0.35, z, 0x8a6a42));
+      clutterItems.push({ geo: new THREE.SphereGeometry(0.9, 8, 6), matrix: new THREE.Matrix4().makeTranslation(av + 15, 1.1, z), color: 0x4a8a3a });
+      addCollider(av + 15 - 0.8, z - 0.8, av + 15 + 0.8, z + 0.8, 1.6);
+    }
+    // bike rack + one parked bike leaning on it
+    const rz = -100;
+    clutterItems.push(boxItem(0.12, 0.9, 0.12, av - 15 - 0.7, 0.45, rz, 0x888888));
+    clutterItems.push(boxItem(0.12, 0.9, 0.12, av - 15 + 0.7, 0.45, rz, 0x888888));
+    clutterItems.push(boxItem(1.5, 0.12, 0.12, av - 15, 0.85, rz, 0x888888));
+    for (const wx of [av - 15 - 0.55, av - 15 + 0.55]) {
+      clutterItems.push({ geo: new THREE.CylinderGeometry(0.35, 0.35, 0.08, 10), matrix: new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(wx, 0.35, rz + 0.3), color: 0x141414 });
+    }
+    clutterItems.push(boxItem(1.3, 0.1, 0.1, av - 15, 0.7, rz + 0.3, 0xdddddd));
+    addCollider(av - 15 - 0.9, rz - 0.5, av - 15 + 0.9, rz + 0.5, 1);
+  }
+  // planters at the corners of the central blocks (shot 4's empty mid-city)
+  for (const [px, pz] of [[30, 30], [170, 170], [30, 270], [170, 330], [230, 30], [370, 170], [-170, 30], [-30, 170]]) {
+    clutterItems.push(boxItem(1.6, 0.7, 1.6, px, 0.35, pz, 0x8a6a42));
+    clutterItems.push({ geo: new THREE.SphereGeometry(0.9, 8, 6), matrix: new THREE.Matrix4().makeTranslation(px, 1.1, pz), color: 0x4a8a3a });
+    addCollider(px - 0.8, pz - 0.8, px + 0.8, pz + 0.8, 1.6);
+  }
+  // dumpsters behind the shophouses and near the landmarks
+  for (const [dx, dz] of [[-60, 120], [40, 120], [200, -440], [-140, -440], [500, -440]]) {
+    clutterItems.push(boxItem(2.6, 1.6, 1.4, dx, 0.8, dz, 0x2f5a3a));
+    clutterItems.push(boxItem(2.7, 0.15, 1.5, dx, 1.65, dz, 0x444444));
+    addCollider(dx - 1.3, dz - 0.7, dx + 1.3, dz + 0.7, 1.8);
+  }
+  // street-name signs at eight intersections (posts merged, faces added below)
+  const streetSignDefs = [];
+  for (const [sx, sz, name] of [[-186, -186, 'CORAL AVE'], [14, 214, 'DELTA BLVD'], [214, -186, 'SUNSET ROW'], [-386, 414, 'PIER ST'], [414, 14, 'NEON AVE'], [14, -386, 'HARBOR RD'], [-186, -386, 'VENICE WAY'], [214, 414, 'MARINA DR']]) {
+    clutterItems.push(boxItem(0.15, 3.2, 0.15, sx, 1.6, sz, 0x333333));
+    streetSignDefs.push({ x: sx, y: 3.4, z: sz, text: name });
+  }
+  // orange/white striped barriers on sidewalk corners
+  for (const [bx, bz] of [[100, -186], [-100, 186], [300, -186], [-300, 186], [500, 186], [-500, -186], [100, 386], [-100, -386]]) {
+    clutterItems.push(boxItem(0.2, 0.9, 0.2, bx - 1.7, 0.45, bz, 0x333333));
+    clutterItems.push(boxItem(0.2, 0.9, 0.2, bx + 1.7, 0.45, bz, 0x333333));
+    for (let s = 0; s < 4; s++) {
+      clutterItems.push(boxItem(0.9, 0.5, 0.15, bx - 1.35 + s * 0.9, 0.9, bz, s % 2 ? 0xf4f4f0 : 0xe67e22));
+    }
+  }
+  // ten more benches on free intersection corners
+  for (const [bx, bz] of [[-186, 400], [14, -200], [214, -400], [414, 200], [-414, -400], [614, -200], [-586, 400], [14, 0], [414, -400], [-214, -200]]) {
+    clutterItems.push(boxItem(3.4, 0.2, 0.9, bx, 0.55, bz, 0x8a6a42));
+    clutterItems.push(boxItem(3.4, 1.1, 0.15, bx, 1.1, bz - 0.45, 0x8a6a42));
+    clutterItems.push(boxItem(0.2, 0.5, 0.7, bx - 1.4, 0.25, bz, 0x333333));
+    clutterItems.push(boxItem(0.2, 0.5, 0.7, bx + 1.4, 0.25, bz, 0x333333));
+  }
+  // eight more hydrants on free corners
+  for (const [hx, hz] of [[216, -216], [-184, 416], [16, 16], [416, -216], [-216, 216], [16, -416], [616, 216], [-584, -216]]) {
+    clutterItems.push(cylItem(0.5, 0.55, 1.2, hx, 0.6, hz, 0xd4ac0d, 10));
+    clutterItems.push({ geo: new THREE.SphereGeometry(0.35, 8, 6), matrix: new THREE.Matrix4().makeTranslation(hx, 1.3, hz), color: 0xd4ac0d });
+  }
+  // twelve more cones on free sidewalk corners
+  for (const [cx, cz] of [[184, -184], [-184, 384], [384, 184], [-384, -184], [584, 384], [-584, 384]]) {
+    clutterItems.push({ geo: new THREE.ConeGeometry(0.7, 1.6, 8), matrix: new THREE.Matrix4().makeTranslation(cx, 0.8, cz), color: 0xe67e22 });
+    clutterItems.push({ geo: new THREE.ConeGeometry(0.7, 1.6, 8), matrix: new THREE.Matrix4().makeTranslation(cx + 3, 0.8, cz + 2), color: 0xe67e22 });
+  }
+  // twenty-four infill trees at the corners of the six central blocks
+  for (const [bcx, bcz] of [[100, 100], [100, 300], [300, 100], [-100, 100], [100, -100], [-100, -100]]) {
+    for (const [ox, oz] of [[-75, -75], [75, -75], [-75, 75], [75, 75]]) {
+      const tx = bcx + ox, tz = bcz + oz;
+      const ts = 0.8 + vrng() * 0.5;
+      clutterItems.push(cylItem(0.5 * ts, 0.7 * ts, 3 * ts, tx, 1.5 * ts, tz, 0x6a4a2a, 8));
+      clutterItems.push({ geo: new THREE.SphereGeometry(3.2 * ts, 8, 6), matrix: new THREE.Matrix4().makeTranslation(tx, 4.5 * ts, tz), color: 0x4a8a3a });
+    }
+  }
+  scene.add(new THREE.Mesh(mergeItems(clutterItems), plain));
+  // street-name sign faces (created after the merge like the other signs)
+  for (const def of streetSignDefs) {
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(4, 1.2), new THREE.MeshLambertMaterial({ map: signTexture([def.text], { bg: '#2ec4b6', fg: '#ffffff' }) }));
+    s.position.set(def.x, def.y, def.z);
+    scene.add(s);
+  }
   // billboards (original art + text) on tall posts at three junctions + BUS signs
   const billboardDefs = [
     { x: -200, z: -200, lines: ['VISIT CORAL PIER', 'GAMES • RIDES • CAFES'], bg: '#c0392b' },
@@ -835,6 +1077,21 @@ export function buildWorld(scene) {
     { x: 600, z: -600, heading: Math.PI / 2, kind: 'suv', color: 0xdddddd },
     { x: 200, z: -612, heading: 0, kind: 'sedan', color: 0x2ec4b6 },
     { x: -388, z: 612, heading: Math.PI, kind: 'bike', color: 0xff2e4d },
+    // v10: twelve more parked cars/trucks/bikes along the avenues, so the
+    // streets read lived-in instead of empty (all clear of keep-clear
+    // points, mission framing, billboard posts and bus shelters).
+    { x: 416, z: 50, heading: Math.PI / 2, kind: 'sedan', color: 0x2ec4b6 },
+    { x: -216, z: 250, heading: 0, kind: 'pickup', color: 0xc0392b },
+    { x: 216, z: -50, heading: Math.PI, kind: 'sport', color: 0xffc53d },
+    { x: -16, z: 450, heading: Math.PI / 2, kind: 'sedan', color: 0xdddddd },
+    { x: 616, z: 250, heading: 0, kind: 'suv', color: 0x2471a3 },
+    { x: -616, z: -250, heading: Math.PI, kind: 'sedan', color: 0x7d3c98 },
+    { x: 16, z: -250, heading: Math.PI / 2, kind: 'bike', color: 0xff2e4d },
+    { x: 416, z: -250, heading: 0, kind: 'pickup', color: 0x229954 },
+    { x: -416, z: 150, heading: Math.PI, kind: 'sport', color: 0xd4ac0d },
+    { x: 216, z: 550, heading: Math.PI / 2, kind: 'sedan', color: 0xff7e5f },
+    { x: -216, z: -450, heading: 0, kind: 'suv', color: 0x2ec4b6 },
+    { x: 616, z: -150, heading: Math.PI, kind: 'bike', color: 0x2471a3 },
   ];
 
   // ---- per-frame animation ----
