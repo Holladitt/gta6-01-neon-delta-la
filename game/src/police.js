@@ -126,11 +126,13 @@ export class Police {
     // source, wide at the ground, like a real searchlight. (The old code
     // flipped it with rotation.x = PI and parked it at y=-11, so it read
     // wide-at-the-heli, pointed down, and stopped ~3 m above the ground.)
-    // Opacity 0.18 (was 0.13): the beam must still read against a bright
-    // golden-hour sky, not only at night.
+    // Opacity 0.22 (was 0.18): the beam must still read against a bright
+    // golden-hour sky, not only at night — v13-fix2 bumped it slightly
+    // toward the reference beam, which locks the car in visibly brighter
+    // light. Kept modest so the cone's edge does not harden further.
     const cone = new THREE.Mesh(
       new THREE.ConeGeometry(5, 20, 12, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false })
     );
     this.heliLight = cone;
     this.scene.add(cone);
@@ -138,7 +140,7 @@ export class Police {
     // under the orbiting helicopter (update() moves it to the player).
     const spot = new THREE.Mesh(
       new THREE.CircleGeometry(8, 20),
-      new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.30, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false })
     );
     spot.rotation.x = -Math.PI / 2;
     spot.position.set(0, 0.15, 0);

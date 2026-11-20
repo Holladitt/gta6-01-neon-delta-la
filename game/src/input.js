@@ -26,7 +26,10 @@ export class Input {
     });
     canvas.addEventListener('click', () => {
       if (!this.locked && document.pointerLockElement !== canvas) {
-        canvas.requestPointerLock?.();
+        // requestPointerLock returns a promise in modern browsers; without
+        // a user gesture (e.g. synthetic CDP input) it rejects — swallow
+        // it so a programmatic click never surfaces an uncaught rejection.
+        canvas.requestPointerLock?.()?.catch?.(() => {});
       }
     });
   }
