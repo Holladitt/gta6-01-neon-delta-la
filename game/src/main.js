@@ -279,6 +279,8 @@ function boot() {
     portCars: traffic.cars.filter((c) => c.port).length,
     police: police.cars.map((c) => [Math.round(c.x), Math.round(c.z)]),
     heli: police.heli ? [Math.round(police.heli.position.x), Math.round(police.heli.position.y), Math.round(police.heli.position.z)] : null,
+    heliBeam: police.beamState ? police.beamState() : null, // v13-fix: searchlight landing point + length + midpoint
+    hour: +game.hour.toFixed(2), // v13-fix: staging hour readout (shot 1 dusk = 17.0)
     siren: police.cars.length && police.cars[0].lightBar ? police.cars[0].lightBar.red.emissiveIntensity : null,
     port: world.port,
     pierStats: world.pier.stats || null,
@@ -907,12 +909,12 @@ function updateOnFoot(dt, t) {
   else hud.setPrompt('');
   // Combat.
   combat.update(dt);
-  if (input.wasPressed('Digit1')) { combat.switchTo(0); hud.setWeaponSlots(combat); }
-  if (input.wasPressed('Digit2')) { combat.switchTo(1); hud.setWeaponSlots(combat); }
-  if (input.wasPressed('Digit3')) { combat.switchTo(2); hud.setWeaponSlots(combat); }
-  if (input.wasPressed('Digit4')) { combat.switchTo(3); hud.setWeaponSlots(combat); }
-  if (input.wasPressed('Digit5')) { combat.switchTo(4); hud.setWeaponSlots(combat); }
-  if (input.wasPressed('Digit6')) { combat.switchTo(5); hud.setWeaponSlots(combat); }
+  if (input.wasPressed('Digit1')) switchWeapon(0);
+  if (input.wasPressed('Digit2')) switchWeapon(1);
+  if (input.wasPressed('Digit3')) switchWeapon(2);
+  if (input.wasPressed('Digit4')) switchWeapon(3);
+  if (input.wasPressed('Digit5')) switchWeapon(4);
+  if (input.wasPressed('Digit6')) switchWeapon(5);
   if (input.wasPressed('KeyR')) {
     if (combat.reload()) {
       hud.setWeaponSlots(combat);
@@ -1314,6 +1316,14 @@ function tryInteract() {
     const d = Math.hypot(game.waypoint.x - player.x, game.waypoint.z - player.z);
     if (d < 8) hud.toast('You are at the marker.');
   }
+}
+
+// Weapon switch with honest feedback (v13-fix): locked slots refuse
+// silently in combat.js, so a dead key press now names the gun and its
+// real price instead of doing nothing.
+function switchWeapon(i) {
+  if (!combat.switchTo(i)) hud.toast(`${WEAPONS[i].name} is locked — buy it at DELTA ARMS for $${WEAPONS[i].price.toLocaleString('en-US')}.`);
+  hud.setWeaponSlots(combat);
 }
 
 boot();

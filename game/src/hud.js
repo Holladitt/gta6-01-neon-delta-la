@@ -231,8 +231,14 @@ export class HUD {
     if (!this.el.shop) return;
     this.renderShop(state);
     this.el.shop.style.display = 'flex';
+    // v13-fix: the rank panel's left edge sat behind the first shop row —
+    // hide it while the shop is open (its numbers are not shop-relevant).
+    if (this.el.rankPanel) this.el.rankPanel.style.display = 'none';
   }
-  hideShop() { if (this.el.shop) this.el.shop.style.display = 'none'; }
+  hideShop() {
+    if (this.el.shop) this.el.shop.style.display = 'none';
+    if (this.el.rankPanel) this.el.rankPanel.style.display = '';
+  }
   renderShop(state) {
     if (!this.el.shopRows) return;
     if (this.el.shopMoney) this.el.shopMoney.textContent = 'YOUR CASH: $' + (state.money || 0).toLocaleString('en-US');

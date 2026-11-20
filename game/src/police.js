@@ -14,6 +14,11 @@ function lambert(color) {
   return new THREE.MeshLambertMaterial({ color });
 }
 
+// Searchlight beam temps (no per-frame allocation).
+const BEAM_UP = new THREE.Vector3(0, 1, 0);
+const _beamDir = new THREE.Vector3();
+const _beamMid = new THREE.Vector3();
+
 // Alternate the light bar between red and blue on a fast beat.
 function flashLightBar(car, t) {
   if (!car.lightBar) return;
@@ -34,6 +39,14 @@ export class Police {
     this.repathT = 0;
     this.level = 0;
     this.callIdx = 0; // cycles the callsign pool so each unit keeps its own callsign
+    // Searchlight readout (scalars, no per-frame allocation): where the beam
+    // lands, its length, and its midpoint — filled by update(), read by beamState().
+    this._beamLen = 0;
+    this._beamDiscX = 0;
+    this._beamDiscZ = 0;
+    this._beamMidX = 0;
+    this._beamMidY = 0;
+    this._beamMidZ = 0;
   }
 
   nextCallsign() { return CALLSIGNS[this.callIdx++ % CALLSIGNS.length]; }
@@ -65,7 +78,10 @@ export class Police {
     if (!WANTED.heliFor(level) && this.heli) {
       this.scene.remove(this.heli);
       this.heli = null;
-      this.heliLight = null;
+      if (this.heliLight) {
+        this.scene.remove(this.heliLight);
+        this.heliLight = null;
+      }
       if (this.heliSpot) {
         this.scene.remove(this.heliSpot);
         this.heliSpot = null;
@@ -102,19 +118,27 @@ export class Police {
     g.add(rotor2);
     addBox(4.5, 0.15, 0.3, 0x333333, 0, -1.2, 0.9); // skids
     addBox(4.5, 0.15, 0.3, 0x333333, 0, -1.2, -0.9);
-    // Translucent searchlight cone reaching the ground from the low orbit.
+    // Searchlight cone: a SCENE-level mesh (not a child of the heli group),
+    // so it can aim at the player instead of hanging straight down under
+    // the helicopter. ConeGeometry's apex is at +Y and the base is wide at
+    // -Y: update() maps +Y onto the heli direction, so the narrow end sits
+    // at the heli and the wide base lands on the player — narrow at the
+    // source, wide at the ground, like a real searchlight. (The old code
+    // flipped it with rotation.x = PI and parked it at y=-11, so it read
+    // wide-at-the-heli, pointed down, and stopped ~3 m above the ground.)
+    // Opacity 0.18 (was 0.13): the beam must still read against a bright
+    // golden-hour sky, not only at night.
     const cone = new THREE.Mesh(
       new THREE.ConeGeometry(5, 20, 12, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.13, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false })
     );
-    cone.position.y = -11;
-    cone.rotation.x = Math.PI;
-    g.add(cone);
-    // Bright disc on the street under the helicopter, so the hunt reads even
-    // when the helicopter itself sits near the frame edge.
+    this.heliLight = cone;
+    this.scene.add(cone);
+    // Bright disc on the street where the beam lands — on the player, not
+    // under the orbiting helicopter (update() moves it to the player).
     const spot = new THREE.Mesh(
       new THREE.CircleGeometry(8, 20),
-      new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.30, side: THREE.DoubleSide, depthWrite: false })
     );
     spot.rotation.x = -Math.PI / 2;
     spot.position.set(0, 0.15, 0);
@@ -123,7 +147,6 @@ export class Police {
     this.heli = g;
     this.heliRotor = rotor;
     this.heliRotor2 = rotor2;
-    this.heliLight = cone;
     this.scene.add(g);
   }
 
@@ -181,15 +204,49 @@ export class Police {
       // the helicopter is visible instead of circling high overhead.
       const hx = px + Math.sin(t * 0.25) * 42;
       const hz = pz + Math.cos(t * 0.2) * 42;
-      this.heli.position.set(hx, 24 + Math.sin(t * 0.5) * 2, hz);
+      const hy = 24 + Math.sin(t * 0.5) * 2;
+      this.heli.position.set(hx, hy, hz);
       this.heli.rotation.y = Math.atan2(px - hx, pz - hz);
       this.heliRotor.rotation.y += dt * 22;
       this.heliRotor2.rotation.y += dt * 22;
-      if (this.heliSpot) this.heliSpot.position.set(hx, 0.15, hz);
+      // Searchlight tracks the player: the cone spans heli -> player ground
+      // position (apex at the heli, wide base on the car), and the bright
+      // disc sits where the beam lands — on the player, not 42 m away
+      // under the orbiting helicopter. Same quaternion trick as the
+      // player-car headlight beam in main.js: +Y (cone apex) maps onto the
+      // heli direction, the cone is centred on the heli-target midpoint,
+      // and Y-scale stretches its 20-unit height to the true distance.
+      if (this.heliLight) {
+        _beamDir.set(hx - px, hy, hz - pz);
+        const dist = _beamDir.length();
+        _beamDir.divideScalar(dist);
+        _beamMid.set((hx + px) / 2, hy / 2, (hz + pz) / 2);
+        this.heliLight.position.copy(_beamMid);
+        this.heliLight.quaternion.setFromUnitVectors(BEAM_UP, _beamDir);
+        this.heliLight.scale.set(1, dist / 20, 1);
+        this._beamLen = dist;
+        this._beamDiscX = px;
+        this._beamDiscZ = pz;
+        this._beamMidX = _beamMid.x;
+        this._beamMidY = _beamMid.y;
+        this._beamMidZ = _beamMid.z;
+      }
+      if (this.heliSpot) this.heliSpot.position.set(px, 0.15, pz);
     }
   }
 
   setLevel(l) { this.level = l; }
+
+  // Debug readout for the searchlight: where the beam lands, its length,
+  // and its midpoint (null when no helicopter is up).
+  beamState() {
+    if (!this.heli || !this.heliLight || this._beamLen <= 0) return null;
+    return {
+      disc: [Math.round(this._beamDiscX), Math.round(this._beamDiscZ)],
+      len: +this._beamLen.toFixed(1),
+      mid: [+this._beamMidX.toFixed(1), +this._beamMidY.toFixed(1), +this._beamMidZ.toFixed(1)],
+    };
+  }
 
   // Line of sight: true when any police car is within 120 units of the player.
   seesPlayer(px, pz) {

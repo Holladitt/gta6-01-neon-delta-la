@@ -771,7 +771,10 @@ export function buildWorld(scene) {
     craneItems.push(boxItem(30, 3, 3, cx, 40, cz, 0xc0392b));
     craneItems.push(boxItem(3, 3, 22, cx + 14, 40, cz, 0xc0392b));
     craneItems.push(cylItem(0.2, 0.2, 14, cx + 22, 32, cz, 0x333333, 6));
-    craneItems.push(boxItem(4, 3, 4, cx + 22, 24, cz, 0x333333));
+    // v13-fix: the hanging load was dark grey on a dark night sky and read
+    // as a floating black box — bright orange container paint so it reads
+    // as cargo on the cable, not a hole in the sky.
+    craneItems.push(boxItem(4, 3, 4, cx + 22, 24, cz, 0xe67e22));
     addCollider(cx - 10, cz - 4, cx + 10, cz + 4, 42);
     portStats.cranes++;
   };

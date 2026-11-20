@@ -1,11 +1,15 @@
 // Screenshot staging: ?shot=1..4 presets the game state for a render.
-// v12: 1 = NIGHT chase (headlights + heli spotlight + dispatch),
+// v13-fix: 1 = DUSK chase at 17:00 golden hour (heli spotlight + dispatch),
 // 2 = DELTA ARMS weapon shop (real money, real prices),
 // 3 = Coral Pier at night, M7 THE NIGHT LEDGER + rank,
 // 4 = M8 THE LAST SIGNAL stage tracker + Orin Beck portrait dialogue.
-function stageNightChase(game) {
+function stageDuskChase(game) {
   game.setState('playing');
-  game.setHour(21.5); // full night: sky dark, lamps + neon lit, headlights on
+  // v13-fix: DUSK at 17:00, not full night — the owner asked for an
+  // afternoon chase (golden hour: warm sky, everything readable). The hour
+  // is set AFTER startMission: M5 has no startHour so startMission does not
+  // pin the clock, but the M8 pattern proves startMission CAN pin it, so
+  // setHour goes after, like stageM8Tracker does.
   // SOUTHBOUND chase: at the 60-tick staging mark the helicopter's orbit
   // (a function of game time) puts it southeast of the player — in front of
   // a south-facing chase camera, near the view centre. A northbound chase
@@ -21,6 +25,7 @@ function stageNightChase(game) {
   // wanted is pinned to 3 so the helicopter deploys and dispatch lists
   // 3 units + AIR-1.
   game.startMission(4);
+  game.setHour(17.0); // golden hour: sky #ff9a3d/#ffb347, nightLevel 0 — bright + warm
   game.setWanted(3);
   // Scripted cruisers hold a fixed offset ahead of the player, so the chase
   // camera always has a cruiser in frame. Travel direction is south (0,+1);
@@ -47,7 +52,7 @@ function stageNightChase(game) {
   // Staged dialogue lasts 10 minutes of REAL time: setDialog's timer is
   // real-time, and the headless wait for 60 ticks takes ~70 real seconds,
   // so a 6-second dialog would be gone before the screenshot.
-  game.hud.setDialog('Night run. The heli is on us — stay in the dark lanes.', 600000);
+  game.hud.setDialog('Dusk run. The heli is on us — stay in the golden lanes.', 600000);
   // The shoot script holds KeyW during the settle so the speed reads > 0.
 }
 
@@ -118,7 +123,7 @@ function stageM8Tracker(game) {
 }
 
 export function applyShot(game, n) {
-  if (n === 1) stageNightChase(game);
+  if (n === 1) stageDuskChase(game);
   else if (n === 2) stageShop(game);
   else if (n === 3) stageNightPier(game);
   else if (n === 4) stageM8Tracker(game);
