@@ -3,9 +3,13 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { VEHICLE_DEFS } from './config.js';
 import { policeDoorTexture } from './geo.js';
+import { applyCollisionDamage, DAMAGE_MIN_IMPACT, DAMAGE_COOLDOWN_S } from './damage.js';
 
 const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
-const glassMat = lam(0x1d2733);
+// v13: cabin glass was near-black (0x1d2733) and read as a solid black box
+// on the car roof from the 3/4 rear chase angle, day and night. Slate blue
+// with a faint emissive so it reads as glass, never pitch black.
+const glassMat = new THREE.MeshLambertMaterial({ color: 0x4a6a8a, emissive: 0x2c4a66, emissiveIntensity: 1.0 });
 const tireMat = lam(0x141414);
 const hubMat = lam(0xcccccc);
 const chromeMat = lam(0xdddddd);
@@ -176,12 +180,17 @@ export function createVehicle(kind, x, z, heading, color) {
   built.group.rotation.y = heading;
   return {
     kind, def, x, z, heading, speed: 0, steer: 0,
-    vx: 0, vz: 0, health: 100, ...built,
+    vx: 0, vz: 0, health: 100, dmgCd: 0, ...built,
   };
 }
 
 // Arcade physics: forward speed + lateral slide (handbrake kills grip).
-export function updateVehicle(v, input, dt, colliders) {
+// opts.damage (player car only): a hard wall hit damages the car — this is
+// the real damage source that makes FIELD REPAIR reachable (QA v12 MAJOR:
+// no code path ever damaged the player car, so repair always answered
+// "already in top shape"). Police/traffic cars pass no opts: their health
+// stays governed by gunfire only, as before.
+export function updateVehicle(v, input, dt, colliders, opts) {
   const d = v.def;
   const grip = input.handbrake ? 2.2 : d.grip;
   const target = input.throttle * (input.throttle >= 0 ? d.top : d.reverse);
@@ -202,6 +211,7 @@ export function updateVehicle(v, input, dt, colliders) {
   v.x = Math.max(-795, Math.min(795, v.x));
   v.z = Math.max(-795, Math.min(795, v.z));
   const r = d.len / 2;
+  v.dmgCd = Math.max(0, (v.dmgCd || 0) - dt);
   for (const c of colliders) {
     const cx = Math.max(c.x0, Math.min(v.x, c.x1));
     const cz = Math.max(c.z0, Math.min(v.z, c.z1));
@@ -211,7 +221,15 @@ export function updateVehicle(v, input, dt, colliders) {
       v.x = cx + (dx / dd) * r;
       v.z = cz + (dz / dd) * r;
       const vn = (v.vx * dx + v.vz * dz) / dd;
-      if (vn < 0) { v.vx -= vn * dx / dd; v.vz -= vn * dz / dd; v.speed *= 0.6; }
+      if (vn < 0) {
+        v.vx -= vn * dx / dd; v.vz -= vn * dz / dd; v.speed *= 0.6;
+        // Hard hit into the wall: real damage (player car only).
+        const impact = -vn;
+        if (opts && opts.damage && impact >= DAMAGE_MIN_IMPACT && v.dmgCd <= 0) {
+          v.health = applyCollisionDamage(v.health, impact);
+          v.dmgCd = DAMAGE_COOLDOWN_S;
+        }
+      }
     }
   }
   // sync mesh

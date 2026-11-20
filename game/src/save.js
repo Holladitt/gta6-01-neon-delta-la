@@ -14,6 +14,12 @@ export function makeSave(data) {
     repairT: +(data.repairT || 0).toFixed(1),
     watchT: +(data.watchT || 0).toFixed(1),
     watchCd: +(data.watchCd || 0).toFixed(1),
+    // v13 career stats (real tracked counts only).
+    stats: {
+      missionsDone: (data.stats && data.stats.missionsDone | 0) || 0,
+      totalEarned: (data.stats && data.stats.totalEarned | 0) || 0,
+      carsStolen: (data.stats && data.stats.carsStolen | 0) || 0,
+    },
     savedAt: Date.now(),
   };
 }
@@ -42,6 +48,11 @@ export function decodeSave(text) {
   if (typeof o.repairT !== 'number' || o.repairT < 0) o.repairT = 0;
   if (typeof o.watchT !== 'number' || o.watchT < 0) o.watchT = 0;
   if (typeof o.watchCd !== 'number' || o.watchCd < 0) o.watchCd = 0;
+  // v13 fields are optional: v10/v11/v12 saves load with zeroed stats.
+  if (!o.stats || typeof o.stats !== 'object') o.stats = { missionsDone: 0, totalEarned: 0, carsStolen: 0 };
+  for (const k of ['missionsDone', 'totalEarned', 'carsStolen']) {
+    if (typeof o.stats[k] !== 'number' || o.stats[k] < 0) o.stats[k] = 0;
+  }
   return o;
 }
 export function memoryStore() {

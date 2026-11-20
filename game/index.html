@@ -76,8 +76,11 @@
   .wslot { font-size: 12px; font-weight: 900; background: rgba(10,20,35,.55); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; padding: 3px 7px; color: #cfd8e3; }
   .wslot.active { color: #ffe9a0; border-color: #ffd23d; background: rgba(60,40,0,.6); }
   .wslot.locked { color: #ffd23d; border-color: rgba(255,210,61,.5); }
-  /* v12: DELTA ARMS shop overlay */
-  #shop-screen { background: rgba(5,10,20,.82); }
+  /* v12: DELTA ARMS shop overlay — v13: dimming cut 0.82 -> 0.45 so the
+     street, the shopfront and Mara at the door stay visible around the
+     panel (v12 read as a menu on a black void); the rows keep their own
+     dark background, so the shop stays readable. */
+  #shop-screen { background: rgba(5,10,20,.45); justify-content: flex-start; padding-top: 48px; }
   #shop-screen h1 { font-size: 40px; font-weight: 900; font-style: italic; letter-spacing: 3px; color: #ffc53d; text-shadow: 0 0 18px rgba(255,197,61,.6), 0 2px 8px #000; }
   #shop-screen h2 { font-size: 16px; color: #7fe3d8; letter-spacing: 4px; margin: 6px 0 4px; }
   #shop-money { font-size: 22px; font-weight: 900; color: #7dffa8; margin-bottom: 14px; }
@@ -92,6 +95,13 @@
   .shop-buy:hover { filter: brightness(1.2); }
   .shop-buy:disabled { background: #444; color: #999; border-color: #555; cursor: not-allowed; }
   #shop-screen p { margin-top: 10px; color: #ffd23d; font-weight: bold; }
+  /* v13: career-stats modal over the pause menu */
+  #stats-screen { background: rgba(5,10,20,.6); }
+  #stats-screen h1 { font-size: 34px; font-weight: 900; font-style: italic; letter-spacing: 3px; color: #ffd23d; text-shadow: 0 0 18px rgba(255,210,61,.6), 0 2px 8px #000; margin-bottom: 16px; }
+  #stats-rows { width: 520px; max-width: 92vw; }
+  .stats-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: rgba(10,20,35,.85); border: 1px solid rgba(255,255,255,.2); border-radius: 10px; padding: 10px 16px; margin-bottom: 8px; }
+  .stats-row span { font-size: 14px; font-weight: bold; color: #9aa5b1; letter-spacing: 1px; }
+  .stats-row b { font-size: 18px; font-weight: 900; color: #fff; }
   #standing { font-size: 13px; color: #7fe3d8; font-weight: bold; }
   #veh-cond { font-size: 14px; font-weight: bold; color: #ffd23d; letter-spacing: 1px; }
   .bar-row { display: flex; align-items: center; gap: 6px; }
@@ -195,8 +205,16 @@
 <div id="pause-menu" class="overlay">
   <h1>PAUSED</h1>
   <button class="btn" id="btn-resume">RESUME</button>
+  <button class="btn secondary" id="btn-stats">CAREER STATS</button>
   <button class="btn secondary" id="btn-restart">RESTART</button>
   <button class="btn small" id="btn-quit">QUIT TO TITLE</button>
+</div>
+
+<div id="stats-screen" class="overlay">
+  <h1>CAREER STATS</h1>
+  <div id="stats-rows"></div>
+  <p style="margin-top:10px;color:#ffd23d;font-weight:bold">Esc — back to pause</p>
+  <button class="btn small" id="btn-stats-close" style="margin-top:14px">CLOSE</button>
 </div>
 
 <div id="map-screen" class="overlay">

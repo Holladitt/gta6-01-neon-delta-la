@@ -105,8 +105,8 @@ export function buildHuman(opt = {}) {
   const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.38 * s, 0.14 * s, 0.36 * s), mat(hair));
   hairTop.position.y = 0.18 * s;
   head.add(hairTop);
-  const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.38 * s, 0.3 * s, 0.1 * s), mat(hair));
-  hairBack.position.set(0, 0.06 * s, -0.18 * s);
+  const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.34 * s, 0.24 * s, 0.1 * s), mat(hair));
+  hairBack.position.set(0, 0.09 * s, -0.17 * s);
   head.add(hairBack);
   // front fringe for a fuller hairline
   if (opt.fringe) {
@@ -121,16 +121,21 @@ export function buildHuman(opt = {}) {
   }
   g.add(head);
   // accessories
+  // v13: ponytail reworked so it reads as a tapered tail from behind, not a
+  // dark slab with a red cube (QA: "black box with a red tie", "red triangle
+  // in Mara's hair"). Upper segment wider at the base, tip narrower and
+  // tilted further back; the tie is now a thin flat band at the tail base.
   if (opt.ponytail) {
-    // two-segment ponytail with a swing pivot, coral tie
-    const pony = new THREE.Mesh(new THREE.BoxGeometry(0.12 * s, 0.55 * s, 0.12 * s), mat(hair));
-    pony.position.set(0, -0.1 * s, -0.26 * s);
+    const pony = new THREE.Mesh(new THREE.BoxGeometry(0.16 * s, 0.5 * s, 0.14 * s), mat(hair));
+    pony.position.set(0, -0.12 * s, -0.28 * s);
+    pony.rotation.x = -0.16;
     head.add(pony);
-    const ponyTip = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.3 * s, 0.1 * s), mat(hair));
-    ponyTip.position.set(0, -0.48 * s, -0.3 * s);
+    const ponyTip = new THREE.Mesh(new THREE.BoxGeometry(0.12 * s, 0.32 * s, 0.12 * s), mat(hair));
+    ponyTip.position.set(0, -0.5 * s, -0.37 * s);
+    ponyTip.rotation.x = -0.3;
     head.add(ponyTip);
-    const tie = new THREE.Mesh(new THREE.BoxGeometry(0.14 * s, 0.08 * s, 0.14 * s), mat(0xff2e4d));
-    tie.position.set(0, 0.14 * s, -0.26 * s);
+    const tie = new THREE.Mesh(new THREE.BoxGeometry(0.18 * s, 0.05 * s, 0.18 * s), mat(0xff2e4d));
+    tie.position.set(0, 0.12 * s, -0.27 * s);
     head.add(tie);
   }
   if (opt.backpack) {
@@ -172,7 +177,7 @@ export function buildHuman(opt = {}) {
 // recognizable from behind. v11: face, fringe, collar, zipper, straps.
 export function buildMara() {
   return buildHuman({
-    skin: 0xe0ac69, shirt: 0xff2e4d, pants: 0x2c3e50, hair: 0x2c1a0a,
+    skin: 0xe0ac69, shirt: 0xff2e4d, pants: 0x2c3e50, hair: 0x4a2c0a,
     shoes: 0xffc53d, ponytail: true, backpack: 0x2471a3, scale: 1.12, height: 1.8,
     stripe: 0xf4f4f0, wide: 1.05, fringe: true, collar: 0xd41e3a, zipper: true, straps: true,
   });

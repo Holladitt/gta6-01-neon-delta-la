@@ -62,6 +62,9 @@ function stageShop(game) {
   game.setMoney(5200);
   game.setRp(555); // RANK B · NIGHTHAWK, 555 / 1000 RP — M1–M6 complete
   game.setDay(7);
+  // v13: pitch back to 0.16 — the shop panel now hugs the top of the
+  // screen (CSS, below), so Mara reads fully beneath it without a steep
+  // tilt; the shophouse row + towers keep their natural framing.
   game.setCamera(Math.PI, 0.16);
   game.openShop();
   // The overlay shows: 3 owned guns with live ammo, 3 locked guns with
@@ -89,7 +92,13 @@ function stageNightPier(game) {
 
 function stageM8Tracker(game) {
   game.setState('playing');
-  game.setHour(18.5); // dusk: the sky burns orange over the port cranes
+  // v13 re-stage: FULL NIGHT in the port, not dusk. The v12 dusk shot was
+  // ~55% flat salmon sky over an empty dark foreground, and a tall black
+  // container sat behind the rank bar. At night the sky is dark, the yard
+  // reads through lamps + headlights + lit crane silhouettes, and the
+  // camera looks EAST into the yard — trailers + container rows fill the
+  // mid-ground, cranes frame both sides, no tall stack in the top-right
+  // corner behind the rank panel.
   // Mission 8 (THE LAST SIGNAL), stage 2/3: the player starts ON the first
   // pickup point (520, 560), so it registers during the settle frames and
   // the tracker reads "1/4" with a real progress bar + NEXT step.
@@ -97,8 +106,12 @@ function stageM8Tracker(game) {
   game.setMoney(9200);
   game.setRp(675); // RANK A · OUTLAW, 675 / 1000 RP — M1–M7 complete
   game.setDay(12);
-  game.setCamera(Math.PI / 4, 0.26); // tilted down from 0.14 — the dusk sky was ~60% empty frame; more port ground + cranes now, less flat sky
   game.startMission(7); // startHour 18.5, startWanted 2 — dispatch shows 2 units
+  game.setHour(21.5); // override to full night AFTER startMission pinned 18.5
+  // East-southeast into the yard: trailer (628,550) + container rows
+  // (660, 520-560) mid-ground, cranes (640,480)/(640,660) framing.
+  // Pitch 0.20 keeps port ground in frame, sky minimal.
+  game.setCamera(0.7, 0.20);
   // Staged dialogue lasts 10 minutes of REAL time (see stageNightChase).
   game.hud.setDialog('The drive is in my hand. Two dead drops, then the whole city hears it.', 600000,
     { name: 'ORIN BECK', img: game.portrait('ORIN BECK') });

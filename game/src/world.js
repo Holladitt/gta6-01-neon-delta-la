@@ -50,6 +50,13 @@ export function buildWorld(scene) {
   // Sign planes get the same treatment via glowMat() below.
   const facMats = [];
   const signMats = [];
+  // v13: ground glow spots under neon signs — cheap light pools on the
+  // pavement (same idea as the helicopter's ground light disc, which
+  // already works). Collected at each sign site, built once below.
+  const glowSpots = []; // {x, y, z, color} — shophouse row, DELTA ARMS, pier
+  const storeSpots = []; // {x, y, z, color} — scattered storefronts (capped)
+  const glowDiscs = []; // meshes; opacity driven by setNight
+  const GLOW_COLORS = [0xff2e4d, 0xffc53d, 0x2ec4b6];
   function glowMat(tex) {
     const m = new THREE.MeshLambertMaterial({ map: tex });
     m.emissive = new THREE.Color(0xffd98a);
@@ -286,6 +293,14 @@ export function buildWorld(scene) {
   );
   armsSign.position.set(90, 8.5, 108.6);
   scene.add(armsSign);
+  // v13: sodium glow pool on the street in front of the gun shop.
+  glowSpots.push({ x: 90, y: 0.12, z: 118, color: 0xffc53d });
+  // v13: one glow pool per shophouse on the row (the x=90 shophouse is
+  // DELTA ARMS, already covered above with its sodium pool).
+  for (const s of shopSigns) {
+    if (s.x === 90) continue;
+    glowSpots.push({ x: s.x, y: 0.12, z: s.z + 16, color: GLOW_COLORS[glowSpots.length % 3] });
+  }
   // Curved-glass corner towers (Downtown landmarks).
   const curved = [];
   for (const [cx, cz] of [[-100, -300], [140, -260]]) {
@@ -324,6 +339,9 @@ export function buildWorld(scene) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(12, 3.5), glowMat(tex));
     m.position.set(s.x, 5.4, s.z);
     scene.add(m);
+    // glow pool on the pavement in front of the sign (street side, +z out
+    // from the face — storefront z already sits on the building face).
+    storeSpots.push({ x: s.x, y: 0.12, z: s.z + 6, color: GLOW_COLORS[storeSpots.length % 3] });
   }
 
   // ---- signs (billboards with original names) ----
@@ -508,6 +526,8 @@ export function buildWorld(scene) {
     s.position.set(x, 5.6, side + (side < 300 ? 4.15 : -4.15));
     s.rotation.y = side < 300 ? 0 : Math.PI;
     scene.add(s);
+    // v13: glow pool on the deck in front of the stall (deck y ≈ 2.5).
+    glowSpots.push({ x, y: 2.62, z: side + (side < 300 ? 6 : -6), color: GLOW_COLORS[glowSpots.length % 3] });
   });
   scene.add(new THREE.Mesh(mergeItems(stallItems), plain));
   // bunting strings across the deck
@@ -1172,6 +1192,23 @@ export function buildWorld(scene) {
     lampHeadMat.emissiveIntensity = 0.5 + night * 1.8;
   }
 
+  // v13: neon ground glow — one flat additive disc per collected spot
+  // (shophouse row + DELTA ARMS + pier stalls first, then up to 11
+  // scattered storefronts; 28 total max). No new textures, a few meshes
+  // only; the helicopter's ground light disc already proved the look.
+  const allSpots = [...glowSpots, ...storeSpots.slice(0, 11)].slice(0, 28);
+  for (const sp of allSpots) {
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(5, 20),
+      new THREE.MeshBasicMaterial({ color: sp.color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.set(sp.x, sp.y, sp.z);
+    disc.visible = false;
+    scene.add(disc);
+    glowDiscs.push(disc);
+  }
+
   // v12 night level (0..1): street lamps brighten, facade windows glow warm,
   // neon signs glow. Called every frame from the main loop with the real
   // clock's night level — 0 by day, 1 at full night.
@@ -1179,9 +1216,11 @@ export function buildWorld(scene) {
     night = Math.max(0, Math.min(1, n));
     for (const m of facMats) m.emissiveIntensity = night * 0.9;
     for (const m of signMats) m.emissiveIntensity = night * 0.7;
+    // v13: glow pools fade in with the night, off by day.
+    for (const d of glowDiscs) { d.material.opacity = night * 0.22; d.visible = night > 0.05; }
   }
 
-  return { graph, colliders, trafficLights: lightGroups, groundY, parkedSpots, update, pier, port: portStats, setNight, shop: { x: 90, z: 112 } };
+  return { graph, colliders, trafficLights: lightGroups, groundY, parkedSpots, update, pier, port: portStats, setNight, shop: { x: 90, z: 112 }, glowDiscs: glowDiscs.length };
 }
 
 // Curved road ribbon: flat strip following (x,z) points, with asphalt + dashes.

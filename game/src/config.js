@@ -179,7 +179,7 @@ export const MISSIONS = [
   // clock is set when the mission starts, a real time rule, not a label).
   // M8 starts at dusk (18.5) and night falls while it runs.
   { id: 7, name: 'THE NIGHT LEDGER', brief: 'Inez keeps the harbor ledger after dark. Meet her on the pier, find the pages, bring them home.',
-    contact: { name: 'INEZ VARGAS', role: 'NIGHT DOCK CLERK', skin: 0xc68642, hair: 0x2c1a0a, hairStyle: 'ponytail', shirt: 0xffc53d },
+    contact: { name: 'INEZ VARGAS', role: 'NIGHT DOCK CLERK', skin: 0xc68642, hair: 0x4a2c0a, hairStyle: 'ponytail', shirt: 0xffc53d },
     stages: [
       { title: 'MEET INEZ AT THE PIER', steps: [0] },
       { title: 'FIND THE LEDGER PAGES', steps: [1] },
@@ -202,6 +202,33 @@ export const MISSIONS = [
       { type: 'visit', points: [[-480, -560], [-700, 300]], r: 10, text: 'Sweep the dead drops: marina, then the pier.' },
       { type: 'goto', x: 0, z: -700, r: 16, text: 'Reach the overlook and broadcast the proof.', inCar: true },
     ], reward: 2500, startHour: 18.5, startWanted: 2 },
+  // v13: two more missions (total 10). M9 is a daytime marina recovery;
+  // M10 is the hot finale — the last witness out, with the NDPD already
+  // hunting (startWanted 3).
+  { id: 9, name: 'THE SUNKEN KEY', brief: 'Lena dropped the marina master key in the shallows — and it opens the port storage unit with the rigged crane manifests inside.',
+    contact: { name: 'LENA MARSH', role: 'MARINA DOCKHAND', skin: 0xf1c27d, hair: 0x6b4423, hairStyle: 'ponytail', shirt: 0x2ec4b6 },
+    stages: [
+      { title: 'MEET LENA AT THE MARINA', steps: [0] },
+      { title: 'DIVE FOR THE SUNKEN KEY', steps: [1] },
+      { title: 'UNLOCK THE STORAGE UNIT', steps: [2] },
+    ],
+    steps: [
+      { type: 'goto', x: -480, z: -560, r: 14, text: 'Meet Lena at the marina dock.' },
+      { type: 'visit', points: [[-560, -480], [-420, -620]], r: 10, text: 'Search the marina shallows for the sunken key.' },
+      { type: 'goto', x: 520, z: 560, r: 14, text: 'Take the key to the port storage unit and open it.', inCar: true },
+    ], reward: 1500 },
+  { id: 10, name: 'THE LAST WITNESS', brief: 'Elias saw the mayor\u2019s men torch the evidence — and he will testify, if Mara gets him out of the hills before the NDPD cordon closes.',
+    contact: { name: 'ELIAS FROST', role: 'EX-DETECTIVE IN HIDING', skin: 0xd9a066, hair: 0xbbbbbb, hairStyle: 'short', shirt: 0x5d6d7e },
+    stages: [
+      { title: 'FIND ELIAS IN THE HILLS', steps: [0] },
+      { title: 'ESCORT ELIAS TO THE CANALS', steps: [1] },
+      { title: 'GET ELIAS TO THE PIER BOAT', steps: [2] },
+    ],
+    steps: [
+      { type: 'goto', x: -300, z: -650, r: 14, text: 'Find Elias at the hills hideout.' },
+      { type: 'goto', x: -400, z: 500, r: 14, text: 'Walk Elias to the canal safehouse — stay out of sight.' },
+      { type: 'goto', x: -700, z: 300, r: 14, text: 'Drive Elias to the pier boat before the cordon closes.', inCar: true },
+    ], reward: 3000, startWanted: 3 },
 ];
 
 export const SIDE_JOBS = [

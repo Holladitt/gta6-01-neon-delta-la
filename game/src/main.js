@@ -63,6 +63,8 @@ const game = {
   bustT: 0, deadT: 0,
   fps: 0, frames: 0, fpsT: 0, ticks: 0, errors: [],
   day: 1, rp: 0, standing: {}, // rank/respect: RP from real payouts only
+  stats: { missionsDone: 0, totalEarned: 0, carsStolen: 0 }, // career stats: only real tracked counts (v13)
+  statsOpen: false, // career-stats modal open over the pause menu
   crime: 'EVADING POLICE', // last crime label shown on the dispatch panel
   witnessT: 0, // witness report countdown (0 = none pending)
   shotT: -99, // time of the last gunshot (drives NPC panic)
@@ -120,8 +122,10 @@ function boot() {
   addNamed({ skin: 0xe0ac69, hair: 0xb5651d, shirt: 0x7d3c98, pants: 0x7b7b7b, height: 1.8 }, -698, 332, Math.PI, 2.3, true);
   addNamed({ skin: 0xc68642, hair: 0x777777, shirt: 0x2c3e50, pants: 0x1a1a2e, height: 1.8 }, 104, -492, Math.PI / 2); // Eden Voss, safehouse
   addNamed({ skin: 0x8d5524, hair: 0x1a1a1a, shirt: 0x5d6d7e, pants: 0x4a3728, height: 1.82, cap: 0x2471a3 }, 524, 552, -Math.PI / 2); // Harlan Dray, port gate
-  addNamed({ skin: 0xc68642, hair: 0x2c1a0a, shirt: 0xffc53d, pants: 0x2c3e50, height: 1.7, ponytail: true }, -724, 312, 0, 2.5); // Inez Vargas, pier (M7 contact)
+  addNamed({ skin: 0xc68642, hair: 0x4a2c0a, shirt: 0xffc53d, pants: 0x2c3e50, height: 1.7, ponytail: true }, -724, 312, 0, 2.5); // Inez Vargas, pier (M7 contact)
   addNamed({ skin: 0x8d5524, hair: 0x777777, shirt: 0x2471a3, pants: 0x1a1a2e, height: 1.78, cap: 0xc0392b }, 540, 580, Math.PI); // Orin Beck, port (M8 contact)
+  addNamed({ skin: 0xf1c27d, hair: 0x6b4423, shirt: 0x2ec4b6, pants: 0x2c3e50, height: 1.72, ponytail: true }, -476, -548, Math.PI / 2); // Lena Marsh, marina (M9 contact)
+  addNamed({ skin: 0xd9a066, hair: 0xbbbbbb, shirt: 0x5d6d7e, pants: 0x1a1a2e, height: 1.8 }, -292, -642, 0); // Elias Frost, hills (M10 contact)
 
   // Scooter riders cruise the -200 avenue (rider seated, legs/arms forward).
   scooters = [];
@@ -209,6 +213,9 @@ function boot() {
   $('btn-resume').addEventListener('click', () => resumeGame());
   $('btn-restart').addEventListener('click', () => { audio.ensure(); newGame(); });
   $('btn-quit').addEventListener('click', () => { pauseGame(false); toTitle(); });
+  // v13: career-stats modal over the pause menu.
+  $('btn-stats').addEventListener('click', () => openStats());
+  $('btn-stats-close').addEventListener('click', () => closeStats());
   $('btn-map-close').addEventListener('click', () => { game.state = 'playing'; hud.showMap(false); });
   // v12 shop: close button + buy delegation (rows are re-rendered on every
   // open/buy, so clicks are caught on the container, not per button).
@@ -293,6 +300,9 @@ function boot() {
     totalTraffic: traffic.cars.length,
     nightTraffic: traffic.cars.filter((c) => c.nightOnly).length,
     missions: MISSIONS.length,
+    glowDiscs: world.glowDiscs,
+    carCondition: game.inCar ? Math.round(game.inCar.health) : null,
+    stats: game.stats,
   });
   window.addEventListener('error', (e) => game.errors.push(String(e.message)));
 
@@ -316,6 +326,9 @@ const gameApi = {
   spawnCar(kind, x, z, heading, color) {
     const v = createVehicle(kind, x, z, heading, color);
     v.health = 100;
+    v.parked = true; // it joins the parked list, so entering it counts as
+    // a steal exactly like a real parked traffic car (was false before:
+    // debug-spawned cars never incremented carsStolen).
     parked.push(v);
     rig.scene.add(v.group);
     return v;
@@ -411,6 +424,8 @@ function newGame() {
   game.day = 1;
   game.rp = 0;
   game.standing = {};
+  game.stats = { missionsDone: 0, totalEarned: 0, carsStolen: 0 };
+  game.statsOpen = false;
   game.crime = 'EVADING POLICE';
   game.witnessT = 0;
   game.crewState = newCrewState();
@@ -450,6 +465,8 @@ function continueGame() {
   game.day = s.day || 1;
   game.rp = s.rp || 0;
   game.standing = s.standing || {};
+  game.stats = s.stats || { missionsDone: 0, totalEarned: 0, carsStolen: 0 };
+  game.statsOpen = false;
   game.crewState.cooldownT = s.plateT || 0;
   game.crewState.repairT = s.repairT || 0;
   game.crewState.watchT = s.watchT || 0;
@@ -490,8 +507,29 @@ function pauseGame(fromLockLoss) {
 function resumeGame() {
   if (game.state !== 'paused') return;
   game.state = 'playing';
+  game.statsOpen = false;
+  hud.hideStats();
   hud.showPause(false);
   lockPointer();
+}
+
+// v13: career-stats modal over the pause menu. Every number comes from real
+// tracked state — missions done / total missions, total earned, cars stolen,
+// days played, rank + RP, weapons owned / total. No invented counters.
+function openStats() {
+  if (game.state !== 'paused') return;
+  game.statsOpen = true;
+  const rank = rankFor(game.rp);
+  hud.showStats({
+    missionsDone: game.stats.missionsDone, missionsTotal: MISSIONS.length,
+    totalEarned: game.stats.totalEarned, carsStolen: game.stats.carsStolen,
+    days: game.day, rank: `${rank.letter} · ${rank.title}`, rp: game.rp,
+    nextRp: rank.nextMin, weaponsOwned: combat.owned.length, weaponsTotal: WEAPONS.length,
+  });
+}
+function closeStats() {
+  game.statsOpen = false;
+  hud.hideStats();
 }
 
 // ---------- DELTA ARMS shop ----------
@@ -590,6 +628,7 @@ function enterCar(v) {
     // Stealing a parked car: a ped within 25u sees it. No instant heat —
     // the witness reports after a real 3s delay, then dispatch sends a unit.
     v.stolen = true;
+    game.stats.carsStolen += 1;
     game.crime = 'VEHICLE THEFT';
     if (nearestPed(25)) {
       game.witnessT = 3;
@@ -784,14 +823,19 @@ function tick(now) {
       hud.showMap(false);
     }
   } else if (game.state === 'shop') {
-    // v12: shop is open — the world is frozen behind the overlay. Keys
-    // 4/5/6 buy the shop weapons, B/Esc closes.
+    // v13: keep framing the scene behind the overlay — without this the
+    // camera stays at its boot position (ground level: a flat brown field)
+    // and the minimap never draws on the ?shot=2 boot path, which is why
+    // the v12 shop shot showed a near-black world + an empty minimap.
+    // The world stays frozen; only the camera + HUD refresh.
+    updateCameraHud(dt, t);
     if (input.wasPressed('KeyB') || input.wasPressed('Escape')) closeShop();
     if (input.wasPressed('Digit4')) buyWeaponSlot(3);
     if (input.wasPressed('Digit5')) buyWeaponSlot(4);
     if (input.wasPressed('Digit6')) buyWeaponSlot(5);
   } else if (game.state === 'paused') {
-    if (input.wasPressed('Escape')) resumeGame();
+    // v13: Esc closes the stats modal first, only then resumes.
+    if (input.wasPressed('Escape')) { if (game.statsOpen) closeStats(); else resumeGame(); }
   }
   } catch (err) {
     // Record the message + stack (capped) so the cause is diagnosable from
@@ -894,7 +938,7 @@ function updateDriving(dt, t) {
   const th = (input.down('KeyW') ? 1 : 0) - (input.down('KeyS') ? 1 : 0);
   const st = (input.down('KeyA') ? -1 : 0) + (input.down('KeyD') ? 1 : 0);
   const hb = input.down('Space');
-  updateVehicle(inCar, { throttle: th, steer: st, handbrake: hb }, dt, world.colliders);
+  updateVehicle(inCar, { throttle: th, steer: st, handbrake: hb }, dt, world.colliders, { damage: true });
   player.x = inCar.x;
   player.z = inCar.z;
   player.heading = inCar.heading;
@@ -930,6 +974,10 @@ function updateMissions(dt, t) {
       if (ev.type === 'dialog') hud.setDialog(ev.text, 5000);
       if (ev.type === 'complete') {
         game.money += ev.reward;
+        // Career stats: every real payout counts; only main missions count
+        // toward the missions-completed total (side jobs pay, not a mission).
+        game.stats.totalEarned += ev.reward;
+        if (active === game.mission) game.stats.missionsDone += 1;
         // Rank/respect: RP comes only from the real payout. A new day dawns
         // after each completed main mission (side jobs pay RP, not a new day).
         game.rp += rpForReward(ev.reward);
@@ -1076,6 +1124,7 @@ function updateHotkeys(dt, t) {
       weapons: combat.owned, ammo: combat.ammo, reserves: combat.reserves,
       day: game.day, rp: game.rp, standing: game.standing, plateT: game.crewState.cooldownT,
       repairT: game.crewState.repairT, watchT: game.crewState.watchT, watchCd: game.crewState.watchCd,
+      stats: game.stats,
     });
     hud.toast('Game saved.');
     audio.blip(880, 0.1, 'sine', 0.15);

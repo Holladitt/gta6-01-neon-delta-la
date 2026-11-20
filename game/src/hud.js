@@ -31,6 +31,7 @@ export class HUD {
       rankPanel: $('rank-panel'), rankTitle: $('rank-title'), rankBar: $('rank-bar'), rankRp: $('rank-rp'),
       crewBar: $('crew-bar'),
       shop: $('shop-screen'), shopRows: $('shop-rows'), shopMoney: $('shop-money'),
+      stats: $('stats-screen'), statsRows: $('stats-rows'),
     };
     this.minimap = $('minimap').getContext('2d');
     this.citymap = $('citymap').getContext('2d');
@@ -262,6 +263,26 @@ export class HUD {
   hideTitle() { this.el.title.style.display = 'none'; }
   showPause(on) { this.el.pause.style.display = on ? 'flex' : 'none'; }
   showMap(on) { this.el.map.style.display = on ? 'flex' : 'none'; }
+
+  // ---- v13 career-stats modal ----
+  // state = { missionsDone, missionsTotal, totalEarned, carsStolen, days,
+  // rank, rp, nextRp, weaponsOwned, weaponsTotal } — every number is real
+  // tracked game state; nothing here is invented or decorative.
+  showStats(state) {
+    if (!this.el.stats) return;
+    const row = (label, value) => `<div class="stats-row"><span>${label}</span><b>${value}</b></div>`;
+    const next = state.nextRp ? ` · NEXT ${state.nextRp} RP` : ' · MAX RANK';
+    this.el.statsRows.innerHTML =
+      row('MISSIONS COMPLETED', `${state.missionsDone} / ${state.missionsTotal}`) +
+      row('TOTAL EARNED', `$${state.totalEarned.toLocaleString('en-US')}`) +
+      row('CARS STOLEN', `${state.carsStolen}`) +
+      row('DAYS PLAYED', `${state.days}`) +
+      row('RANK', `${state.rank}${next}`) +
+      row('RESPECT (RP)', `${state.rp}`) +
+      row('WEAPONS OWNED', `${state.weaponsOwned} / ${state.weaponsTotal}`);
+    this.el.stats.style.display = 'flex';
+  }
+  hideStats() { if (this.el.stats) this.el.stats.style.display = 'none'; }
 
   // ---- minimap (circular, 180px) ----
   drawMinimap(d) {

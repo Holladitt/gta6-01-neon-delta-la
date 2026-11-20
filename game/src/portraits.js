@@ -111,7 +111,7 @@ function portrait(o) {
   return cv.toDataURL('image/png');
 }
 
-const MARA = { skin: 0xe0ac69, hair: 0x2c1a0a, hairStyle: 'ponytail', shirt: 0xff2e4d, bg: '#5a1020' };
+const MARA = { skin: 0xe0ac69, hair: 0x4a2c0a, hairStyle: 'ponytail', shirt: 0xff2e4d, bg: '#5a1020' };
 const CREW_LOOKS = {
   juno: { skin: 0xc68642, hair: 0x1a1a1a, hairStyle: 'short', shirt: 0x2471a3, bg: '#0f2a4a' },
   petra: { skin: 0xf1c27d, hair: 0x8a6a42, hairStyle: 'bun', shirt: 0x229954, bg: '#0f3a26' },
