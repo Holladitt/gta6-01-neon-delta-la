@@ -1,11 +1,11 @@
 // Neon Delta LA — main orchestrator. State machine, player, missions, wanted,
 // combat, save/load, HUD wiring, screenshot staging. All original content.
 import * as THREE from '../vendor/three.module.min.js';
-import { WORLD, DISTRICTS, PLAYER, SAVE_KEY, MISSIONS, SIDE_JOBS, KEYS, WEAPONS, CREW, districtAt } from './config.js';
+import { WORLD, DISTRICTS, PLAYER, SAVE_KEY, MISSIONS, SIDE_JOBS, KEYS, WEAPONS, CREW, SHOP, districtAt } from './config.js';
 import { mulberry32 } from './rng.js';
 import { buildWorld, groundY, inWater } from './world.js';
 import { buildMara, buildHuman, animateWalk, animateIdle } from './characters.js';
-import { createVehicle, updateVehicle, setHeadlights } from './vehicles.js';
+import { createVehicle, updateVehicle, setHeadlights, setTaillights } from './vehicles.js';
 import { Traffic, Peds } from './traffic.js';
 import { Police } from './police.js';
 import { Officers } from './officers.js';
@@ -20,11 +20,14 @@ import { AudioSys } from './audio.js';
 import { applyShot } from './shots.js';
 import { buildDispatch } from './dispatch.js';
 import { rankFor, rpForReward, addStanding, getStanding, standingLabel } from './rank.js';
-import { newCrewState, canSwap, applySwap, tickCooldown } from './crew.js';
+import { newCrewState, canSwap, applySwap, applyRepair, applyOverwatch, tickCooldown } from './crew.js';
 import { makePortraits } from './portraits.js';
+import { buyWeapon } from './shop.js';
+import { nightLevel, isNight } from './lights.js';
 
 const rng = mulberry32(4242);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const UP_VEC = new THREE.Vector3(0, 1, 0); // beam-cone quaternion source (no per-frame allocation)
 const $ = (id) => document.getElementById(id);
 // Wrap an angle to [-PI, PI].
 function normAngle(a) {
@@ -72,6 +75,7 @@ let rig, world, traffic, peds, police, officers, hud, input, audio, combat;
 let scooters = [];
 let mara, maraParts, parked = [];
 let waypointMarker, waypointBeam, tracers = [];
+let beamCone, beamDisc; // v12: player-car headlight beam (cone + ground disc), night only
 let player = { x: PLAYER.spawn.x, z: PLAYER.spawn.z, heading: PLAYER.spawn.heading, speed: 0, phase: 0, moving: false };
 let camTarget = { x: 0, y: 2, z: 0 };
 
@@ -82,7 +86,7 @@ function boot() {
   world = buildWorld(rig.scene);
   traffic = new Traffic(rig.scene, world.colliders, world.trafficLights);
   traffic.spawnPortCars(6); // denser truck + car traffic around the terminal
-  peds = new Peds(rig.scene, 48, 20); // 48 sidewalk NPCs + 20 pier festival crowd
+  peds = new Peds(rig.scene, 48, 20, 24, 12); // 48 sidewalk NPCs + 20 pier crowd + v12 night extras (24 street, 12 pier)
   police = new Police(rig.scene, world.graph, world.colliders);
   officers = new Officers(rig.scene, null); // audio wired below once AudioSys exists
   hud = new HUD();
@@ -116,6 +120,8 @@ function boot() {
   addNamed({ skin: 0xe0ac69, hair: 0xb5651d, shirt: 0x7d3c98, pants: 0x7b7b7b, height: 1.8 }, -698, 332, Math.PI, 2.3, true);
   addNamed({ skin: 0xc68642, hair: 0x777777, shirt: 0x2c3e50, pants: 0x1a1a2e, height: 1.8 }, 104, -492, Math.PI / 2); // Eden Voss, safehouse
   addNamed({ skin: 0x8d5524, hair: 0x1a1a1a, shirt: 0x5d6d7e, pants: 0x4a3728, height: 1.82, cap: 0x2471a3 }, 524, 552, -Math.PI / 2); // Harlan Dray, port gate
+  addNamed({ skin: 0xc68642, hair: 0x2c1a0a, shirt: 0xffc53d, pants: 0x2c3e50, height: 1.7, ponytail: true }, -724, 312, 0, 2.5); // Inez Vargas, pier (M7 contact)
+  addNamed({ skin: 0x8d5524, hair: 0x777777, shirt: 0x2471a3, pants: 0x1a1a2e, height: 1.78, cap: 0xc0392b }, 540, 580, Math.PI); // Orin Beck, port (M8 contact)
 
   // Scooter riders cruise the -200 avenue (rider seated, legs/arms forward).
   scooters = [];
@@ -180,6 +186,23 @@ function boot() {
     tracers.push({ line, t: 0 });
   }
 
+  // v12: player-car headlight beam — a translucent cone ahead of the car +
+  // a bright disc on the road where it lands. Visible only at dusk/night
+  // while driving; positioned every frame in updateCameraHud.
+  beamCone = new THREE.Mesh(
+    new THREE.ConeGeometry(3.2, 15, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.10, side: THREE.DoubleSide, depthWrite: false })
+  );
+  beamCone.visible = false;
+  rig.scene.add(beamCone);
+  beamDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(5, 20),
+    new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.20, side: THREE.DoubleSide, depthWrite: false })
+  );
+  beamDisc.rotation.x = -Math.PI / 2;
+  beamDisc.visible = false;
+  rig.scene.add(beamDisc);
+
   // Title / pause / map buttons.
   $('btn-new').addEventListener('click', () => { audio.ensure(); newGame(); });
   $('btn-continue').addEventListener('click', () => { audio.ensure(); continueGame(); });
@@ -187,6 +210,13 @@ function boot() {
   $('btn-restart').addEventListener('click', () => { audio.ensure(); newGame(); });
   $('btn-quit').addEventListener('click', () => { pauseGame(false); toTitle(); });
   $('btn-map-close').addEventListener('click', () => { game.state = 'playing'; hud.showMap(false); });
+  // v12 shop: close button + buy delegation (rows are re-rendered on every
+  // open/buy, so clicks are caught on the container, not per button).
+  $('btn-shop-close').addEventListener('click', () => closeShop());
+  $('shop-rows').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-buy]');
+    if (btn) buyWeaponSlot(parseInt(btn.dataset.buy, 10));
+  });
   document.addEventListener('pointerlockchange', () => {
     if (!document.pointerLockElement && game.state === 'playing' && !game.shotMode) pauseGame(true);
   });
@@ -205,7 +235,7 @@ function boot() {
   game.portraits = makePortraits(MISSIONS.map((m) => m.contact));
   hud.setPortraits(game.portraits);
   hud.setRank(rankFor(0));
-  hud.setCrewAbility(0, 0);
+  hud.setCrewAbility(game.crewState, 0, { inCar: false, condition: null, money: game.money });
   rig.setTimeOfDay(game.hour);
 
   // Screenshot staging (?shot=1..4).
@@ -253,6 +283,16 @@ function boot() {
     plateCooldown: +game.crewState.cooldownT.toFixed(1),
     dispatchUnits: police.cars.length + (police.heli ? 1 : 0),
     scooters: scooters.length,
+    night: +nightLevel(game.hour).toFixed(2),
+    shopOpen: game.state === 'shop',
+    ownedWeapons: combat.owned.slice(),
+    overwatchT: +game.crewState.watchT.toFixed(1),
+    repairT: +game.crewState.repairT.toFixed(1),
+    totalPeds: peds.npcs.length,
+    nightPeds: peds.npcs.filter((n) => n.nightOnly).length,
+    totalTraffic: traffic.cars.length,
+    nightTraffic: traffic.cars.filter((c) => c.nightOnly).length,
+    missions: MISSIONS.length,
   });
   window.addEventListener('error', (e) => game.errors.push(String(e.message)));
 
@@ -347,6 +387,10 @@ const gameApi = {
     return best;
   },
   portrait(name) { return game.portraits ? game.portraits[name] : null; },
+  openShop() { openShop(); },
+  closeShop() { closeShop(); },
+  buyWeaponSlot(id) { return buyWeaponSlot(id); },
+  shopState() { return { money: game.money, owned: combat.owned.slice(), ammo: combat.ammo.slice(), reserves: combat.reserves.slice() }; },
   setHealth(h) {
     game.health = h;
     hud.setHealth(h, game.armor);
@@ -383,7 +427,7 @@ function newGame() {
   hud.setHealth(100, 0);
   hud.setRank(rankFor(0));
   hud.setClock(game.hour, game.day);
-  hud.setCrewAbility(0, 0);
+  hud.setCrewAbility(game.crewState, 0, { inCar: false, condition: null, money: game.money });
   hud.setDispatch(null);
   hud.setDialog('Back in Neon Delta. My sister is out there — and so are the answers.', 6000);
   hud.setMission('MISSION 1 — RETURN TO LA: Steal a sedan.');
@@ -407,6 +451,9 @@ function continueGame() {
   game.rp = s.rp || 0;
   game.standing = s.standing || {};
   game.crewState.cooldownT = s.plateT || 0;
+  game.crewState.repairT = s.repairT || 0;
+  game.crewState.watchT = s.watchT || 0;
+  game.crewState.watchCd = s.watchCd || 0;
   game.hour = s.hour;
   gameApi.teleport(s.x, s.z, s.heading);
   game.state = 'playing';
@@ -418,7 +465,7 @@ function continueGame() {
   hud.setHealth(game.health, game.armor);
   hud.setClock(game.hour, game.day);
   hud.setRank(rankFor(game.rp));
-  hud.setCrewAbility(game.crewState.cooldownT, 0);
+  hud.setCrewAbility(game.crewState, 0, { inCar: false, condition: null, money: game.money });
   rig.setTimeOfDay(game.hour);
   hud.toast('Save loaded.');
   lockPointer();
@@ -447,6 +494,48 @@ function resumeGame() {
   lockPointer();
 }
 
+// ---------- DELTA ARMS shop ----------
+// B opens the shop anywhere (menu access); E near the storefront does the
+// same. The world freezes while the shop is open (state 'shop' — the tick
+// only simulates 'playing'), and the overlay shows only real state.
+function shopState() {
+  return { money: game.money, owned: combat.owned.slice(), ammo: combat.ammo.slice(), reserves: combat.reserves.slice() };
+}
+function openShop() {
+  if (game.state !== 'playing' && game.state !== 'shop') return;
+  game.state = 'shop';
+  if (document.pointerLockElement) document.exitPointerLock();
+  hud.showShop(shopState());
+  audio.blip(700, 0.08, 'triangle', 0.15);
+}
+function closeShop() {
+  if (game.state !== 'shop') return;
+  game.state = 'playing';
+  hud.hideShop();
+  lockPointer();
+}
+function buyWeaponSlot(id) {
+  if (!WEAPONS[id]) { hud.toast('No such weapon.'); return false; }
+  const res = buyWeapon(game.money, combat.owned, combat.ammo, combat.reserves, id);
+  if (!res.ok) {
+    const why = res.reason === 'no-funds' ? `Not enough cash — need $${WEAPONS[id].price.toLocaleString('en-US')}.`
+      : res.reason === 'owned' ? 'Already owned.'
+      : 'That weapon is not for sale.';
+    hud.toast(why);
+    return false;
+  }
+  game.money = res.money;
+  combat.owned = res.owned;
+  combat.ammo = res.ammo;
+  combat.reserves = res.reserves;
+  hud.setMoney(game.money);
+  hud.setWeaponSlots(combat);
+  hud.renderShop(shopState());
+  hud.toast(`${res.name} bought — $${res.price.toLocaleString('en-US')}. Press ${id + 1} to equip.`);
+  audio.blip(880, 0.12, 'sine', 0.2);
+  return true;
+}
+
 function startMission(i) {
   if (i >= MISSIONS.length) { hud.toast('All missions complete. Free roam.'); return; }
   const m = engineStartMission(i);
@@ -454,6 +543,13 @@ function startMission(i) {
   game.mission = m;
   game.sideJob = null;
   const def = MISSIONS[i];
+  // v12: a mission may pin the clock (M7 starts at 21.5 = night, M8 at
+  // 18.5 = dusk). This is a real time rule — the world actually goes dark.
+  if (def.startHour != null) {
+    game.hour = def.startHour;
+    rig.setTimeOfDay(game.hour);
+    hud.setClock(game.hour, game.day);
+  }
   if (def.startWanted) {
     WANTED.add(game.wanted, def.startWanted);
     police.setLevel(game.wanted.level);
@@ -636,8 +732,18 @@ function tick(now) {
     rig.setTimeOfDay(game.hour);
     hud.setClock(game.hour, game.day);
     const dusk = game.hour >= 17.5 || game.hour < 6;
+    // v12 night: the real clock drives the whole night layer — lamps and
+    // windows glow (world), extra peds + traffic appear (pier/downtown),
+    // every car shows headlights + taillights (player, police, traffic).
+    const night = nightLevel(game.hour);
+    world.setNight(night);
+    traffic.setNight(isNight(game.hour));
+    peds.setNight(isNight(game.hour));
     for (const v of parked) setHeadlights(v, dusk);
     for (const tc of traffic.cars) setHeadlights(tc.v, dusk);
+    if (game.inCar) setHeadlights(game.inCar, dusk);
+    for (const c of police.cars) setHeadlights(c, dusk);
+    setTaillights(dusk);
 
     // Mouse look.
     const { dx, dy } = input.consumeMouse();
@@ -677,6 +783,13 @@ function tick(now) {
       game.state = 'playing';
       hud.showMap(false);
     }
+  } else if (game.state === 'shop') {
+    // v12: shop is open — the world is frozen behind the overlay. Keys
+    // 4/5/6 buy the shop weapons, B/Esc closes.
+    if (input.wasPressed('KeyB') || input.wasPressed('Escape')) closeShop();
+    if (input.wasPressed('Digit4')) buyWeaponSlot(3);
+    if (input.wasPressed('Digit5')) buyWeaponSlot(4);
+    if (input.wasPressed('Digit6')) buyWeaponSlot(5);
   } else if (game.state === 'paused') {
     if (input.wasPressed('Escape')) resumeGame();
   }
@@ -743,15 +856,19 @@ function updateOnFoot(dt, t) {
   mara.rotation.y = player.heading;
   if (player.moving) animateWalk(maraParts, player.phase, 0.7, sprint ? 1.3 : 1);
   else animateIdle(maraParts, t);
-  // Prompt: enter car.
+  // Prompt: enter car — or the DELTA ARMS shop when standing at its door.
   const nc = nearestCar(4.5);
   if (nc) hud.setPrompt(`F — ${nc.parked && !nc.stolen ? 'STEAL' : 'ENTER'} ${nc.def.model}`);
+  else if (Math.hypot(player.x - world.shop.x, player.z - world.shop.z) < SHOP.radius) hud.setPrompt('B — DELTA ARMS WEAPON SHOP');
   else hud.setPrompt('');
   // Combat.
   combat.update(dt);
   if (input.wasPressed('Digit1')) { combat.switchTo(0); hud.setWeaponSlots(combat); }
   if (input.wasPressed('Digit2')) { combat.switchTo(1); hud.setWeaponSlots(combat); }
   if (input.wasPressed('Digit3')) { combat.switchTo(2); hud.setWeaponSlots(combat); }
+  if (input.wasPressed('Digit4')) { combat.switchTo(3); hud.setWeaponSlots(combat); }
+  if (input.wasPressed('Digit5')) { combat.switchTo(4); hud.setWeaponSlots(combat); }
+  if (input.wasPressed('Digit6')) { combat.switchTo(5); hud.setWeaponSlots(combat); }
   if (input.wasPressed('KeyR')) {
     if (combat.reload()) {
       hud.setWeaponSlots(combat);
@@ -877,7 +994,7 @@ function updateWanted(dt, t) {
     heli: police.heli ? { x: police.heli.position.x, z: police.heli.position.z } : null,
     px: player.x, pz: player.z, wanted: game.wanted.level, crime: game.crime, seen,
   }));
-  hud.setCrewAbility(game.crewState.cooldownT, game.wanted.level);
+  hud.setCrewAbility(game.crewState, game.wanted.level, crewCtx());
   const nearPolice = police.cars.length ? Math.min(...police.cars.map((c) => Math.hypot(c.x - player.x, c.z - player.z))) : 999;
   audio.setSiren(game.wanted.level > 0, nearPolice / 300);
 }
@@ -928,6 +1045,15 @@ function updateBustedWasted(dt, t) {
   }
 }
 
+// Live context the crew bar's repair row needs: in a car? how hurt? how much cash?
+function crewCtx() {
+  return {
+    inCar: !!game.inCar,
+    condition: game.inCar ? Math.round(game.inCar.health) : null,
+    money: game.money,
+  };
+}
+
 // --- hotkeys: pause, map, next mission, save, radio, side job, interact ---
 function updateHotkeys(dt, t) {
   if (input.wasPressed('Escape')) pauseGame(false);
@@ -949,10 +1075,14 @@ function updateHotkeys(dt, t) {
       hour: game.hour, x: player.x, z: player.z, heading: player.heading,
       weapons: combat.owned, ammo: combat.ammo, reserves: combat.reserves,
       day: game.day, rp: game.rp, standing: game.standing, plateT: game.crewState.cooldownT,
+      repairT: game.crewState.repairT, watchT: game.crewState.watchT, watchCd: game.crewState.watchCd,
     });
     hud.toast('Game saved.');
     audio.blip(880, 0.1, 'sine', 0.15);
   }
+  // B — DELTA ARMS weapon shop (menu access from anywhere; the storefront
+  // stands at the Midtown shophouse row).
+  if (input.wasPressed('KeyB')) openShop();
   // C — CLEAN PLATES (Juno, the only real crew ability): swap plates,
   // wanted -1, 45s cooldown. Fails honestly when there is no heat or the
   // ability is still recharging.
@@ -962,7 +1092,7 @@ function updateHotkeys(dt, t) {
       game.wanted.level = res.wanted;
       police.setLevel(res.wanted);
       hud.setWanted(res.wanted);
-      hud.setCrewAbility(game.crewState.cooldownT, res.wanted);
+      hud.setCrewAbility(game.crewState, res.wanted, crewCtx());
       hud.toast('CLEAN PLATES — Juno swapped the plates. Heat down.');
       hud.setDialog('Plates swapped. They lost the tag on us.', 4000,
         { name: 'JUNO REYES', img: game.portraits.juno });
@@ -971,6 +1101,45 @@ function updateHotkeys(dt, t) {
       hud.toast('No heat to lose.');
     } else {
       hud.toast(`CLEAN PLATES recharging — ${Math.ceil(game.crewState.cooldownT)}s.`);
+    }
+  }
+  // V — FIELD REPAIR (Petra): fix the current car to 100% for $150 in
+  // parts, 60s cooldown. Honest failures: on foot, car already fine, broke,
+  // or still recharging.
+  if (input.wasPressed('KeyV')) {
+    const res = applyRepair(game.crewState, game.inCar, game.money, CREW[1].ability.cost, CREW[1].ability.cooldown);
+    if (res.ok) {
+      game.money = res.money;
+      hud.setMoney(game.money);
+      hud.setCrewAbility(game.crewState, game.wanted.level, crewCtx());
+      hud.toast('FIELD REPAIR — Petra fixed the car to 100%. -$150.');
+      hud.setDialog('Good as new. Try not to dent it again.', 4000,
+        { name: 'PETRA HALE', img: game.portraits.petra });
+      audio.blip(660, 0.12, 'triangle', 0.2);
+    } else if (res.reason === 'no-car') {
+      hud.toast('Get in a car first.');
+    } else if (res.reason === 'full') {
+      hud.toast('Car is already in top shape.');
+    } else if (res.reason === 'no-funds') {
+      hud.toast('Need $150 for parts.');
+    } else {
+      hud.toast(`FIELD REPAIR recharging — ${Math.ceil(game.crewState.repairT)}s.`);
+    }
+  }
+  // X — OVERWATCH (Cassia): police callsigns + distances on the minimap
+  // for 20s, 45s cooldown.
+  if (input.wasPressed('KeyX')) {
+    const res = applyOverwatch(game.crewState, CREW[2].ability.duration, CREW[2].ability.cooldown);
+    if (res.ok) {
+      hud.setCrewAbility(game.crewState, game.wanted.level, crewCtx());
+      hud.toast('OVERWATCH — Cassia is tracking the NDPD for 20s.');
+      hud.setDialog('Eyes up. I have every unit on the map.', 4000,
+        { name: 'CASSIA WREN', img: game.portraits.cassia });
+      audio.blip(990, 0.12, 'triangle', 0.2);
+    } else if (res.reason === 'active') {
+      hud.toast('OVERWATCH already running.');
+    } else {
+      hud.toast(`OVERWATCH recharging — ${Math.ceil(game.crewState.watchCd)}s.`);
     }
   }
   if (input.wasPressed('KeyQ')) {
@@ -1064,14 +1233,34 @@ function updateCameraHud(dt, t) {
   if (!game.inCar) hud.setSpeed(0, 'ON FOOT');
   hud.drawMinimap({
     px: player.x, pz: player.z, heading: rig.yaw,
-    police: police.cars.map((c) => ({ x: c.x, z: c.z })),
+    police: police.cars.map((c) => ({ x: c.x, z: c.z, call: c.callsign })),
     traffic: traffic.cars.map((c) => ({ x: c.v.x, z: c.v.z })),
     waypoint: game.waypoint,
+    overwatch: game.crewState.watchT > 0, // v12: Cassia's reveal
   });
+  // v12 headlight beam: at dusk/night, a cone ahead of the player's car +
+  // a bright disc on the road where it lands. The cone's apex sits at the
+  // car and opens forward (quaternion maps +Y onto the back direction).
+  const dusk = game.hour >= 17.5 || game.hour < 6;
+  const beamOn = dusk && !!game.inCar;
+  beamCone.visible = beamOn;
+  beamDisc.visible = beamOn;
+  if (beamOn) {
+    const car = game.inCar;
+    const fx = Math.sin(car.heading), fz = Math.cos(car.heading);
+    beamCone.position.set(car.x + fx * 7.5, 1.2, car.z + fz * 7.5);
+    beamCone.quaternion.setFromUnitVectors(UP_VEC, new THREE.Vector3(-fx, 0.12, -fz).normalize());
+    beamDisc.position.set(car.x + fx * 15, 0.15, car.z + fz * 15);
+  }
 }
 
 function tryInteract() {
-  // E: context interaction — mission props near the waypoint.
+  // E: context interaction — mission props near the waypoint, or the
+  // DELTA ARMS shop when standing at its door.
+  if (Math.hypot(player.x - world.shop.x, player.z - world.shop.z) < SHOP.radius) {
+    openShop();
+    return;
+  }
   if (game.waypoint) {
     const d = Math.hypot(game.waypoint.x - player.x, game.waypoint.z - player.z);
     if (d < 8) hud.toast('You are at the marker.');

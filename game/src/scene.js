@@ -48,6 +48,18 @@ export class SceneRig {
     );
     this.scene.add(this.sunDisc);
     this.scene.add(this.sunHalo);
+    // moon disc + halo (night band only; opacity set in setTimeOfDay)
+    this.moonDisc = new THREE.Mesh(
+      new THREE.CircleGeometry(34, 24),
+      new THREE.MeshBasicMaterial({ color: 0xe8ecf5, fog: false, transparent: true, opacity: 0 })
+    );
+    this.moonHalo = new THREE.Mesh(
+      new THREE.CircleGeometry(80, 24),
+      new THREE.MeshBasicMaterial({ color: 0x9fb4d8, fog: false, transparent: true, opacity: 0 })
+    );
+    this.scene.add(this.moonDisc);
+    this.scene.add(this.moonHalo);
+    this.moonDir = null;
     this.lastBand = -1;
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -88,6 +100,15 @@ export class SceneRig {
     this.sunHalo.position.copy(discPos);
     this.sunHalo.lookAt(this.camera.position);
     this.sunHalo.material.opacity = discOp * 0.3;
+    // moon: only at night (band 3), high in the east — the night sky needs
+    // its own light in the frame, not just a darker sun.
+    const moonOn = band === 3;
+    this.moonDisc.material.opacity = moonOn ? 0.95 : 0;
+    this.moonHalo.material.opacity = moonOn ? 0.25 : 0;
+    if (moonOn) {
+      // fixed east-high direction; updateCamera re-anchors it to the camera
+      this.moonDir = new THREE.Vector3(0.55, 0.62, -0.55).normalize();
+    }
   }
   // Third-person camera: mouse orbit, collision pulls the camera in.
   updateCamera(dt, tx, ty, tz, heading, speed01, inCar, colliders) {
@@ -127,6 +148,15 @@ export class SceneRig {
       this.sunHalo.position.copy(dp);
       this.sunDisc.lookAt(this.camera.position);
       this.sunHalo.lookAt(this.camera.position);
+    }
+    // moon disc follows the camera the same way (night only)
+    if (this.moonDir) {
+      const mp = this.camera.position.clone().addScaledVector(this.moonDir, 1900);
+      mp.y = Math.max(mp.y, 120);
+      this.moonDisc.position.copy(mp);
+      this.moonHalo.position.copy(mp);
+      this.moonDisc.lookAt(this.camera.position);
+      this.moonHalo.lookAt(this.camera.position);
     }
   }
   render() { this.renderer.render(this.scene, this.camera); }

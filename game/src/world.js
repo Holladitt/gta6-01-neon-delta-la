@@ -44,6 +44,20 @@ export function buildWorld(scene) {
   scene.add(ocean);
 
   // ---- facade materials (varied window fields per style, not flat grids) ----
+  // v12 night glow: every facade material carries its own texture as an
+  // emissive map (warm, dim). At night the lit windows in the texture glow
+  // and the walls pick up a faint warm wash; by day the intensity is 0.
+  // Sign planes get the same treatment via glowMat() below.
+  const facMats = [];
+  const signMats = [];
+  function glowMat(tex) {
+    const m = new THREE.MeshLambertMaterial({ map: tex });
+    m.emissive = new THREE.Color(0xffd98a);
+    m.emissiveMap = tex;
+    m.emissiveIntensity = 0;
+    signMats.push(m);
+    return m;
+  }
   const fac = {
     blue: new THREE.MeshLambertMaterial({ map: windowTexture('#8fb8d8', 'tower') }),
     tan: new THREE.MeshLambertMaterial({ map: windowTexture('#c9a876', 'block') }),
@@ -54,6 +68,15 @@ export function buildWorld(scene) {
     teal: new THREE.MeshLambertMaterial({ map: windowTexture('#7fc4bd', 'tower') }),
     brick: new THREE.MeshLambertMaterial({ map: windowTexture('#a85a44', 'brick') }),
   };
+  for (const m of Object.values(fac)) {
+    m.emissive = new THREE.Color(0x8a6a3a);
+    m.emissiveMap = m.map;
+    m.emissiveIntensity = 0;
+    facMats.push(m);
+  }
+  // Night level 0..1 (set by setNight): drives lamp heads, facade glow and
+  // sign glow in update(). Stored in the closure, applied every frame.
+  let night = 0;
   const plain = new THREE.MeshLambertMaterial({ vertexColors: true });
   const glassCurved = new THREE.MeshLambertMaterial({ map: windowTexture('#6fa8c8', 'tower'), transparent: true, opacity: 0.92 });
 
@@ -254,6 +277,15 @@ export function buildWorld(scene) {
       plainItems.push(boxItem(0.9, 0.7, 0.7, x - 1.5 + gIdx * 1.5, 3.45, 108.6, [0xff2e4d, 0xffc53d, 0x2ec4b6][(i + gIdx) % 3]));
     }
   });
+  // v12: DELTA ARMS gun shop — the last shophouse on the row (x=90, z=100)
+  // carries the shop sign on its street face; the door the player walks up
+  // to is at (90, 112). The sign glows at night like every other sign.
+  const armsSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(14, 5),
+    glowMat(signTexture(['DELTA ARMS', 'GUNS & AMMO'], { bg: '#1a1a1a', fg: '#ffc53d' }))
+  );
+  armsSign.position.set(90, 8.5, 108.6);
+  scene.add(armsSign);
   // Curved-glass corner towers (Downtown landmarks).
   const curved = [];
   for (const [cx, cz] of [[-100, -300], [140, -260]]) {
@@ -289,7 +321,7 @@ export function buildWorld(scene) {
   // ---- ground-floor storefront signs (neon names on the street face)
   for (const s of storefrontSigns) {
     const tex = signTexture([s.text], { bg: '#12233d' });
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(12, 3.5), new THREE.MeshLambertMaterial({ map: tex }));
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(12, 3.5), glowMat(tex));
     m.position.set(s.x, 5.4, s.z);
     scene.add(m);
   }
@@ -303,7 +335,7 @@ export function buildWorld(scene) {
   ];
   for (const s of signDefs) {
     const tex = signTexture(s.lines, { bg: '#12233d' });
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshLambertMaterial({ map: tex }));
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), glowMat(tex));
     m.position.set(s.x, 10, s.z);
     m.rotation.y = s.ry;
     scene.add(m);
@@ -316,7 +348,7 @@ export function buildWorld(scene) {
   // Hillside sign: NEON DELTA LA letters on the north hills.
   const hillSign = new THREE.Mesh(
     new THREE.PlaneGeometry(90, 18),
-    new THREE.MeshLambertMaterial({ map: signTexture(['NEON DELTA LA'], { bg: '#e8e4da', fg: '#ff2e4d' }) })
+    glowMat(signTexture(['NEON DELTA LA'], { bg: '#e8e4da', fg: '#ff2e4d' }))
   );
   hillSign.position.set(0, 14, -755);
   hillSign.rotation.x = -0.25;
@@ -441,7 +473,7 @@ export function buildWorld(scene) {
   scene.add(arch);
   const gateSign = new THREE.Mesh(
     new THREE.PlaneGeometry(30, 10),
-    new THREE.MeshLambertMaterial({ map: signTexture(['CORAL PIER', 'AMUSEMENT PIER', 'GAMES • RIDES • CAFES'], { bg: '#12233d', fg: '#ff5a6e' }) })
+    glowMat(signTexture(['CORAL PIER', 'AMUSEMENT PIER', 'GAMES • RIDES • CAFES'], { bg: '#12233d', fg: '#ff5a6e' }))
   );
   gateSign.position.set(-656, 12, 300);
   scene.add(gateSign);
@@ -472,7 +504,7 @@ export function buildWorld(scene) {
     }
     addCollider(x - 5, side - 4, x + 5, side + 4, 8);
     // big name sign on the front face, facing the boardwalk
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), new THREE.MeshLambertMaterial({ map: signTexture([name], { bg: '#12233d' }) }));
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(8, 3), glowMat(signTexture([name], { bg: '#12233d' })));
     s.position.set(x, 5.6, side + (side < 300 ? 4.15 : -4.15));
     s.rotation.y = side < 300 ? 0 : Math.PI;
     scene.add(s);
@@ -602,7 +634,7 @@ export function buildWorld(scene) {
   pierExtraItems.push({ geo: new THREE.SphereGeometry(0.45, 8, 6), matrix: new THREE.Matrix4().makeTranslation(-730.6, 4.2, 289.2), color: 0xff7eb6 });
   pierExtraItems.push({ geo: new THREE.SphereGeometry(0.45, 8, 6), matrix: new THREE.Matrix4().makeTranslation(-729.4, 4.2, 290.8), color: 0xff9ec7 });
   scene.add(new THREE.Mesh(mergeItems(pierExtraItems), plain));
-  const candySign = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.2), new THREE.MeshLambertMaterial({ map: signTexture(['COTTON CANDY'], { bg: '#7d3c98', fg: '#ffffff' }) }));
+  const candySign = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.2), glowMat(signTexture(['COTTON CANDY'], { bg: '#7d3c98', fg: '#ffffff' })));
   candySign.position.set(-728.6, 3.4, 290);
   candySign.rotation.y = Math.PI / 2;
   scene.add(candySign);
@@ -986,7 +1018,7 @@ export function buildWorld(scene) {
   scene.add(new THREE.Mesh(mergeItems(clutterItems), plain));
   // street-name sign faces (created after the merge like the other signs)
   for (const def of streetSignDefs) {
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(4, 1.2), new THREE.MeshLambertMaterial({ map: signTexture([def.text], { bg: '#2ec4b6', fg: '#ffffff' }) }));
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(4, 1.2), glowMat(signTexture([def.text], { bg: '#2ec4b6', fg: '#ffffff' })));
     s.position.set(def.x, def.y, def.z);
     scene.add(s);
   }
@@ -998,7 +1030,7 @@ export function buildWorld(scene) {
   ];
   for (const b of billboardDefs) {
     const tex = signTexture(b.lines, { bg: b.bg, fg: '#ffffff', sub: '#ffd98a' });
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(24, 12), new THREE.MeshLambertMaterial({ map: tex }));
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(24, 12), glowMat(tex));
     m.position.set(b.x, 14, b.z);
     scene.add(m);
     const postItems = [boxItem(0.8, 12, 0.8, b.x - 8, 6, b.z, 0x333333), boxItem(0.8, 12, 0.8, b.x + 8, 6, b.z, 0x333333)];
@@ -1007,7 +1039,7 @@ export function buildWorld(scene) {
   }
   for (const b of busSignDefs) {
     const tex = signTexture(['BUS'], { bg: '#2ec4b6', fg: '#ffffff' });
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.5), new THREE.MeshLambertMaterial({ map: tex }));
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.5), glowMat(tex));
     m.position.set(b.x, 3.4, b.z);
     scene.add(m);
   }
@@ -1137,10 +1169,19 @@ export function buildWorld(scene) {
       }
       pier.glowPts.geometry.attributes.position.needsUpdate = true;
     }
-    lampHeadMat.emissiveIntensity = 0.5;
+    lampHeadMat.emissiveIntensity = 0.5 + night * 1.8;
   }
 
-  return { graph, colliders, trafficLights: lightGroups, groundY, parkedSpots, update, pier, port: portStats };
+  // v12 night level (0..1): street lamps brighten, facade windows glow warm,
+  // neon signs glow. Called every frame from the main loop with the real
+  // clock's night level — 0 by day, 1 at full night.
+  function setNight(n) {
+    night = Math.max(0, Math.min(1, n));
+    for (const m of facMats) m.emissiveIntensity = night * 0.9;
+    for (const m of signMats) m.emissiveIntensity = night * 0.7;
+  }
+
+  return { graph, colliders, trafficLights: lightGroups, groundY, parkedSpots, update, pier, port: portStats, setNight, shop: { x: 90, z: 112 } };
 }
 
 // Curved road ribbon: flat strip following (x,z) points, with asphalt + dashes.

@@ -1,9 +1,11 @@
 // HUD: DOM overlay, circular minimap, city map, title + pause screens.
 // v11: NDPD dispatch panel, rank panel, crew bar, weapon slots, DAY counter,
 // WANTED banner, stage tracker, district standing, vehicle identity, dialog
-// portraits. Every panel shows only state the game actually tracks.
+// portraits. v12: 6 weapon slots (3 shop-locked with real prices), 3 crew
+// abilities, DELTA ARMS shop overlay, minimap OVERWATCH labels.
+// Every panel shows only state the game actually tracks.
 // Matches the element ids in index.html.
-import { WORLD, DISTRICTS } from './config.js';
+import { WORLD, DISTRICTS, WEAPONS } from './config.js';
 
 export class HUD {
   constructor() {
@@ -28,6 +30,7 @@ export class HUD {
       dispatch: $('dispatch'), dispatchBody: $('dispatch-body'), dispatchHead: $('dispatch-head'),
       rankPanel: $('rank-panel'), rankTitle: $('rank-title'), rankBar: $('rank-bar'), rankRp: $('rank-rp'),
       crewBar: $('crew-bar'),
+      shop: $('shop-screen'), shopRows: $('shop-rows'), shopMoney: $('shop-money'),
     };
     this.minimap = $('minimap').getContext('2d');
     this.citymap = $('citymap').getContext('2d');
@@ -48,8 +51,12 @@ export class HUD {
       this.el.crewBar.innerHTML = '<div class="crew-head">CREW</div>' + crew.map((c) => `
         <div class="crew-row"><img src="${map[c.id]}" alt="">
         <div><div class="crew-name">${c.name}</div><div class="crew-role">${c.role}</div></div></div>`).join('')
-        + '<div class="crew-ability" id="crew-ability">CLEAN PLATES [C] — READY</div>';
+        + '<div class="crew-ability" id="crew-ability">CLEAN PLATES [C] — READY</div>'
+        + '<div class="crew-ability" id="crew-ability-repair">FIELD REPAIR [V] — READY</div>'
+        + '<div class="crew-ability" id="crew-ability-watch">OVERWATCH [X] — READY</div>';
       this.el.crewAbility = document.getElementById('crew-ability');
+      this.el.crewAbilityRepair = document.getElementById('crew-ability-repair');
+      this.el.crewAbilityWatch = document.getElementById('crew-ability-watch');
     }
   }
   setMoney(n) { this.el.money.textContent = '$' + n.toLocaleString('en-US'); }
@@ -71,14 +78,17 @@ export class HUD {
     if (this.el.healthNum) this.el.healthNum.textContent = Math.round(Math.max(0, h));
     if (this.el.armorNum) this.el.armorNum.textContent = Math.round(Math.max(0, a));
   }
-  // 3 real weapon slots (pistol/SMG/shotgun) with live ammo — no LOCKED slots.
+  // 6 weapon slots with live ammo. Locked shop weapons show their REAL
+  // price (never a fake LOCKED label) — the price is the buy path.
   setWeaponSlots(combat) {
     if (!this.el.weaponStrip) return;
-    const names = ['PISTOL', 'SMG', 'SHOTGUN'];
     let html = '';
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < WEAPONS.length; i++) {
+      const w = WEAPONS[i];
       const active = combat.current === i;
-      html += `<span class="wslot${active ? ' active' : ''}">${i + 1} ${names[i]} ${combat.ammo[i]}/${combat.reserves[i]}</span>`;
+      const owned = combat.owned.includes(i);
+      const label = owned ? `${i + 1} ${w.name} ${combat.ammo[i]}/${combat.reserves[i]}` : `${i + 1} ${w.name} $${w.price.toLocaleString('en-US')}`;
+      html += `<span class="wslot${active ? ' active' : ''}${owned ? '' : ' locked'}">${label}</span>`;
     }
     this.el.weaponStrip.innerHTML = html;
   }
@@ -180,13 +190,65 @@ export class HUD {
     this.el.rankBar.style.width = pct + '%';
     this.el.rankRp.textContent = r.nextMin ? `${r.rp.toLocaleString('en-US')} / ${r.nextMin.toLocaleString('en-US')} RP` : `${r.rp.toLocaleString('en-US')} RP · MAX`;
   }
-  // Crew ability row: cooldown seconds or READY. Only the one real ability.
-  setCrewAbility(cooldownT, wanted) {
-    if (!this.el.crewAbility) return;
-    if (wanted <= 0) this.el.crewAbility.textContent = 'CLEAN PLATES [C] — NO HEAT';
-    else if (cooldownT > 0) this.el.crewAbility.textContent = `CLEAN PLATES [C] — ${Math.ceil(cooldownT)}s`;
-    else this.el.crewAbility.textContent = 'CLEAN PLATES [C] — READY';
-    this.el.crewAbility.classList.toggle('ready', wanted > 0 && cooldownT <= 0);
+  // Crew ability rows: cooldown seconds or READY. All three are real.
+  // state = crew state {cooldownT, repairT, watchT, watchCd}; ctx = the
+  // live context the repair ability needs {inCar, condition, money}.
+  setCrewAbility(state, wanted, ctx = {}) {
+    const cs = state || {};
+    if (this.el.crewAbility) {
+      if (wanted <= 0) this.el.crewAbility.textContent = 'CLEAN PLATES [C] — NO HEAT';
+      else if (cs.cooldownT > 0) this.el.crewAbility.textContent = `CLEAN PLATES [C] — ${Math.ceil(cs.cooldownT)}s`;
+      else this.el.crewAbility.textContent = 'CLEAN PLATES [C] — READY';
+      this.el.crewAbility.classList.toggle('ready', wanted > 0 && cs.cooldownT <= 0);
+    }
+    if (this.el.crewAbilityRepair) {
+      const cond = ctx.condition;
+      let text, ready = false;
+      if (!ctx.inCar) text = 'FIELD REPAIR [V] — NEED A CAR';
+      else if (cond != null && cond >= 100) text = 'FIELD REPAIR [V] — CAR OK';
+      else if (cs.repairT > 0) text = `FIELD REPAIR [V] — ${Math.ceil(cs.repairT)}s`;
+      else if ((ctx.money ?? 0) < 150) text = 'FIELD REPAIR [V] — NEED $150';
+      else { text = 'FIELD REPAIR [V] — READY ($150)'; ready = true; }
+      this.el.crewAbilityRepair.textContent = text;
+      this.el.crewAbilityRepair.classList.toggle('ready', ready);
+    }
+    if (this.el.crewAbilityWatch) {
+      let text, ready = false;
+      if (cs.watchT > 0) text = `OVERWATCH [X] — ${Math.ceil(cs.watchT)}s LEFT`;
+      else if (cs.watchCd > 0) text = `OVERWATCH [X] — ${Math.ceil(cs.watchCd)}s`;
+      else { text = 'OVERWATCH [X] — READY'; ready = true; }
+      this.el.crewAbilityWatch.textContent = text;
+      this.el.crewAbilityWatch.classList.toggle('ready', ready);
+    }
+  }
+
+  // ---- DELTA ARMS shop overlay ----
+  // state = {money, owned, ammo, reserves}. Every row shows the real state:
+  // owned weapons show live ammo, locked ones show the real price + a BUY
+  // button that is only enabled when the player can actually afford it.
+  showShop(state) {
+    if (!this.el.shop) return;
+    this.renderShop(state);
+    this.el.shop.style.display = 'flex';
+  }
+  hideShop() { if (this.el.shop) this.el.shop.style.display = 'none'; }
+  renderShop(state) {
+    if (!this.el.shopRows) return;
+    if (this.el.shopMoney) this.el.shopMoney.textContent = 'YOUR CASH: $' + (state.money || 0).toLocaleString('en-US');
+    let html = '';
+    for (const w of WEAPONS) {
+      const owned = state.owned.includes(w.id);
+      const afford = (state.money || 0) >= w.price;
+      const status = owned
+        ? `<span class="shop-owned">OWNED · ${state.ammo[w.id]}/${state.reserves[w.id]} ammo</span>`
+        : `<button class="shop-buy" data-buy="${w.id}" ${afford ? '' : 'disabled'}>BUY $${w.price.toLocaleString('en-US')}</button>`;
+      html += `<div class="shop-row">
+        <div class="shop-num">${w.id + 1}</div>
+        <div class="shop-info"><div class="shop-name">${w.name}</div>
+        <div class="shop-stats">DMG ${w.dmg} · MAG ${w.mag} · RANGE ${w.range}m${w.auto ? ' · AUTO' : ''}${w.pellets ? ` · ${w.pellets} PELLETS` : ''}</div></div>
+        ${status}</div>`;
+    }
+    this.el.shopRows.innerHTML = html;
   }
   showTitle(save) {
     this.el.title.style.display = 'flex';
@@ -236,9 +298,21 @@ export class HUD {
     // traffic
     g.fillStyle = '#9aa5b1';
     for (const t of d.traffic || []) { g.fillRect(sc(t.x) - 1.5, sc(t.z) - 1.5, 3, 3); }
-    // police
-    g.fillStyle = '#ff4444';
-    for (const p of d.police || []) { g.beginPath(); g.arc(sc(p.x), sc(p.z), 3.5, 0, Math.PI * 2); g.fill(); }
+    // police (red dots). OVERWATCH (Cassia, 20s): each unit also shows its
+    // real callsign + real distance in meters, with a gold tracking ring.
+    for (const p of d.police || []) {
+      g.fillStyle = '#ff4444';
+      g.beginPath(); g.arc(sc(p.x), sc(p.z), d.overwatch ? 5 : 3.5, 0, Math.PI * 2); g.fill();
+      if (d.overwatch) {
+        g.strokeStyle = '#ffd23d'; g.lineWidth = 2;
+        g.beginPath(); g.arc(sc(p.x), sc(p.z), 8, 0, Math.PI * 2); g.stroke();
+        if (p.call) {
+          const dist = Math.round(Math.hypot(p.x - d.px, p.z - d.pz));
+          g.fillStyle = '#ffd23d'; g.font = 'bold 9px Arial'; g.textAlign = 'left';
+          g.fillText(`${p.call} ${dist}m`, sc(p.x) + 9, sc(p.z) + 3);
+        }
+      }
+    }
     // player arrow
     const px = sc(d.px), pz = sc(d.pz);
     g.save();

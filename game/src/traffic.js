@@ -25,7 +25,28 @@ export class Traffic {
     this.colliders = colliders;
     this.lights = lightGroups;
     this.cars = [];
+    this.nightOn = false;
     for (let i = 0; i < 10; i++) this.spawnCar(true);
+    this.spawnNightCars(6); // v12: extra cars that only appear at night
+  }
+
+  // v12 night traffic: 6 more cars on the grid, invisible by day. They keep
+  // driving their routes while hidden (cheap — one visible flag flips them
+  // on), so the streets read busier the moment night falls.
+  spawnNightCars(n) {
+    for (let i = 0; i < n; i++) {
+      const car = this.spawnCar(true);
+      car.nightOnly = true;
+      car.v.group.visible = false;
+    }
+    return n;
+  }
+  setNight(on) {
+    if (this.nightOn === on) return;
+    this.nightOn = on;
+    for (const car of this.cars) {
+      if (car.nightOnly) car.v.group.visible = on;
+    }
   }
 
   spawnCar(anywhere) {
@@ -163,11 +184,14 @@ function randomNpc() {
 
 export class Peds {
   // count = sidewalk NPCs; pierCount = festival crowd confined to the pier deck.
-  constructor(scene, count = 48, pierCount = 0) {
+  // v12 night extras: nightSidewalk extra sidewalk NPCs + nightPier extra
+  // pier crowd, both invisible by day (zero scale) and strolling at night.
+  constructor(scene, count = 48, pierCount = 0, nightSidewalk = 24, nightPier = 12) {
     this.scene = scene;
     this.count = count;
     this.pierCount = pierCount;
-    const total = count + pierCount;
+    this.nightOn = false;
+    const total = count + pierCount + nightSidewalk + nightPier;
     const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
     const mk = (geo) => {
       const m = new THREE.InstancedMesh(geo, mat, total);
@@ -232,9 +256,40 @@ export class Peds {
       };
       this.npcs.push(npc);
     }
+    // v12 night extras: extra sidewalk strollers + extra pier crowd, parked
+    // at zero scale by day. They are real NPCs (same walk, same panic) that
+    // only exist on the street at night.
+    for (let i = 0; i < nightSidewalk; i++) {
+      const npc = {
+        ...randomNpc(),
+        speed: range(rng, 1.2, 2.2),
+        road: 0, side: 1, along: 0, dir: 1, axis: 'z',
+        nightOnly: true,
+      };
+      this.assignRoad(npc, 0, 0);
+      this.npcs.push(npc);
+    }
+    for (let i = 0; i < nightPier; i++) {
+      const lane = pierLanes[i % 4] + range(rng, -0.5, 0.5);
+      const npc = {
+        ...randomNpc(),
+        speed: range(rng, 1.0, 1.8),
+        road: 300, side: lane / 15.5, along: range(rng, -780, -670),
+        dir: rng() < 0.5 ? 1 : -1, axis: 'x', zone: 'pier', y: 2.5, lane,
+        nightOnly: true,
+      };
+      this.npcs.push(npc);
+    }
     this.applyColors();
   }
 
+  // v12: flip the night crowd on/off. Day hides them (zero scale); night
+  // lets them stroll. The respawn logic in update() pulls far night NPCs
+  // back near the player once night starts.
+  setNight(on) { this.nightOn = on; }
+
+  // (Re)assign an NPC to a road: pier crowd just reverses on the deck,
+  // street NPCs get a fresh random road/side/along.
   assignRoad(npc, px, pz) {
     if (npc.zone === 'pier') { npc.dir *= -1; return; } // festival crowd stays on the pier
     npc.axis = rng() < 0.5 ? 'z' : 'x';
@@ -267,26 +322,34 @@ export class Peds {
     const sv = new THREE.Vector3(), pos = new THREE.Vector3();
     this.npcs.forEach((n, i) => {
       let x, z, heading;
+      // v12: night-only NPCs stand still + invisible by day.
+      const hidden = n.nightOnly && !this.nightOn;
       if (n.zone === 'pier') {
         // Festival crowd: stroll the deck between the gate and the wheel, bounce at the ends.
-        n.along += n.dir * n.speed * dt;
-        if (n.along > -668) { n.along = -668; n.dir = -1; }
-        if (n.along < -782) { n.along = -782; n.dir = 1; }
+        if (!hidden) {
+          n.along += n.dir * n.speed * dt;
+          if (n.along > -668) { n.along = -668; n.dir = -1; }
+          if (n.along < -782) { n.along = -782; n.dir = 1; }
+        }
         x = n.along;
         z = 300 + n.lane;
         heading = n.dir > 0 ? Math.PI / 2 : -Math.PI / 2;
       } else {
-        n.along += n.dir * n.speed * dt;
-        if (n.along > 760 || n.along < -760) { this.assignRoad(n, px, pz); }
-        // Respawn groups that drifted far from the player.
-        const wx = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
-        const wz = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
-        if ((wx - px) ** 2 + (wz - pz) ** 2 > 420 * 420) this.assignRoad(n, px, pz);
-        // Panic: when the player is shooting or the heat is high, nearby
-        // NPCs run away from the player at 2.5x speed instead of strolling.
-        if (panic && (wx - px) ** 2 + (wz - pz) ** 2 < 45 * 45) {
-          n.dir = (n.axis === 'z' ? (wz - pz) : (wx - px)) >= 0 ? 1 : -1;
-          n.along += n.dir * n.speed * 1.5 * dt; // burst on top of the stroll step = 2.5x
+        if (!hidden) {
+          n.along += n.dir * n.speed * dt;
+          if (n.along > 760 || n.along < -760) { this.assignRoad(n, px, pz); }
+          // Respawn groups that drifted far from the player.
+          const wx0 = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
+          const wz0 = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
+          if ((wx0 - px) ** 2 + (wz0 - pz) ** 2 > 420 * 420) this.assignRoad(n, px, pz);
+          // Panic: when the player is shooting or the heat is high, nearby
+          // NPCs run away from the player at 2.5x speed instead of strolling.
+          const wx = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
+          const wz = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
+          if (panic && (wx - px) ** 2 + (wz - pz) ** 2 < 45 * 45) {
+            n.dir = (n.axis === 'z' ? (wz - pz) : (wx - px)) >= 0 ? 1 : -1;
+            n.along += n.dir * n.speed * 1.5 * dt; // burst on top of the stroll step = 2.5x
+          }
         }
         x = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
         z = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
@@ -295,6 +358,7 @@ export class Peds {
       n.phase += dt * n.speed * 2.4;
       const sw = Math.sin(n.phase) * 0.75; // bigger limb swing — walk reads at distance
       const s = n.scale, wd = n.wide || 1, yb = n.y || 0;
+      const vis = hidden ? 0.0001 : s; // hidden night NPCs collapse to a point
       const set = (mesh, px2, py, pz2, rx = 0, ry = heading, rz = 0, sc = s, swd = 1) => {
         e.set(rx, ry, rz);
         q.setFromEuler(e);
@@ -303,16 +367,16 @@ export class Peds {
         m4.compose(pos, q, sv);
         mesh.setMatrixAt(i, m4);
       };
-      set(this.torso, x, 1.18 * s + yb, z, 0, heading, 0, s, wd);
-      set(this.head, x, 1.68 * s + yb, z);
-      set(this.hair, x, 1.68 * s + yb, z);
-      set(this.face, x, 1.68 * s + yb, z);
-      set(this.cap, x, 1.9 * s + yb, z, 0, heading, 0, n.cap ? s : 0.0001);
-      set(this.pack, x - Math.sin(heading) * 0.3, 1.2 * s + yb, z - Math.cos(heading) * 0.3, 0, heading, 0, n.pack ? s : 0.0001);
-      set(this.legL, x - Math.cos(heading) * 0.15 * s * wd, 0.84 * s + yb, z + Math.sin(heading) * 0.15 * s * wd, sw, heading, 0);
-      set(this.legR, x + Math.cos(heading) * 0.15 * s * wd, 0.84 * s + yb, z - Math.sin(heading) * 0.15 * s * wd, -sw, heading, 0);
-      set(this.armL, x - Math.cos(heading) * 0.44 * s * wd, 1.46 * s + yb, z + Math.sin(heading) * 0.44 * s * wd, -sw * 0.8, heading, 0.18, s, wd);
-      set(this.armR, x + Math.cos(heading) * 0.44 * s * wd, 1.46 * s + yb, z - Math.sin(heading) * 0.44 * s * wd, sw * 0.8, heading, -0.18, s, wd);
+      set(this.torso, x, 1.18 * s + yb, z, 0, heading, 0, vis, wd);
+      set(this.head, x, 1.68 * s + yb, z, 0, heading, 0, vis);
+      set(this.hair, x, 1.68 * s + yb, z, 0, heading, 0, vis);
+      set(this.face, x, 1.68 * s + yb, z, 0, heading, 0, vis);
+      set(this.cap, x, 1.9 * s + yb, z, 0, heading, 0, n.cap ? vis : 0.0001);
+      set(this.pack, x - Math.sin(heading) * 0.3, 1.2 * s + yb, z - Math.cos(heading) * 0.3, 0, heading, 0, n.pack ? vis : 0.0001);
+      set(this.legL, x - Math.cos(heading) * 0.15 * s * wd, 0.84 * s + yb, z + Math.sin(heading) * 0.15 * s * wd, sw, heading, 0, vis);
+      set(this.legR, x + Math.cos(heading) * 0.15 * s * wd, 0.84 * s + yb, z - Math.sin(heading) * 0.15 * s * wd, -sw, heading, 0, vis);
+      set(this.armL, x - Math.cos(heading) * 0.44 * s * wd, 1.46 * s + yb, z + Math.sin(heading) * 0.44 * s * wd, -sw * 0.8, heading, 0.18, vis, wd);
+      set(this.armR, x + Math.cos(heading) * 0.44 * s * wd, 1.46 * s + yb, z - Math.sin(heading) * 0.44 * s * wd, sw * 0.8, heading, -0.18, vis, wd);
     });
     for (const m of [this.head, this.hair, this.face, this.torso, this.legL, this.legR, this.armL, this.armR, this.cap, this.pack]) {
       m.instanceMatrix.needsUpdate = true;

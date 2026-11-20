@@ -1,5 +1,6 @@
-// Combat: three weapons, switching (1/2/3 all work), reload, ray hit tests.
+// Combat: six weapon slots, switching (1-6 all work), reload, ray hit tests.
 // Weapon switching is a direct index assignment — no mapping table to get wrong.
+// Slots 0-2 are owned from the start; 3-5 are bought at DELTA ARMS.
 import { WEAPONS } from './config.js';
 
 export class Combat {
@@ -11,9 +12,10 @@ export class Combat {
     this.cooldown = 0;
   }
   get weapon() { return WEAPONS[this.current]; }
-  // Direct index switch: keys 1/2/3 map to weapon slots 0/1/2. Always works.
+  // Direct index switch: keys 1-6 map to weapon slots 0-5. Locked weapons
+  // (not in owned) refuse the switch — no fake slot ever fires.
   switchTo(i) {
-    if (i < 0 || i > 2 || !this.owned.includes(i)) return false;
+    if (i < 0 || i >= WEAPONS.length || !this.owned.includes(i)) return false;
     if (i === this.current) return true;
     this.current = i;
     this.cooldown = Math.max(this.cooldown, 0.18);

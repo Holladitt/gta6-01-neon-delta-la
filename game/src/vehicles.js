@@ -229,3 +229,9 @@ export function updateVehicle(v, input, dt, colliders) {
 export function setHeadlights(built, on) {
   if (built.lights) built.lights.emissiveIntensity = on ? 1.4 : 0.25;
 }
+
+// Taillights: one shared material for every car, so one call flips the whole
+// city's rear lights at dusk — bright red at night, dim by day.
+export function setTaillights(on) {
+  tailMat.emissiveIntensity = on ? 1.6 : 0.4;
+}

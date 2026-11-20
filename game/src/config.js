@@ -44,10 +44,27 @@ export const KEYS = {
 };
 
 export const WEAPONS = [
-  { id: 0, name: 'PISTOL', dmg: 34, mag: 12, reserve: 120, rate: 0.22, spread: 0.012, range: 120, auto: false },
-  { id: 1, name: 'SMG', dmg: 17, mag: 30, reserve: 240, rate: 0.085, spread: 0.03, range: 90, auto: true },
-  { id: 2, name: 'SHOTGUN', dmg: 13, mag: 6, reserve: 48, rate: 0.85, spread: 0.07, range: 55, auto: false, pellets: 7 },
+  { id: 0, name: 'PISTOL', dmg: 34, mag: 12, reserve: 120, rate: 0.22, spread: 0.012, range: 120, auto: false, price: 0 },
+  { id: 1, name: 'SMG', dmg: 17, mag: 30, reserve: 240, rate: 0.085, spread: 0.03, range: 90, auto: true, price: 0 },
+  { id: 2, name: 'SHOTGUN', dmg: 13, mag: 6, reserve: 48, rate: 0.85, spread: 0.07, range: 55, auto: false, pellets: 7, price: 0 },
+  // v12 gun-shop stock (DELTA ARMS). Prices are real: every one is payable
+  // from real mission money (M1-M6 pay $5,550 + $250 start = $5,800; all
+  // three cost $5,200 together). Locked until bought — no fake unlocks.
+  { id: 3, name: 'DELTA CARBINE', dmg: 26, mag: 30, reserve: 180, rate: 0.12, spread: 0.02, range: 130, auto: true, price: 900 },
+  { id: 4, name: 'LONGSHOT', dmg: 95, mag: 5, reserve: 25, rate: 1.1, spread: 0.004, range: 180, auto: false, price: 1800 },
+  { id: 5, name: 'MARAUDER', dmg: 14, mag: 60, reserve: 300, rate: 0.07, spread: 0.035, range: 100, auto: true, price: 2500 },
 ];
+
+// DELTA ARMS — the gun shop. B opens it anywhere (menu access); the
+// storefront stands at the Midtown shophouse row, where E/B near the door
+// shows the shop prompt. All three new weapons are sold here, nowhere else.
+export const SHOP = {
+  name: 'DELTA ARMS',
+  sub: 'GUNS & AMMO — MIDTOWN',
+  x: 90, z: 112, // door of the last shophouse on the row (z = 100, face +12)
+  radius: 14,
+  key: 'KeyB',
+};
 
 export const VEHICLE_DEFS = {
   sedan: { name: 'SEDAN', model: 'MERIDIAN S', accel: 14, top: 34, reverse: 10, turn: 1.9, grip: 6.5, brake: 26, len: 4.6, wid: 2.0 },
@@ -68,13 +85,15 @@ export const RANKS = [
   { letter: 'S', title: 'DELTA LEGEND', minRp: 1000 },
 ];
 
-// Crew: three named members. Only ONE ability is real — CLEAN PLATES
-// (driver Juno): swap plates, wanted -1, 45s cooldown. The other two
-// members have no ability shown, by design (no fake abilities).
+// Crew: three named members, three REAL abilities (v12: all three work).
+// Juno (driver): CLEAN PLATES — swap plates, wanted -1, 45s cooldown.
+// Petra (mechanic): FIELD REPAIR — fix the current car to 100% condition,
+// $150 in parts, 60s cooldown. Cassia (lookout): OVERWATCH — police
+// callsigns + distances on the minimap for 20s, 45s cooldown.
 export const CREW = [
   { id: 'juno', name: 'JUNO REYES', role: 'DRIVER', ability: { id: 'plates', label: 'CLEAN PLATES', key: 'KeyC', cooldown: 45, desc: 'Swap plates — wanted -1' } },
-  { id: 'petra', name: 'PETRA HALE', role: 'MECHANIC', ability: null },
-  { id: 'cassia', name: 'CASSIA WREN', role: 'LOOKOUT', ability: null },
+  { id: 'petra', name: 'PETRA HALE', role: 'MECHANIC', ability: { id: 'repair', label: 'FIELD REPAIR', key: 'KeyV', cooldown: 60, cost: 150, desc: 'Fix the car to 100% — $150 parts' } },
+  { id: 'cassia', name: 'CASSIA WREN', role: 'LOOKOUT', ability: { id: 'overwatch', label: 'OVERWATCH', key: 'KeyX', cooldown: 45, duration: 20, desc: 'Track police on the minimap — 20s' } },
 ];
 
 // NDPD unit callsigns (original; pool is cycled by unit index).
@@ -156,6 +175,33 @@ export const MISSIONS = [
       { type: 'visit', points: [[100, -500], [-480, -560], [520, 560]], r: 10, text: 'Collect the proof: safehouse, marina, port.' },
       { type: 'goto', x: 0, z: 700, r: 16, text: 'Reach the south gate and disappear.', inCar: true },
     ], reward: 2000, startWanted: 3 },
+  // v12: two new missions (total 8). M7 runs at NIGHT (startHour 21.5 — the
+  // clock is set when the mission starts, a real time rule, not a label).
+  // M8 starts at dusk (18.5) and night falls while it runs.
+  { id: 7, name: 'THE NIGHT LEDGER', brief: 'Inez keeps the harbor ledger after dark. Meet her on the pier, find the pages, bring them home.',
+    contact: { name: 'INEZ VARGAS', role: 'NIGHT DOCK CLERK', skin: 0xc68642, hair: 0x2c1a0a, hairStyle: 'ponytail', shirt: 0xffc53d },
+    stages: [
+      { title: 'MEET INEZ AT THE PIER', steps: [0] },
+      { title: 'FIND THE LEDGER PAGES', steps: [1] },
+      { title: 'DELIVER TO THE SAFEHOUSE', steps: [2] },
+    ],
+    steps: [
+      { type: 'goto', x: -700, z: 300, r: 16, text: 'Meet Inez on Coral Pier — after dark.' },
+      { type: 'visit', points: [[-740, 260], [-730, 420]], r: 8, text: 'Find the two ledger pages on the pier.' },
+      { type: 'goto', x: 100, z: -500, r: 14, text: 'Deliver the ledger to the Downtown safehouse.', inCar: true },
+    ], reward: 1200, startHour: 21.5 },
+  { id: 8, name: 'THE LAST SIGNAL', brief: 'Orin can put the proof on the air — if the drive reaches the overlook before the NDPD locks the city down.',
+    contact: { name: 'ORIN BECK', role: 'PIRATE RADIO HOST', skin: 0x8d5524, hair: 0x777777, hairStyle: 'short', shirt: 0x2471a3 },
+    stages: [
+      { title: 'GET THE BROADCAST DRIVE', steps: [0] },
+      { title: 'SWEEP THE DEAD DROPS', steps: [1] },
+      { title: 'BROADCAST FROM THE OVERLOOK', steps: [2] },
+    ],
+    steps: [
+      { type: 'goto', x: 520, z: 560, r: 12, text: 'Pick up the broadcast drive at Long Beach Port.' },
+      { type: 'visit', points: [[-480, -560], [-700, 300]], r: 10, text: 'Sweep the dead drops: marina, then the pier.' },
+      { type: 'goto', x: 0, z: -700, r: 16, text: 'Reach the overlook and broadcast the proof.', inCar: true },
+    ], reward: 2500, startHour: 18.5, startWanted: 2 },
 ];
 
 export const SIDE_JOBS = [
