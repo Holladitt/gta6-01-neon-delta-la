@@ -16,6 +16,7 @@ export class HUD {
       stars: $('stars'), healthFill: $('health-fill'), armorFill: $('armor-fill'),
       healthNum: $('health-num'), armorNum: $('armor-num'),
       district: $('district-name'), districtSub: $('district-sub'), standing: $('standing'),
+      districtWrap: $('district'),
       speedNum: $('speed-num'), vehName: $('veh-name'), vehCond: $('veh-cond'),
       mission: $('mission-text'), missionStage: $('mission-stage'), stageFill: $('stage-fill'),
       missionNext: $('mission-next'),
@@ -206,8 +207,8 @@ export class HUD {
       const cond = ctx.condition;
       let text, ready = false;
       if (!ctx.inCar) text = 'FIELD REPAIR [V] — NEED A CAR';
-      else if (cond != null && cond >= 100) text = 'FIELD REPAIR [V] — CAR OK';
       else if (cs.repairT > 0) text = `FIELD REPAIR [V] — ${Math.ceil(cs.repairT)}s`;
+      else if (cond != null && cond >= 100) text = 'FIELD REPAIR [V] — CAR OK';
       else if ((ctx.money ?? 0) < 150) text = 'FIELD REPAIR [V] — NEED $150';
       else { text = 'FIELD REPAIR [V] — READY ($150)'; ready = true; }
       this.el.crewAbilityRepair.textContent = text;
@@ -234,10 +235,17 @@ export class HUD {
     // v13-fix: the rank panel's left edge sat behind the first shop row —
     // hide it while the shop is open (its numbers are not shop-relevant).
     if (this.el.rankPanel) this.el.rankPanel.style.display = 'none';
+    // v14: the right-docked panel sits over the crew bar and the district
+    // title — both paint above the overlay, so hide them too while the
+    // shop is open (restored in hideShop, same as the rank panel).
+    if (this.el.crewBar) this.el.crewBar.style.display = 'none';
+    if (this.el.districtWrap) this.el.districtWrap.style.display = 'none';
   }
   hideShop() {
     if (this.el.shop) this.el.shop.style.display = 'none';
     if (this.el.rankPanel) this.el.rankPanel.style.display = '';
+    if (this.el.crewBar) this.el.crewBar.style.display = '';
+    if (this.el.districtWrap) this.el.districtWrap.style.display = '';
   }
   renderShop(state) {
     if (!this.el.shopRows) return;

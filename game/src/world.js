@@ -530,6 +530,11 @@ export function buildWorld(scene) {
     glowSpots.push({ x, y: 2.62, z: side + (side < 300 ? 6 : -6), color: GLOW_COLORS[glowSpots.length % 3] });
   });
   scene.add(new THREE.Mesh(mergeItems(stallItems), plain));
+  // v14: one warm pool on the deck in front of the camera — shot 3's
+  // foreground around Mara's feet was bare dark planks. This is the
+  // 28th glow disc in total (17 glowSpots + 11 storeSpots), exactly the
+  // cap in setNight, so no storefront pool is dropped.
+  glowSpots.push({ x: -716, y: 2.62, z: 300, color: 0xffc53d });
   // bunting strings across the deck
   const buntItems = [];
   const buntColors = [0xff2e4d, 0xffc53d, 0x2ec4b6, 0x7d3c98, 0xff7e5f];
@@ -770,11 +775,17 @@ export function buildWorld(scene) {
     craneItems.push(boxItem(3, 40, 3, cx + 8, 20, cz, 0xc0392b));
     craneItems.push(boxItem(30, 3, 3, cx, 40, cz, 0xc0392b));
     craneItems.push(boxItem(3, 3, 22, cx + 14, 40, cz, 0xc0392b));
-    craneItems.push(cylItem(0.2, 0.2, 14, cx + 22, 32, cz, 0x333333, 6));
+    // v14: the hanging load is the port's hero element — a full-size
+    // container on twin cables with a spreader bar, not a small box on
+    // one cable. Cables run from the jib (y ~39) to the spreader (y 26.5).
+    craneItems.push(cylItem(0.15, 0.15, 12.5, cx + 18, 32.75, cz, 0x333333, 6));
+    craneItems.push(cylItem(0.15, 0.15, 12.5, cx + 26, 32.75, cz, 0x333333, 6));
+    craneItems.push(boxItem(10, 0.8, 1, cx + 22, 26.1, cz, 0x333333)); // spreader bar
     // v13-fix: the hanging load was dark grey on a dark night sky and read
     // as a floating black box — bright orange container paint so it reads
     // as cargo on the cable, not a hole in the sky.
-    craneItems.push(boxItem(4, 3, 4, cx + 22, 24, cz, 0xe67e22));
+    craneItems.push(boxItem(12, 3.5, 4.5, cx + 22, 24, cz, 0xe67e22));
+    craneItems.push(boxItem(12.1, 0.6, 4.6, cx + 22, 24, cz, 0xf4f4f0)); // white band
     addCollider(cx - 10, cz - 4, cx + 10, cz + 4, 42);
     portStats.cranes++;
   };
@@ -900,6 +911,33 @@ export function buildWorld(scene) {
   }
   scene.add(new THREE.Mesh(mergeItems(yardItems), plain));
 
+  // ---- v14: shot-4 foreground dressing — the yard between the player
+  // (520,560) and the (640,660) crane was a wide empty dark slab. A
+  // 2-high container stack, a lamp post, barrels and pallets sit on the
+  // sightline to the crane load so the foreground has depth. Kept in a
+  // separate array on purpose: portStats is untouched (the sim and QA
+  // read it), colliders only for the chunky pieces.
+  const foreItems = [];
+  foreItems.push(boxItem(12, 2.6, 2.6, 575, 1.3, 605, 0x2471a3));
+  foreItems.push(boxItem(12, 2.6, 2.6, 575, 4.0, 605, 0xe67e22));
+  addCollider(575 - 6, 605 - 1.3, 575 + 6, 605 + 1.3, 5.4);
+  foreItems.push(cylItem(0.15, 0.2, 7, 560, 3.5, 615, 0x333333, 6)); // lamp pole
+  for (let i = 0; i < 3; i++) {
+    const ox = (i % 2) * 2.2, oz = Math.floor(i / 2) * 2.2;
+    foreItems.push(cylItem(0.9, 0.9, 2.2, 590 + ox, 1.1, 640 + oz, barrelColors[i % 3], 10));
+  }
+  addCollider(590 - 1, 640 - 1, 590 + 3.2, 640 + 3.2, 2.5);
+  foreItems.push(boxItem(2.4, 1.0, 2.4, 555, 0.5, 635, 0xb08a5a)); // pallet stack
+  foreItems.push(boxItem(2.2, 0.2, 2.2, 555, 1.05, 635, 0x8a6a42));
+  foreItems.push(boxItem(2.4, 1.0, 2.4, 555, 1.55, 635, 0xb08a5a));
+  foreItems.push(boxItem(2.2, 0.2, 2.2, 555, 2.1, 635, 0x8a6a42));
+  scene.add(new THREE.Mesh(mergeItems(foreItems), plain));
+  // Lamp head is its own basic-material mesh so it stays bright at dusk.
+  const lampHead = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 0.45),
+    new THREE.MeshBasicMaterial({ color: 0xffe9a0 }));
+  lampHead.position.set(560, 7.0, 615);
+  scene.add(lampHead);
+
   // ---- Midtown street props: fire hydrants at intersections + crates by the shops
   const streetItems = [];
   for (const [hx, hz] of [[216, 216], [-184, 16], [16, -184], [416, 216], [-216, -216], [16, 416], [616, -184], [-584, 416]]) {
@@ -942,6 +980,32 @@ export function buildWorld(scene) {
     }
   }
   scene.add(new THREE.Mesh(mergeItems(streetItems), plain));
+  // ---- v14: DELTA ARMS forecourt dressing — shot 2's lower half was
+  // flat green grass. At the shot-2 yaw (2.94) the camera's ground wedge
+  // is narrow: z 115–130 shows only x ~72–90 left of the walkway and
+  // x ~100–110 right (the right mid-ground hides behind the right-docked
+  // panel), so the props sit in that wedge, flanking Mara — not in the
+  // yaw-PI strips (x 30–60 / 125–150), which now fall outside the frame.
+  const forecourtItems = [];
+  // left of the walkway (reads lower-left, below the TIDE BOOKS sign)
+  forecourtItems.push(boxItem(1.6, 0.7, 1.6, 79, 0.35, 117, 0x8a6a42)); // planter
+  forecourtItems.push({ geo: new THREE.SphereGeometry(0.9, 8, 6), matrix: new THREE.Matrix4().makeTranslation(79, 1.1, 117), color: 0x4a8a3a });
+  addCollider(79 - 0.8, 117 - 0.8, 79 + 0.8, 117 + 0.8, 1.6);
+  forecourtItems.push(boxItem(2.0, 2.0, 2.0, 76, 1.0, 121, 0xa8875a)); // crates
+  forecourtItems.push(boxItem(1.6, 1.6, 1.6, 76.3, 2.8, 121, 0x8f6f42));
+  addCollider(76 - 1.1, 121 - 1.1, 76 + 1.4, 121 + 1.1, 3.8);
+  forecourtItems.push(boxItem(3.4, 0.2, 0.9, 81, 0.55, 125, 0x8a6a42)); // bench
+  forecourtItems.push(boxItem(3.4, 1.0, 0.15, 81, 1.05, 124.6, 0x8a6a42));
+  forecourtItems.push(boxItem(0.2, 0.5, 0.7, 79.6, 0.25, 125, 0x333333));
+  forecourtItems.push(boxItem(0.2, 0.5, 0.7, 82.4, 0.25, 125, 0x333333));
+  // right of the walkway (reads bottom-right, below the panel)
+  forecourtItems.push(boxItem(0.12, 0.9, 0.12, 101.3, 0.45, 126, 0x888888)); // bike rack
+  forecourtItems.push(boxItem(0.12, 0.9, 0.12, 102.7, 0.45, 126, 0x888888));
+  forecourtItems.push(boxItem(1.5, 0.12, 0.12, 102, 0.85, 126, 0x888888));
+  forecourtItems.push({ geo: new THREE.CylinderGeometry(0.35, 0.35, 0.08, 10), matrix: new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(101.45, 0.35, 126.3), color: 0x141414 });
+  forecourtItems.push({ geo: new THREE.CylinderGeometry(0.35, 0.35, 0.08, 10), matrix: new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(102.55, 0.35, 126.3), color: 0x141414 });
+  addCollider(102 - 0.9, 126 - 0.5, 102 + 0.9, 126 + 0.5, 1);
+  scene.add(new THREE.Mesh(mergeItems(forecourtItems), plain));
   // ---- v10: street clutter — mailboxes, newspaper boxes, bike racks
   // (with parked bikes), planters, street bins, dumpsters, street-name
   // signs, barriers, extra benches / hydrants / cones, and infill trees

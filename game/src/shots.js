@@ -60,7 +60,11 @@ function stageShop(game) {
   game.setState('playing');
   game.setHour(13.5); // bright day: the shop overlay and prices read crisp
   // Stand at the DELTA ARMS door (90, 112), facing it from the sidewalk.
-  game.teleport(90, 132, Math.PI);
+  // v14: yaw 2.94 (not PI) — at PI the "VINYL & CO" sign's east end was
+  // cut at the left frame edge ("CO"); rotating 0.2 rad right shifts the
+  // row right so TIDE BOOKS is fully in frame and no sign text is cut at
+  // the edge (VINYL & CO itself leaves the frame to the left).
+  game.teleport(90, 132, 2.94);
   game.setWanted(0);
   // Exactly the sum of all three shop prices (900 + 1800 + 2500) — the
   // overlay proves every gun is affordable from real earned money.
@@ -70,7 +74,9 @@ function stageShop(game) {
   // v13: pitch back to 0.16 — the shop panel now hugs the top of the
   // screen (CSS, below), so Mara reads fully beneath it without a steep
   // tilt; the shophouse row + towers keep their natural framing.
-  game.setCamera(Math.PI, 0.16);
+  // v14: yaw 2.94 matches the teleport heading (see above); the shop
+  // panel is right-docked in CSS now, so Mara stands clear of it.
+  game.setCamera(2.94, 0.16);
   game.openShop();
   // The overlay shows: 3 owned guns with live ammo, 3 locked guns with
   // real prices + BUY buttons, and the real cash balance in the header.
@@ -97,13 +103,13 @@ function stageNightPier(game) {
 
 function stageM8Tracker(game) {
   game.setState('playing');
-  // v13 re-stage: FULL NIGHT in the port, not dusk. The v12 dusk shot was
-  // ~55% flat salmon sky over an empty dark foreground, and a tall black
-  // container sat behind the rank bar. At night the sky is dark, the yard
-  // reads through lamps + headlights + lit crane silhouettes, and the
-  // camera looks EAST into the yard — trailers + container rows fill the
-  // mid-ground, cranes frame both sides, no tall stack in the top-right
-  // corner behind the rank panel.
+  // v14 re-stage: DUSK in the port (hour 18.0), not deep night. The v13
+  // full-night shot was a dark yard with a small crane load and a wide
+  // empty foreground. At 18.0 the sky is dusk band 2 (orange horizon,
+  // nightLevel 0.33), the enlarged crane load reads bright orange against
+  // it, and the new foreground props (container stack, lamp, barrels,
+  // pallets) fill the yard. Close to M8's own startHour 18.5, so the
+  // staging stays honest to the mission.
   // Mission 8 (THE LAST SIGNAL), stage 2/3: the player starts ON the first
   // pickup point (520, 560), so it registers during the settle frames and
   // the tracker reads "1/4" with a real progress bar + NEXT step.
@@ -112,11 +118,13 @@ function stageM8Tracker(game) {
   game.setRp(675); // RANK A · OUTLAW, 675 / 1000 RP — M1–M7 complete
   game.setDay(12);
   game.startMission(7); // startHour 18.5, startWanted 2 — dispatch shows 2 units
-  game.setHour(21.5); // override to full night AFTER startMission pinned 18.5
-  // East-southeast into the yard: trailer (628,550) + container rows
-  // (660, 520-560) mid-ground, cranes (640,480)/(640,660) framing.
+  game.setHour(18.0); // dusk override AFTER startMission pinned 18.5
+  // East-southeast into the yard, yaw 0.96 centres the (640,660) crane
+  // load and puts the big near (520,620) load clear of the dialog at the
+  // right edge: trailer (628,550) + container row (660,560) frame the
+  // left, foreground props (575,605) sit on the crane sightline.
   // Pitch 0.20 keeps port ground in frame, sky minimal.
-  game.setCamera(0.7, 0.20);
+  game.setCamera(0.96, 0.20);
   // Staged dialogue lasts 10 minutes of REAL time (see stageNightChase).
   game.hud.setDialog('The drive is in my hand. Two dead drops, then the whole city hears it.', 600000,
     { name: 'ORIN BECK', img: game.portrait('ORIN BECK') });

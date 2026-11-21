@@ -37,8 +37,18 @@ function buildSedan(color, twoTone) {
   const g = new THREE.Group();
   const body = lam(color);
   g.add(box(4.6, 0.75, 2.0, 0, 0.62, 0, body));
-  g.add(box(2.4, 0.62, 1.8, -0.2, 1.28, 0, glassMat)); // cabin
-  g.add(box(2.2, 0.1, 1.7, -0.2, 1.62, 0, twoTone || color)); // roof
+  // v14: real cabin — narrower glasshouse core, body-colour corner
+  // pillars, roof with overhang, sloped windscreen + rear glass.
+  g.add(box(2.0, 0.5, 1.5, -0.2, 1.3, 0, glassMat)); // glasshouse core
+  for (const px of [0.75, -1.15]) for (const pz of [0.7, -0.7])
+    g.add(box(0.12, 0.5, 0.12, px, 1.3, pz, body)); // corner pillars
+  g.add(box(2.3, 0.1, 1.7, -0.2, 1.6, 0, lam(twoTone || color))); // roof
+  const shield = box(0.06, 0.6, 1.5, 0.9, 1.32, 0, glassMat); // windscreen
+  shield.rotation.z = 0.42;
+  g.add(shield);
+  const rear = box(0.06, 0.6, 1.5, -1.3, 1.32, 0, glassMat); // rear glass
+  rear.rotation.z = -0.42;
+  g.add(rear);
   g.add(box(0.5, 0.4, 1.9, 2.28, 0.55, 0, chromeMat)); // grille + bumper
   g.add(box(0.3, 0.28, 1.7, -2.32, 0.55, 0, chromeMat));
   g.add(box(0.2, 0.22, 0.4, 2.32, 0.75, 0.65, lightMat));
@@ -95,8 +105,18 @@ function buildSport(color, stripe) {
   const g = new THREE.Group();
   const body = lam(color);
   g.add(box(4.4, 0.55, 2.0, 0, 0.55, 0, body)); // low body
-  g.add(box(2.0, 0.5, 1.7, -0.3, 1.05, 0, glassMat));
-  g.add(box(1.9, 0.08, 1.6, -0.3, 1.32, 0, color));
+  // v14: real cabin — narrower glasshouse core, body-colour corner
+  // pillars, roof with overhang, sloped windscreen + fastback rear glass.
+  g.add(box(1.4, 0.42, 1.3, -0.3, 1.04, 0, glassMat)); // glasshouse core
+  for (const px of [0.35, -0.95]) for (const pz of [0.6, -0.6])
+    g.add(box(0.12, 0.42, 0.12, px, 1.04, pz, body)); // corner pillars
+  g.add(box(1.9, 0.08, 1.5, -0.3, 1.3, 0, lam(color))); // roof
+  const shield = box(0.06, 0.55, 1.3, 0.48, 1.05, 0, glassMat); // windscreen
+  shield.rotation.z = 0.42;
+  g.add(shield);
+  const rear = box(0.06, 0.55, 1.3, -1.08, 1.05, 0, glassMat); // rear glass
+  rear.rotation.z = -0.42;
+  g.add(rear);
   // racing stripe over hood + roof
   g.add(box(4.2, 0.04, 0.5, 0, 0.84, 0, lam(stripe || 0xf4f4f0)));
   // spoiler

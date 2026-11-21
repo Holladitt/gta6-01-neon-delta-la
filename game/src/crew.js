@@ -28,8 +28,11 @@ export function applySwap(state, wanted, cooldown) {
 // after the $150 parts cost is deducted (unchanged on failure).
 export function applyRepair(state, inCar, money, cost, cooldown) {
   if (!inCar) return { ok: false, condition: null, money, reason: 'no-car' };
-  if ((inCar.health ?? 100) >= 100) return { ok: false, condition: Math.round(inCar.health), money, reason: 'full' };
+  // Cooldown is checked BEFORE full condition (v14): pressing V again
+  // during the 60 s recharge must report the cooldown, not "already in
+  // top shape" — a repaired car is at 100 while the timer still runs.
   if ((state.repairT || 0) > 0) return { ok: false, condition: Math.round(inCar.health), money, reason: 'cooldown' };
+  if ((inCar.health ?? 100) >= 100) return { ok: false, condition: Math.round(inCar.health), money, reason: 'full' };
   if (money < cost) return { ok: false, condition: Math.round(inCar.health), money, reason: 'no-funds' };
   state.repairT = cooldown;
   inCar.health = 100;
