@@ -1,72 +1,40 @@
-// characters.js — pedestrians: 104 walkers on the sidewalks (browser).
-// Two InstancedMeshes (bodies + heads) keep the whole crowd at 2 draw calls.
-import * as THREE from 'three';
-import { RNG } from './rng.js';
+// Characters: Mara Solano, the protagonist, plus pedestrian
+// archetypes and the NDPD officers. Pure data — colours, sizes and
+// names the scene and the portraits draw from.
+export const MARA = {
+  name: 'Mara Solano',
+  title: 'Ex-getaway driver',
+  jacket: 0x1abc9c, shirt: 0xecf0f1, pants: 0x2c3e50, hair: 0x1a1a1a,
+  height: 1.75, speed: 6,
+  story: 'Her vanished sister held proof of corruption: a mayor, a port businessman, the police.',
+};
 
-const PED_COUNT = 104;
+export const PED_ARCHETYPES = [
+  { name: 'commuter', shirt: 0x3498db, pants: 0x2c3e50, skin: 0xe0ac69, speed: 1.4 },
+  { name: 'tourist', shirt: 0xe74c3c, pants: 0xecf0f1, skin: 0xc68642, speed: 1.1 },
+  { name: 'worker', shirt: 0xf39c12, pants: 0x34495e, skin: 0x8d5524, speed: 1.6 },
+  { name: 'student', shirt: 0x9b59b6, pants: 0x2c3e50, skin: 0xffdbac, speed: 1.8 },
+  { name: 'elder', shirt: 0x95a5a6, pants: 0x7f8c8d, skin: 0xe0ac69, speed: 0.9 },
+  { name: 'runner', shirt: 0x2ecc71, pants: 0x1a1a1a, skin: 0xc68642, speed: 2.4 },
+];
 
-export class PedSystem {
-  constructor(scene) {
-    this.scene = scene;
-    this.peds = [];
-    const bodyGeo = new THREE.BoxGeometry(0.7, 1.1, 0.42);
-    const headGeo = new THREE.SphereGeometry(0.26, 8, 6);
-    this.bodyMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    this.headMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-    this.bodies = new THREE.InstancedMesh(bodyGeo, this.bodyMat, PED_COUNT);
-    this.heads = new THREE.InstancedMesh(headGeo, this.headMat, PED_COUNT);
-    this.bodies.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.heads.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    scene.add(this.bodies);
-    scene.add(this.heads);
-    this.dummy = new THREE.Object3D();
-    this.colors = new THREE.Color();
-    const rng = new RNG(99);
-    const shirtPalette = [0xd94f3d, 0x3d7dd9, 0x3dd97a, 0xd9c23d, 0x8a4fd9, 0xe0e0e0, 0x222831, 0xff8a3d];
-    const skinPalette = [0xe8b48c, 0xc98d5f, 0x8a5a34, 0xf0c8a0];
-    for (let i = 0; i < PED_COUNT; i++) {
-      // Walk a straight sidewalk segment, back and forth.
-      const bx = Math.round(rng.range(-5, 5)) * 150;
-      const bz = Math.round(rng.range(-5, 5)) * 150;
-      const alongX = rng.chance(0.5);
-      const off = rng.range(-60, 60);
-      const a = -66, b = 66;
-      const seg = alongX
-        ? { ax: bx + a, az: bz + 75 + off * 0.1, bx2: bx + b, bz2: bz + 75 + off * 0.1 }
-        : { ax: bx + 75 + off * 0.1, az: bz + a, bx2: bx + 75 + off * 0.1, bz2: bz + b };
-      this.peds.push({
-        seg, t: rng.next(), dir: rng.chance(0.5) ? 1 : -1,
-        speed: rng.range(0.9, 1.9), phase: rng.next() * Math.PI * 2,
-        shirt: shirtPalette[rng.int(0, shirtPalette.length - 1)],
-        skin: skinPalette[rng.int(0, skinPalette.length - 1)],
-      });
-      this.bodies.setColorAt(i, this.colors.setHex(this.peds[i].shirt));
-      this.heads.setColorAt(i, this.colors.setHex(this.peds[i].skin));
-    }
-    this.bodies.instanceColor.needsUpdate = true;
-    this.heads.instanceColor.needsUpdate = true;
-  }
+export const CONTACTS = [
+  { name: 'Eden Voss', role: 'Fixer', shirt: 0x8e44ad, district: 'downtown' },
+  { name: 'Harlan Dray', role: 'Smuggler', shirt: 0x16a085, district: 'venice' },
+  { name: 'Lucia Marlow', role: 'Informant', shirt: 0xd35400, district: 'pier' },
+  { name: 'Dante Kovac', role: 'Fence', shirt: 0x2c3e50, district: 'port' },
+  { name: 'Sable Okonkwo', role: 'Racer', shirt: 0xc0392b, district: 'hills' },
+  { name: 'Vera Lindqvist', role: 'Broker', shirt: 0x2980b9, district: 'marina' },
+  { name: 'Inez Vargas', role: 'Archivist', shirt: 0x7d3c98, district: 'downtown' },
+  { name: 'Orin Beck', role: 'Runner', shirt: 0x117a65, district: 'marina' },
+  { name: 'Lena Marsh', role: 'Diver', shirt: 0x1a5276, district: 'marina' },
+  { name: 'Elias Frost', role: 'Witness', shirt: 0x616a6b, district: 'downtown' },
+];
 
-  update(dt, time) {
-    for (let i = 0; i < this.peds.length; i++) {
-      const p = this.peds[i];
-      const len = Math.hypot(p.seg.bx2 - p.seg.ax, p.seg.bz2 - p.seg.az);
-      p.t += (p.dir * p.speed * dt) / len;
-      if (p.t >= 1) { p.t = 1; p.dir = -1; }
-      if (p.t <= 0) { p.t = 0; p.dir = 1; }
-      const x = p.seg.ax + (p.seg.bx2 - p.seg.ax) * p.t;
-      const z = p.seg.az + (p.seg.bz2 - p.seg.az) * p.t;
-      const heading = Math.atan2((p.seg.bx2 - p.seg.ax) * p.dir, -(p.seg.bz2 - p.seg.az) * p.dir);
-      const bob = Math.abs(Math.sin(time * 6 + p.phase)) * 0.06;
-      this.dummy.position.set(x, 0.62 + bob, z);
-      this.dummy.rotation.set(0, heading, 0);
-      this.dummy.updateMatrix();
-      this.bodies.setMatrixAt(i, this.dummy.matrix);
-      this.dummy.position.set(x, 1.45 + bob, z);
-      this.dummy.updateMatrix();
-      this.heads.setMatrixAt(i, this.dummy.matrix);
-    }
-    this.bodies.instanceMatrix.needsUpdate = true;
-    this.heads.instanceMatrix.needsUpdate = true;
-  }
+export function pedArchetype(i) {
+  return PED_ARCHETYPES[i % PED_ARCHETYPES.length];
+}
+
+export function contactByName(name) {
+  return CONTACTS.find((c) => c.name === name) || null;
 }

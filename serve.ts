@@ -1,11 +1,17 @@
-// serve.ts — dev server: serves game/ at http://localhost:8080.
+// Dev server: serves game/ on http://localhost:8080 so the game
+// can be played in a desktop browser. Node 22, standard library
+// only. Run: node serve.ts (or node --experimental-strip-types
+// serve.ts on Node 22.6-22.17).
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { join, dirname, extname } from 'node:path';
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { join, extname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), 'game');
-const types: Record<string, string> = {
+const here = fileURLToPath(new URL('.', import.meta.url));
+const root = join(here, 'game');
+const port = Number(process.env.PORT || 8080);
+
+const TYPES: Record<string, string> = {
   '.html': 'text/html',
   '.js': 'text/javascript',
   '.mjs': 'text/javascript',
@@ -15,26 +21,21 @@ const types: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
-  '.glsl': 'text/plain',
 };
 
-const server = createServer(async (req, res) => {
-  try {
-    const url = new URL(req.url ?? '/', 'http://localhost:8080');
-    const path = url.pathname === '/' ? '/index.html' : url.pathname;
-    const file = join(root, decodeURIComponent(path));
-    if (!file.startsWith(root)) {
-      res.writeHead(403);
-      res.end();
-      return;
-    }
-    const data = await readFile(file);
-    res.writeHead(200, { 'content-type': types[extname(file)] ?? 'application/octet-stream' });
-    res.end(data);
-  } catch {
-    res.writeHead(404);
+const server = createServer((req, res) => {
+  const url = decodeURIComponent((req.url || '/').split('?')[0]);
+  const path = normalize(join(root, url === '/' ? 'index.html' : url));
+  if (!path.startsWith(root) || !existsSync(path) || !statSync(path).isFile()) {
+    res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('not found');
+    return;
   }
+  const type = TYPES[extname(path)] || 'application/octet-stream';
+  res.writeHead(200, { 'content-type': type });
+  res.end(readFileSync(path));
 });
 
-server.listen(8080, () => console.log('Neon Delta LA at http://localhost:8080'));
+server.listen(port, () => {
+  console.log('Neon Delta LA serving game/ at http://localhost:' + port);
+});

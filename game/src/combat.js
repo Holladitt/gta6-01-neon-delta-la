@@ -1,42 +1,50 @@
-// combat.js — shooting: owned weapons, ammo, cooldown, reload (pure).
-import { WEAPONS } from './config.js';
+// Combat: six weapons in four tiers, and the weapon wheel.
+// Hold Q to open the radial wheel showing the four tiers and the
+// owned weapons; pick with the mouse or the number keys 1-4.
+// The HUD shows the current weapon and its tier.
+import { WEAPONS, weaponById } from './config.js';
 
-export class Combat {
-  constructor() {
-    this.owned = [0, 1, 2];
-    this.current = 0;
-    this.ammo = WEAPONS.map((w) => w.mag);
-    this.reserves = WEAPONS.map((w) => w.reserve);
-    this.cooldown = 0;
-  }
+export function createCombat() {
+  return { current: 'pistol', wheelOpen: false, lastShotAt: 0, shotsFired: 0 };
+}
 
-  switchTo(index) {
-    if (!this.owned.includes(index)) return false;
-    this.current = index;
-    return true;
-  }
+export function currentWeapon(c) {
+  return weaponById(c.current);
+}
 
-  fire() {
-    if (this.cooldown > 0) return null;
-    if (this.ammo[this.current] <= 0) return null;
-    const w = WEAPONS[this.current];
-    this.ammo[this.current] -= 1;
-    this.cooldown = w.rate;
-    return { weapon: this.current, damage: w.damage, range: w.range };
-  }
+export function selectWeapon(c, id, owned) {
+  const w = weaponById(id);
+  if (!owned || !owned[w.id]) return { ok: false, reason: 'not owned' };
+  c.current = w.id;
+  return { ok: true, weapon: w };
+}
 
-  reload() {
-    const w = WEAPONS[this.current];
-    const need = w.mag - this.ammo[this.current];
-    if (need <= 0) return false;
-    const take = Math.min(need, this.reserves[this.current]);
-    if (take <= 0) return false;
-    this.ammo[this.current] += take;
-    this.reserves[this.current] -= take;
-    return true;
-  }
+export function selectTier(c, tier, owned) {
+  const inTier = WEAPONS.filter((w) => w.tier === tier && owned && owned[w.id]);
+  if (inTier.length === 0) return { ok: false, reason: 'no weapon in tier' };
+  c.current = inTier[0].id;
+  return { ok: true, weapon: inTier[0] };
+}
 
-  tick(dt) {
-    if (this.cooldown > 0) this.cooldown = Math.max(0, this.cooldown - dt);
-  }
+export function openWheel(c) {
+  c.wheelOpen = true;
+  return c.wheelOpen;
+}
+
+export function closeWheel(c) {
+  c.wheelOpen = false;
+  return c.wheelOpen;
+}
+
+export function wheelItems(owned) {
+  return WEAPONS.map((w) => ({ id: w.id, name: w.name, tier: w.tier, owned: !!(owned && owned[w.id]) }));
+}
+
+export function fire(c, now) {
+  const w = weaponById(c.current);
+  const gap = 1 / w.rate;
+  if (now - c.lastShotAt < gap) return { ok: false, reason: 'rate limited' };
+  c.lastShotAt = now;
+  c.shotsFired += 1;
+  return { ok: true, damage: w.damage, range: w.range, weapon: w };
 }

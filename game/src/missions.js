@@ -1,58 +1,62 @@
-// missions.js — mission scripting engine (pure).
-// Steps: goto/deliver {x,z[,inCar]} | steal {kind} | visit {points} |
-// chase | escape | survive {seconds}. A step completes, the engine
-// advances; when the last step completes the mission is done.
-import { MISSIONS } from './config.js';
+// Mission scripting engine: ten story missions in order, each with
+// ordered objective points. Finishing a mission reports the payout
+// and the district it finished in; the world applies the payout,
+// the rank points (payout / 10), the day advance, and the district
+// standing. The engine itself only moves the objective pointer.
+import { MISSIONS, MISSION_TOTAL_PAYOUT, MISSION_TOTAL_RP, STANDING_GAIN, districtAt, missionById } from './config.js';
 
-const RADIUS = 14;
+export { missionById };
 
-export function startMission(index) {
-  return { index, def: MISSIONS[index], step: 0, status: 'active', timer: 0, visited: [] };
+export function createMissionState() {
+  return { current: 1, objective: 0, day: 1, completed: [], rp: 0, money: 0 };
 }
 
-export function currentStep(m) {
-  if (!m || m.status !== 'active') return null;
-  return m.def.steps[m.step] || null;
+export function currentMission(state) {
+  if (!state.current) return null;
+  return MISSIONS.find((m) => m.id === state.current) || null;
 }
 
-function dist2(ax, az, bx, bz) {
-  const dx = ax - bx;
-  const dz = az - bz;
-  return dx * dx + dz * dz;
+export function currentObjective(state) {
+  const m = currentMission(state);
+  if (!m) return null;
+  return m.points[state.objective] || null;
 }
 
-export function updateMission(m, dt, ctx) {
-  if (!m || m.status !== 'active') return;
-  const s = currentStep(m);
-  if (!s) {
-    m.status = 'done';
-    return;
+export function missionProgress(state) {
+  const m = currentMission(state);
+  if (!m) return { done: true, label: 'ALL MISSIONS DONE' };
+  const p = m.points[state.objective];
+  return { done: false, label: p ? p.label : m.title, mission: m };
+}
+
+// Reach an objective point: advance, or finish the mission.
+export function reachObjective(state, x, z) {
+  const m = currentMission(state);
+  if (!m) return { event: 'none' };
+  const p = m.points[state.objective];
+  if (!p) return { event: 'none' };
+  const dx = x - p.x; const dz = z - p.z;
+  if (dx * dx + dz * dz > 25 * 25) return { event: 'none' };
+  state.objective += 1;
+  if (state.objective < m.points.length) {
+    return { event: 'objective', mission: m, next: m.points[state.objective] };
   }
-  let done = false;
-  if (s.type === 'goto' || s.type === 'deliver') {
-    if (dist2(ctx.x, ctx.z, s.x, s.z) <= RADIUS * RADIUS && (!s.inCar || ctx.inCar)) done = true;
-  } else if (s.type === 'steal') {
-    if (ctx.inCar && ctx.stoleKind === s.kind) done = true;
-  } else if (s.type === 'visit') {
-    for (const p of s.points) {
-      if (!m.visited.includes(p) && dist2(ctx.x, ctx.z, p[0], p[1]) <= RADIUS * RADIUS) m.visited.push(p);
-    }
-    if (m.visited.length >= s.points.length) done = true;
-  } else if (s.type === 'chase') {
-    if (ctx.chaseClose) {
-      m.timer += dt;
-      if (m.timer >= 20) done = true;
-    }
-  } else if (s.type === 'escape') {
-    if ((ctx.wanted || 0) <= 0) done = true;
-  } else if (s.type === 'survive') {
-    m.timer += dt;
-    if (m.timer >= (s.seconds || 30)) done = true;
-  }
-  if (done) {
-    m.step += 1;
-    m.timer = 0;
-    m.visited = [];
-    if (m.step >= m.def.steps.length) m.status = 'done';
-  }
+  // Mission complete. The world applies payout, rp and day.
+  state.completed.push(m.id);
+  const d = districtAt(x, z);
+  state.current = m.id + 1 <= MISSIONS.length ? m.id + 1 : null;
+  state.objective = 0;
+  return { event: 'complete', mission: m, payout: m.payout, district: d.id, standing: STANDING_GAIN.mission };
+}
+
+export function totalPayout() {
+  return MISSION_TOTAL_PAYOUT;
+}
+
+export function totalRp() {
+  return MISSION_TOTAL_RP;
+}
+
+export function allMissionsDone(state) {
+  return state.completed.length === MISSIONS.length;
 }

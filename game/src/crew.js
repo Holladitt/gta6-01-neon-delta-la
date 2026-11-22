@@ -1,44 +1,55 @@
-// crew.js — crew abilities: clean plates, field repair, overwatch (pure).
-export function newCrewState() {
-  return { cooldownT: 0, repairT: 0, watchT: 0, watchCd: 0 };
+// Crew of three, each with one ability on a key.
+// CLEAN PLATES [C] lowers wanted by 1 (45 s cooldown).
+// FIELD REPAIR [V] costs exactly 150 and restores condition to 100%
+// (60 s cooldown; while recharging a second use is refused, money
+// stays unchanged, and a toast says it is recharging).
+// OVERWATCH [X] lasts 20 s with a 25 s cooldown.
+import { CREW } from './config.js';
+
+export function createCrewState() {
+  const s = { cooldowns: {}, overwatchUntil: 0 };
+  for (const c of CREW) s.cooldowns[c.id] = 0;
+  return s;
 }
 
-export function canSwap(state, wanted) {
-  return wanted > 0 && state.cooldownT <= 0;
+export function crewMember(id) {
+  return CREW.find((c) => c.id === id) || null;
 }
 
-// Juno Reyes — CLEAN PLATES: drops wanted by 1.
-export function applySwap(state, wanted, cd = 45) {
-  if (wanted <= 0) return { ok: false, reason: 'no-heat', wanted };
-  if (state.cooldownT > 0) return { ok: false, reason: 'cooldown', wanted };
-  state.cooldownT = cd;
-  return { ok: true, wanted: wanted - 1 };
+export function abilityReady(crew, id, now) {
+  return (crew.cooldowns[id] || 0) <= now;
 }
 
-// Petra Hale — FIELD REPAIR: $150 restores the car to 100%.
-// Cooldown is checked before "full", so a press during the 60 s recharge
-// answers 'cooldown' (the toast reads "recharging"), not 'full'.
-export function applyRepair(state, car, money, cost = 150, cd = 60) {
-  if (!car) return { ok: false, reason: 'no-car', money };
-  if (state.repairT > 0) return { ok: false, reason: 'cooldown', money };
-  if (car.health >= 100) return { ok: false, reason: 'full', money };
-  if (money < cost) return { ok: false, reason: 'no-funds', money };
-  state.repairT = cd;
-  car.health = 100;
-  return { ok: true, condition: 100, money: money - cost };
+export function cooldownLeft(crew, id, now) {
+  return Math.max(0, (crew.cooldowns[id] || 0) - now);
 }
 
-// Cassia Wren — OVERWATCH: marks police for a while.
-export function applyOverwatch(state, duration = 20, cd = 45) {
-  if (state.watchT > 0) return { ok: false, reason: 'active' };
-  if (state.watchCd > 0) return { ok: false, reason: 'cooldown' };
-  state.watchT = duration;
-  state.watchCd = cd;
-  return { ok: true, duration };
-}
-
-export function tickCooldown(state, dt) {
-  for (const k of ['cooldownT', 'repairT', 'watchT', 'watchCd']) {
-    if (typeof state[k] === 'number') state[k] = Math.max(0, state[k] - dt);
+export function useAbility(crew, id, now, game) {
+  const c = crewMember(id);
+  if (!c) return { ok: false, reason: 'no such crew' };
+  if (!abilityReady(crew, id, now)) {
+    return { ok: false, reason: 'recharging', left: cooldownLeft(crew, id, now) };
   }
+  if (id === 'juno') {
+    crew.cooldowns.juno = now + c.cooldown;
+    game.wanted.level = Math.max(0, game.wanted.level - 1);
+    return { ok: true, reason: 'clean plates', wanted: game.wanted.level };
+  }
+  if (id === 'petra') {
+    if (game.money < c.cost) return { ok: false, reason: 'not enough money' };
+    game.money -= c.cost;
+    game.car.condition = 100;
+    crew.cooldowns.petra = now + c.cooldown;
+    return { ok: true, reason: 'field repair', money: game.money };
+  }
+  if (id === 'cassia') {
+    crew.cooldowns.cassia = now + c.cooldown;
+    crew.overwatchUntil = now + c.duration;
+    return { ok: true, reason: 'overwatch', until: crew.overwatchUntil };
+  }
+  return { ok: false, reason: 'unknown ability' };
+}
+
+export function overwatchActive(crew, now) {
+  return now < crew.overwatchUntil;
 }

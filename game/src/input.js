@@ -1,51 +1,51 @@
-// input.js — keyboard + mouse input state (browser).
+// Keyboard and mouse input. WASD/arrows drive, E enters/exits the
+// car, F steals a car, SPACE fires, Q holds the weapon wheel open
+// (1-4 pick a tier), C/V/X are crew abilities, SHIFT is nitro,
+// M starts a mission, R starts a race, J starts a side job, P
+// pauses, T saves. Safe to construct in node tests (no listeners
+// attach without a window).
 export function createInput() {
-  const keys = {};
-  const pressed = {}; // edge-triggered: true only on the frame the key went down
-  let mouseX = 0, mouseY = 0, mouseDown = false, clicked = false;
-  let anyKey = false;
-
-  function onDown(e) {
-    if (e.repeat) return;
-    keys[e.code] = true;
-    pressed[e.code] = true;
-    anyKey = true;
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
-  }
-  function onUp(e) {
-    keys[e.code] = false;
-  }
-  function onMove(e) {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-  }
-  function onMouseDown(e) {
-    mouseDown = true;
-    clicked = true;
-  }
-  function onMouseUp() {
-    mouseDown = false;
-  }
-
-  window.addEventListener('keydown', onDown);
-  window.addEventListener('keyup', onUp);
-  window.addEventListener('mousemove', onMove);
-  window.addEventListener('mousedown', onMouseDown);
-  window.addEventListener('mouseup', onMouseUp);
-
-  return {
-    get down() { return keys; },
-    get mouse() { return { x: mouseX, y: mouseY, down: mouseDown }; },
-    wasPressed(code) {
-      return !!pressed[code];
+  const input = {
+    forward: false, back: false, left: false, right: false,
+    fire: false, nitro: false, wheel: false,
+    pressed: {}, mouseX: 0, mouseY: 0, mouseDown: false,
+    attach() {
+      if (typeof window === 'undefined') return;
+      window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'w' || k === 'arrowup') input.forward = true;
+        if (k === 's' || k === 'arrowdown') input.back = true;
+        if (k === 'a' || k === 'arrowleft') input.left = true;
+        if (k === 'd' || k === 'arrowright') input.right = true;
+        if (k === ' ') input.fire = true;
+        if (k === 'shift') input.nitro = true;
+        if (k === 'q') input.wheel = true;
+        if (!input.pressed[k]) input.pressed[k] = true;
+      });
+      window.addEventListener('keyup', (e) => {
+        const k = e.key.toLowerCase();
+        if (k === 'w' || k === 'arrowup') input.forward = false;
+        if (k === 's' || k === 'arrowdown') input.back = false;
+        if (k === 'a' || k === 'arrowleft') input.left = false;
+        if (k === 'd' || k === 'arrowright') input.right = false;
+        if (k === ' ') input.fire = false;
+        if (k === 'shift') input.nitro = false;
+        if (k === 'q') input.wheel = false;
+      });
+      window.addEventListener('mousemove', (e) => {
+        input.mouseX = e.clientX; input.mouseY = e.clientY;
+      });
+      window.addEventListener('mousedown', () => { input.mouseDown = true; });
+      window.addEventListener('mouseup', () => { input.mouseDown = false; });
     },
-    get clicked() { return clicked; },
-    get anyKey() { return anyKey; },
-    // Call once per tick: clears the edge-triggered flags.
-    endFrame() {
-      for (const k of Object.keys(pressed)) pressed[k] = false;
-      clicked = false;
-      anyKey = false;
+    // One-shot key: true once per press, then cleared by the loop.
+    consume(k) {
+      if (input.pressed[k]) { input.pressed[k] = false; return true; }
+      return false;
+    },
+    clearPressed() {
+      input.pressed = {};
     },
   };
+  return input;
 }

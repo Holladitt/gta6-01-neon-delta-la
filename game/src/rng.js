@@ -1,29 +1,46 @@
-// rng.js — small seeded random generator (pure, deterministic layout).
-export function mulberry32(seed) {
+// Seeded random numbers for Neon Delta LA: District Wars.
+// A small deterministic generator so the world, traffic and races
+// can be rebuilt from one seed. No browser or library dependency.
+export function makeRng(seed) {
   let a = seed >>> 0;
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
+  return function next() {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-export class RNG {
-  constructor(seed) {
-    this.next = mulberry32(seed);
+export function range(rng, lo, hi) {
+  return lo + rng() * (hi - lo);
+}
+
+export function intRange(rng, lo, hi) {
+  return lo + Math.floor(rng() * (hi - lo + 1));
+}
+
+export function pick(rng, list) {
+  return list[Math.floor(rng() * list.length)];
+}
+
+export function shuffle(rng, list) {
+  const out = list.slice();
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = out[i]; out[i] = out[j]; out[j] = tmp;
   }
-  range(a, b) {
-    return a + this.next() * (b - a);
-  }
-  int(a, b) {
-    return Math.floor(this.range(a, b + 1));
-  }
-  pick(arr) {
-    return arr[Math.floor(this.next() * arr.length)];
-  }
-  chance(p) {
-    return this.next() < p;
-  }
+  return out;
+}
+
+export function clamp(v, lo, hi) {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
+export function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+export function dist2(ax, az, bx, bz) {
+  const dx = ax - bx; const dz = az - bz;
+  return Math.sqrt(dx * dx + dz * dz);
 }

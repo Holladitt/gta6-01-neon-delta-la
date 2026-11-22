@@ -1,13 +1,20 @@
-// damage.js — collision damage rules (pure).
-export const DAMAGE_MIN_IMPACT = 5;
+// Collision damage: an impact of 5 m/s or more deals damage equal
+// to the impact times 1.2 rounded, minimum 5, with a 0.5 s cooldown.
+import { COLLISION } from './config.js';
 
-export function collisionDamage(impact) {
-  if (impact < DAMAGE_MIN_IMPACT) return 0;
-  return Math.max(5, Math.round(impact * 1.2));
+export function collisionDamage(impactSpeed) {
+  if (impactSpeed < COLLISION.minSpeed) return 0;
+  const raw = Math.round(impactSpeed * COLLISION.mult);
+  return raw < COLLISION.minDamage ? COLLISION.minDamage : raw;
 }
 
-// Applies collision damage to a health/condition value; the result never
-// drops below 5 from a single hit.
-export function applyCollisionDamage(health, impact) {
-  return Math.max(5, health - collisionDamage(impact));
+export function canDamage(lastHitAt, now) {
+  return now - lastHitAt >= COLLISION.cooldown;
+}
+
+export function applyDamage(condition, impactSpeed, armour) {
+  const dmg = collisionDamage(impactSpeed);
+  if (dmg === 0) return { condition, dealt: 0 };
+  const reduced = armour ? Math.max(1, Math.round(dmg * 0.6)) : dmg;
+  return { condition: Math.max(0, condition - reduced), dealt: reduced };
 }

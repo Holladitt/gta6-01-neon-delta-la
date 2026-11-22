@@ -1,56 +1,84 @@
-// save.js — save encoding/decoding with old-save defaults (pure).
-import { WEAPONS } from './config.js';
+// Save system: 3 slots, per-slot keys. Saving writes the slot;
+// loading returns the data or null; a corrupt save starts safe
+// (null, never a crash). Works in the browser and in node tests
+// (falls back to an in-memory store when localStorage is absent).
+import { SAVE_KEY_BASE, SAVE_SLOTS } from './config.js';
 
-export function makeSave(state) {
-  return { v: 3, savedAt: Date.now(), ...state };
-}
-
-export function encodeSave(state) {
-  return JSON.stringify(makeSave(state));
-}
-
-function padToSix(arr, defaults) {
-  const out = [];
-  for (let i = 0; i < 6; i++) {
-    out.push(Array.isArray(arr) && typeof arr[i] === 'number' ? arr[i] : defaults[i]);
-  }
-  return out;
-}
-
-export function decodeSave(text) {
-  let d;
+function backend() {
   try {
-    d = JSON.parse(text);
-  } catch {
+    if (typeof globalThis !== 'undefined' && globalThis.localStorage) return globalThis.localStorage;
+  } catch (e) { /* fall through */ }
+  const mem = new Map();
+  return {
+    getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+    setItem: (k, v) => { mem.set(k, String(v)); },
+    removeItem: (k) => { mem.delete(k); },
+  };
+}
+
+let store = null;
+export function saveStore() {
+  if (!store) store = backend();
+  return store;
+}
+
+export function slotKey(slot) {
+  return SAVE_KEY_BASE + '.slot' + slot;
+}
+
+export function slotCount() {
+  return SAVE_SLOTS;
+}
+
+export function saveGame(slot, data) {
+  if (slot < 1 || slot > SAVE_SLOTS) return false;
+  try {
+    saveStore().setItem(slotKey(slot), JSON.stringify(data));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+export function loadGame(slot) {
+  if (slot < 1 || slot > SAVE_SLOTS) return null;
+  let raw = null;
+  try {
+    raw = saveStore().getItem(slotKey(slot));
+  } catch (e) {
     return null;
   }
-  if (!d || typeof d !== 'object' || d.v !== 3) return null;
+  if (!raw) return null;
+  try {
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== 'object') return null;
+    return data;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function slotSummary(slot) {
+  const d = loadGame(slot);
+  if (!d) return null;
+  return { money: d.money || 0, day: d.day || 1, rank: d.rank || 'D', district: d.district || 'Downtown' };
+}
+
+export function clearSlot(slot) {
+  try {
+    saveStore().removeItem(slotKey(slot));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+export function serializeWorld(w) {
   return {
-    v: 3,
-    money: d.money ?? 250,
-    mission: d.mission ?? 0,
-    step: d.step ?? 0,
-    health: d.health ?? 100,
-    armor: d.armor ?? 0,
-    x: d.x ?? 0,
-    z: d.z ?? 0,
-    heading: d.heading ?? 0,
-    hour: d.hour ?? 12,
-    weapons: Array.isArray(d.weapons) ? d.weapons.slice() : [0, 1, 2],
-    ammo: padToSix(d.ammo, WEAPONS.map((w) => w.mag)),
-    reserves: padToSix(d.reserves, WEAPONS.map((w) => w.reserve)),
-    day: d.day ?? 1,
-    rp: d.rp ?? 0,
-    standing: d.standing ?? {},
-    plateT: d.plateT ?? 0,
-    repairT: d.repairT ?? 0,
-    watchT: d.watchT ?? 0,
-    watchCd: d.watchCd ?? 0,
-    stats: {
-      missionsDone: d.stats?.missionsDone ?? 0,
-      totalEarned: d.stats?.totalEarned ?? 0,
-      carsStolen: d.stats?.carsStolen ?? 0,
-    },
-    savedAt: d.savedAt ?? 0,
+    money: w.money, day: w.day, rp: w.rp, hour: w.hour,
+    district: w.districtId, standing: w.standing, tapes: w.tapesFound,
+    missionsDone: w.missions.completed, currentMission: w.missions.current,
+    rank: w.rankCode, carCondition: w.car.condition, owned: w.shop.owned,
+    garage: w.garage, savedAt: Date.now(),
   };
 }

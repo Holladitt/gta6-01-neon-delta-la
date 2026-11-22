@@ -1,79 +1,82 @@
-// astar.js — A* pathfinding over the road grid (pure).
-// Nodes are [x, z] road intersections; edges join orthogonal neighbours.
-import { roadNodes } from './geo.js';
-import { ROAD_SPACING, WORLD_HALF } from './config.js';
+// A-star pathfinding over the road grid. Police cars flank the
+// player by following waypoints on the grid instead of driving
+// straight through buildings. The grid is 60 units a cell; a cell
+// is walkable when it sits on a road or open ground.
+import { MAP } from './config.js';
 
-function key(x, z) {
-  return x + ',' + z;
+export const CELL = 60;
+
+export function gridSize() {
+  return {
+    cols: Math.ceil((MAP.x1 - MAP.x0) / CELL),
+    rows: Math.ceil((MAP.z1 - MAP.z0) / CELL),
+  };
 }
 
-export function buildGraph() {
-  const nodes = new Map();
-  for (const [x, z] of roadNodes()) nodes.set(key(x, z), [x, z]);
-  return nodes;
+export function cellOf(x, z) {
+  return {
+    col: Math.floor((x - MAP.x0) / CELL),
+    row: Math.floor((z - MAP.z0) / CELL),
+  };
 }
 
-function neighbours(nodes, x, z) {
-  const out = [];
-  for (const [dx, dz] of [[ROAD_SPACING, 0], [-ROAD_SPACING, 0], [0, ROAD_SPACING], [0, -ROAD_SPACING]]) {
-    const nx = x + dx, nz = z + dz;
-    if (nx < -WORLD_HALF || nx > WORLD_HALF || nz < -WORLD_HALF || nz > 750) continue;
-    if (nodes.has(key(nx, nz))) out.push([nx, nz]);
-  }
-  return out;
+export function cellCenter(col, row) {
+  return { x: MAP.x0 + col * CELL + CELL / 2, z: MAP.z0 + row * CELL + CELL / 2 };
 }
 
-function heuristic(a, b) {
-  return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+// Roads run every 120 units; cells near a road line are walkable,
+// plus the pier deck, the port yard and the marina apron.
+export function walkable(col, row) {
+  const { cols, rows } = gridSize();
+  if (col < 0 || row < 0 || col >= cols || row >= rows) return false;
+  const c = cellCenter(col, row);
+  const rx = ((c.x + 700) % 120 + 120) % 120;
+  const rz = ((c.z + 700) % 120 + 120) % 120;
+  const roadX = rx >= 9 && rx <= 31;
+  const roadZ = rz >= 9 && rz <= 31;
+  if (roadX || roadZ) return true;
+  if (c.x > -80 && c.x < 700 && c.z > 280 && c.z < 620) return true; // port yard
+  if (c.x > -780 && c.x < -620 && c.z > 360 && c.z < 500) return true; // pier deck
+  if (c.x > -80 && c.x < 320 && c.z > -120 && c.z < 280) return true; // marina apron
+  return false;
 }
 
-// Returns an array of [x, z] waypoints from start to goal (inclusive),
-// or null when no route exists.
-export function findPath(nodes, start, goal) {
-  const s = nearestInGraph(nodes, start);
-  const g = nearestInGraph(nodes, goal);
-  if (!s || !g) return null;
-  const open = [{ node: s, f: heuristic(s, g), g: 0 }];
-  const came = new Map();
-  const cost = new Map([[key(s[0], s[1]), 0]]);
-  const closed = new Set();
-  while (open.length) {
+function key(col, row) {
+  return col + ',' + row;
+}
+
+export function findPath(sx, sz, gx, gz) {
+  const start = cellOf(sx, sz);
+  const goal = cellOf(gx, gz);
+  const open = [{ col: start.col, row: start.row, g: 0, f: 0, parent: null }];
+  const seen = new Map();
+  seen.set(key(start.col, start.row), 0);
+  let best = null;
+  let guard = 0;
+  while (open.length > 0 && guard < 4000) {
+    guard += 1;
     let bi = 0;
-    for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
-    const cur = open.splice(bi, 1)[0].node;
-    const ck = key(cur[0], cur[1]);
-    if (closed.has(ck)) continue;
-    closed.add(ck);
-    if (cur[0] === g[0] && cur[1] === g[1]) {
-      const path = [cur];
-      let k = ck;
-      while (came.has(k)) {
-        const prev = came.get(k);
-        path.unshift(prev);
-        k = key(prev[0], prev[1]);
-      }
-      return path;
-    }
-    for (const nb of neighbours(nodes, cur[0], cur[1])) {
-      const nk = key(nb[0], nb[1]);
-      if (closed.has(nk)) continue;
-      const nc = cost.get(ck) + ROAD_SPACING;
-      if (nc < (cost.get(nk) ?? Infinity)) {
-        cost.set(nk, nc);
-        came.set(nk, cur);
-        open.push({ node: nb, f: nc + heuristic(nb, g), g: nc });
-      }
+    for (let i = 1; i < open.length; i += 1) if (open[i].f < open[bi].f) bi = i;
+    const cur = open.splice(bi, 1)[0];
+    if (cur.col === goal.col && cur.row === goal.row) { best = cur; break; }
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (const [dc, dr] of dirs) {
+      const nc = cur.col + dc; const nr = cur.row + dr;
+      if (!walkable(nc, nr)) continue;
+      const g = cur.g + 1;
+      const k = key(nc, nr);
+      if (seen.has(k) && seen.get(k) <= g) continue;
+      seen.set(k, g);
+      const h = Math.abs(nc - goal.col) + Math.abs(nr - goal.row);
+      open.push({ col: nc, row: nr, g, f: g + h, parent: cur });
     }
   }
-  return null;
-}
-
-function nearestInGraph(nodes, p) {
-  const nx = Math.round(p[0] / ROAD_SPACING) * ROAD_SPACING;
-  const nz = Math.round(p[1] / ROAD_SPACING) * ROAD_SPACING;
-  const clamped = [
-    Math.max(-WORLD_HALF, Math.min(WORLD_HALF, nx)),
-    Math.max(-WORLD_HALF, Math.min(750, nz)),
-  ];
-  return nodes.has(key(clamped[0], clamped[1])) ? clamped : null;
+  if (!best) return [cellCenter(goal.col, goal.row)];
+  const path = [];
+  let node = best;
+  while (node) {
+    path.unshift(cellCenter(node.col, node.row));
+    node = node.parent;
+  }
+  return path;
 }
