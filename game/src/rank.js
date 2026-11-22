@@ -1,5 +1,4 @@
-// Rank ladder for Neon Delta LA: rank points (RP) earned from mission
-// payouts (1 RP per $10) move Mara up five ranks to DELTA LEGEND.
+// rank.js — rank ladder from reputation points.
 import { RANKS } from './config.js';
 
 export function rankFor(rp) {
@@ -9,18 +8,15 @@ export function rankFor(rp) {
   }
   return best;
 }
-
 export function rankCode(rp) {
   return rankFor(rp).code;
 }
-
 export function rpForPayout(payout) {
-  return Math.floor(payout / 10);
+  return Math.round(payout / 10);
 }
-
 export function nextRank(rp) {
   for (const r of RANKS) {
-    if (r.rp > rp) return r;
+    if (rp < r.rp) return r;
   }
   return null;
 }

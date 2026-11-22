@@ -1,7 +1,4 @@
 node_modules/
 out/
-/output
-*.log
 .DS_Store
-screenshots/*.png
-!screenshots/*.jpg
+*.log

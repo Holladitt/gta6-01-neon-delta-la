@@ -1,75 +1,56 @@
-// Garage tuning and the drivable boat for Neon Delta LA.
-// The garage sells Engine (+25% top speed), Armour (half collision
-// damage) and Nitro (a 3-second boost on N). Each is a real effect on
-// the car and the panel shows what is owned. The boat at the Marina
-// floats, steers and has a speed readout.
+// garage.js — tuning upgrades with real effects: engine, armour, nitro.
 import { GARAGE_UPGRADES, BOAT } from './config.js';
-import { dist2, clamp } from './rng.js';
+import { dist2 } from './rng.js';
 
 export function createGarage() {
-  return { owned: {}, nitroUntil: -1e9 };
+  return { owned: {}, nitroUntil: 0 };
 }
-
-export function garageUpgrade(id) {
-  return GARAGE_UPGRADES.find((u) => u.id === id) || null;
-}
-
 export function buyUpgrade(g, money, id) {
-  const u = garageUpgrade(id);
-  if (!u) return { ok: false, money, reason: 'unknown' };
-  if (g.owned[id]) return { ok: false, money, reason: 'owned' };
-  if (money < u.price) return { ok: false, money, reason: 'broke' };
+  const up = GARAGE_UPGRADES.find((u) => u.id === id);
+  if (!up) return { ok: false, money };
+  if (g.owned[id]) return { ok: false, money };
+  if (money < up.price) return { ok: false, money };
   g.owned[id] = true;
-  return { ok: true, money: money - u.price, upgrade: id, price: u.price };
+  return { ok: true, money: money - up.price };
 }
-
-export function ownedUpgrades(g) {
-  return GARAGE_UPGRADES.filter((u) => g.owned[u.id]).map((u) => u.id);
-}
-
 export function topSpeed(g, base) {
   return g.owned.engine ? base * 1.25 : base;
 }
-
 export function hasNitro(g) {
   return !!g.owned.nitro;
 }
-
 export function triggerNitro(g, now) {
-  if (!hasNitro(g)) return false;
+  if (!g.owned.nitro) return false;
   g.nitroUntil = now + 3;
   return true;
 }
-
 export function nitroActive(g, now) {
   return now < g.nitroUntil;
 }
+export function ownedUpgrades(g) {
+  return Object.keys(g.owned).filter((k) => g.owned[k]);
+}
 
+// The drivable boat at the Marina.
 export function createBoat() {
   return { x: BOAT.x, z: BOAT.z, angle: 0, speed: 0, boarded: false };
 }
-
-export function boardBoat(b, x, z) {
-  if (dist2(x, z, b.x, b.z) > 12) return false;
-  b.boarded = true;
+export function boardBoat(boat, x, z) {
+  if (dist2(x, z, boat.x, boat.z) > 12) return false;
+  boat.boarded = true;
   return true;
 }
-
-export function leaveBoat(b) {
-  b.boarded = false;
-  b.speed = 0;
+export function leaveBoat(boat) {
+  boat.boarded = false;
+  boat.speed = 0;
   return true;
 }
-
-export function driveBoat(b, input, dt) {
-  if (!b.boarded) return;
-  if (input.forward) b.speed = Math.min(18, b.speed + 12 * dt);
-  else if (input.back) b.speed = Math.max(-6, b.speed - 8 * dt);
-  else b.speed *= Math.max(0, 1 - 0.8 * dt);
-  if (input.left) b.angle += 1.1 * dt;
-  if (input.right) b.angle -= 1.1 * dt;
-  b.x += Math.sin(b.angle) * b.speed * dt;
-  b.z += Math.cos(b.angle) * b.speed * dt;
-  b.x = clamp(b.x, -700, 760);
-  b.z = clamp(b.z, 640, 790);
+export function driveBoat(boat, input, dt) {
+  if (!boat.boarded) return false;
+  const go = input === true || (input && input.forward);
+  if (go) boat.speed = Math.min(20, boat.speed + 8 * dt);
+  else boat.speed = Math.max(0, boat.speed - 4 * dt);
+  boat.x += Math.sin(boat.angle) * boat.speed * dt;
+  boat.z += Math.cos(boat.angle) * boat.speed * dt;
+  return true;
 }

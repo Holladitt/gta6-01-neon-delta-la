@@ -1,197 +1,173 @@
-// The game world for Neon Delta LA: District Wars.
-// Holds player, car, wanted, standing, missions, crew, combat, cover,
-// races, jobs, tapes, garage, boat, traffic and police. The update
-// loop drives the car, the missions, the clock and the pursuit; a
-// frozen world (shot mode) never changes.
-import { MISSIONS, OBJECTIVE_RADIUS, PED_COUNT, TRAFFIC_TOTAL, WANTED_MAX, SHOP, GARAGE_POS, BOAT } from './config.js';
-import { districtAt } from './config.js';
-import { createMissionState, currentMission, currentObjective, reachObjective } from './missions.js';
+// world.js — the world state and its update: driving, missions, wanted, cover.
+import { MISSIONS, DISTRICTS } from './config.js';
+import { createMissionState, currentMission, reachObjective } from './missions.js';
 import { createStanding, addMissionStanding } from './standing.js';
+import { createWanted, setWanted, decayWanted } from './wanted.js';
+import { createCover, updateCover } from './cover.js';
 import { createShopState } from './shop.js';
 import { createCrewState } from './crew.js';
-import { createWanted } from './wanted.js';
 import { createCombat } from './combat.js';
-import { createCover } from './cover.js';
 import { createRaceState, createJobState, createTapeState } from './races.js';
-import { createGarage, createBoat } from './garage.js';
+import { createGarage, topSpeed } from './garage.js';
 import { createTraffic, updateTraffic } from './traffic.js';
 import { createPolice, updatePolice } from './police.js';
+import { rankCode, rpForPayout } from './rank.js';
+import { districtAt } from './config.js';
+import { inBuilding } from './geo.js';
 import { clamp, dist2 } from './rng.js';
-import { onRoad, inOcean, inBuilding } from './geo.js';
 
-export function createWorld(seed) {
+export function createWorld() {
   return {
     state: 'TITLE',
-    frozen: false,
     money: 500,
     day: 1,
     hour: 10,
     rp: 0,
     rank: 'D',
     district: 'downtown',
-    player: { x: -280, z: -280, angle: 0, onFoot: false },
-    car: { x: -280, z: -280, angle: 0, speed: 0, condition: 100, nitro: false, nitroTimer: 0 },
-    wanted: createWanted(),
-    standing: createStanding(),
+    frozen: false,
+    driving: true,
+    time: 0,
+    player: { x: 0, z: 0, angle: 0, onFoot: false },
+    car: { x: 0, z: 0, angle: 0, speed: 0, condition: 100 },
     missions: createMissionState(),
+    standing: createStanding(),
+    wanted: createWanted(),
+    cover: createCover(),
     shop: createShopState(),
     crew: createCrewState(),
     combat: createCombat(),
-    cover: createCover(),
     race: createRaceState(),
-    jobs: createJobState(),
+    job: createJobState(),
     tapes: createTapeState(),
     garage: createGarage(),
-    boat: createBoat(),
-    traffic: createTraffic(seed === undefined ? 90210 : seed),
+    traffic: createTraffic(90210),
     police: createPolice(),
-    wheelOpen: false,
-    toast: '',
+    boat: { x: 565, z: 648, speed: 0, boarded: false },
+    message: '',
   };
 }
-
-export function startMission(w, id) {
-  const m = MISSIONS.find((x) => x.id === id);
-  if (!m) return false;
-  w.missions.current = id;
-  w.missions.done = w.missions.done.filter((x) => x !== id);
-  if (m.startWanted !== undefined) w.wanted.level = m.startWanted;
+export function startMission(w, n) {
+  const m = MISSIONS[n - 1];
+  if (!m) return null;
+  w.missions.current = n;
+  w.missions.objective = 0;
   w.state = 'MISSION';
-  return true;
+  if (m.startWanted) setWanted(w.wanted, m.startWanted);
+  w.message = 'M' + m.id + ' ' + m.name.toUpperCase() + ' — ' + m.contact;
+  return m;
 }
-
-function nearObjective(w) {
-  const obj = currentObjective(w.missions);
-  if (!obj) return false;
-  const cx = w.player.onFoot ? w.player.x : w.car.x;
-  const cz = w.player.onFoot ? w.player.z : w.car.z;
-  return dist2(cx, cz, obj.x, obj.z) <= OBJECTIVE_RADIUS;
-}
-
-function driveCar(w, input, dt) {
-  const car = w.car;
-  const top = car.nitro ? 34 * 1.25 : 34;
-  if (input.forward) car.speed = Math.min(top, car.speed + 22 * dt);
-  else if (input.back) car.speed = Math.max(-8, car.speed - 18 * dt);
-  else car.speed -= Math.sign(car.speed) * Math.min(Math.abs(car.speed), 12 * dt);
-  if (input.left) car.angle -= 2.2 * dt * (car.speed > 0 ? 1 : -1);
-  if (input.right) car.angle += 2.2 * dt * (car.speed > 0 ? 1 : -1);
-  const nx = car.x + Math.sin(car.angle) * car.speed * dt;
-  const nz = car.z + Math.cos(car.angle) * car.speed * dt;
-  if (!inOcean(nx, nz) && !inBuilding(nx, nz)) {
-    car.x = nx;
-    car.z = nz;
-  } else {
-    car.speed *= 0.5;
-  }
-  car.x = clamp(car.x, -760, 760);
-  car.z = clamp(car.z, -760, 620);
-  w.player.x = car.x;
-  w.player.z = car.z;
-  w.player.angle = car.angle;
-}
-
-function walkPlayer(w, input, dt) {
-  const p = w.player;
-  const sp = 6;
-  if (input.forward) {
-    p.x += Math.sin(p.angle) * sp * dt;
-    p.z += Math.cos(p.angle) * sp * dt;
-  }
-  if (input.back) {
-    p.x -= Math.sin(p.angle) * sp * dt;
-    p.z -= Math.cos(p.angle) * sp * dt;
-  }
-  if (input.left) p.angle -= 2.2 * dt;
-  if (input.right) p.angle += 2.2 * dt;
-  p.x = clamp(p.x, -760, 760);
-  p.z = clamp(p.z, -760, 620);
-}
-
-export function updateWorld(w, input, dt) {
-  if (w.frozen) return;
-  const inp = input || {};
-  w.hour += dt / 60;
-  if (w.hour >= 24) {
-    w.hour -= 24;
-    w.day += 1;
-  }
-  if (w.player.onFoot) walkPlayer(w, inp, dt);
-  else driveCar(w, inp, dt);
-  w.district = districtAt(w.player.x, w.player.z);
-  if (w.state === 'MISSION') {
-    const cx = w.player.onFoot ? w.player.x : w.car.x;
-    const cz = w.player.onFoot ? w.player.z : w.car.z;
-    const ev = reachObjective(w.missions, cx, cz);
-    if (ev && ev.event === 'complete') {
-      w.money += ev.payout;
-      w.rp += Math.round(ev.payout / 10);
-      w.day += 1;
-      addMissionStanding(w.standing, ev.district);
-      w.state = 'FREE_ROAM';
-    }
-  }
-  const now = Date.now();
-  updateTraffic(w.traffic, dt, w.player.x, w.player.z);
-  updatePolice(w.police, w, dt, now);
-}
-
 export function enterCar(w) {
-  const d = dist2(w.player.x, w.player.z, w.car.x, w.car.z);
-  if (d > 10) return false;
+  if (dist2(w.player.x, w.player.z, w.car.x, w.car.z) > 8) return false;
+  w.driving = true;
   w.player.onFoot = false;
   w.player.x = w.car.x;
   w.player.z = w.car.z;
   return true;
 }
-
 export function exitCar(w) {
+  w.driving = false;
   w.player.onFoot = true;
-  w.player.x = w.car.x + 3;
+  w.player.x = w.car.x;
   w.player.z = w.car.z;
   return true;
 }
-
-export function stealCar(w, cars) {
-  const list = Array.isArray(cars) ? cars : [cars];
-  let best = null;
-  let bestD = Infinity;
-  for (const car of list) {
-    const d = dist2(w.player.x, w.player.z, car.x, car.z);
-    if (d < bestD) {
-      bestD = d;
-      best = car;
+export function stealCar(w, cars, z) {
+  let list = cars;
+  if (!Array.isArray(list)) {
+    if (typeof cars === 'number' && typeof z === 'number') list = [{ x: cars, z }];
+    else if (cars && typeof cars.x === 'number') list = [cars];
+    else list = [];
+  }
+  for (const c of list) {
+    if (dist2(w.player.x, w.player.z, c.x, c.z) < 12) {
+      w.driving = true;
+      w.player.onFoot = false;
+      w.car.x = c.x;
+      w.car.z = c.z;
+      w.player.x = c.x;
+      w.player.z = c.z;
+      return true;
     }
   }
-  if (!best || bestD > 5) return false;
-  w.player.onFoot = false;
-  w.car.x = best.x;
-  w.car.z = best.z;
-  w.car.speed = 0;
-  return true;
+  // Also allow stealing the hero car itself when standing next to it.
+  if (list.length === 0 && dist2(w.player.x, w.player.z, w.car.x, w.car.z) < 12) {
+    w.driving = true;
+    w.player.onFoot = false;
+    return true;
+  }
+  return false;
 }
-
-export function enterBoat(w) {
-  if (w.boat.boarded) return false;
-  const d = dist2(w.player.x, w.player.z, w.boat.x, w.boat.z);
-  if (d > 12) return false;
-  w.boat.boarded = true;
-  return true;
-}
-
-export function leaveBoat(w) {
-  w.boat.boarded = false;
-  return true;
-}
-
-export function setState(w, state) {
-  w.state = state;
-}
-
-export function pedTotal(w) {
-  return w.traffic.peds.length;
-}
-
-export function trafficTotal(w) {
-  return w.traffic.cars.length;
+export function updateWorld(w, input, dt) {
+  if (w.frozen) return w;
+  w.time += dt || 0;
+  const inp = input || {};
+  // Driving.
+  if (w.driving) {
+    const base = topSpeed(w.garage, 34);
+    const top = w.garage && w.garage.nitroUntil > w.time ? base * 1.5 : base;
+    if (inp.forward || inp.up || inp.throttle) w.car.speed += 22 * dt;
+    if (inp.back || inp.down) w.car.speed -= 18 * dt;
+    if (inp.brake) w.car.speed *= Math.max(0, 1 - 4 * dt);
+    w.car.speed = clamp(w.car.speed, -10, top);
+    if (!inp.forward && !inp.up && !inp.throttle && !inp.back && !inp.down) {
+      w.car.speed *= Math.max(0, 1 - 0.4 * dt);
+      if (Math.abs(w.car.speed) < 0.05) w.car.speed = 0;
+    }
+    const steer = (inp.left ? 1 : 0) - (inp.right ? 1 : 0) + (inp.steer || 0);
+    w.car.angle += steer * w.car.speed * 0.03 * dt;
+    const nx = w.car.x + Math.sin(w.car.angle) * w.car.speed * dt;
+    const nz = w.car.z + Math.cos(w.car.angle) * w.car.speed * dt;
+    if (inBuilding(nx, nz)) {
+      w.car.speed = 0;
+    } else {
+      w.car.x = clamp(nx, -780, 780);
+      w.car.z = clamp(nz, -780, 780);
+    }
+    w.player.x = w.car.x;
+    w.player.z = w.car.z;
+  } else {
+    // On foot.
+    const sp = 6;
+    let mx = 0;
+    let mz = 0;
+    if (inp.forward || inp.up) mz -= 1;
+    if (inp.back || inp.down) mz += 1;
+    if (inp.left) mx -= 1;
+    if (inp.right) mx += 1;
+    if (mx !== 0 || mz !== 0) {
+      const len = Math.hypot(mx, mz);
+      const nx = w.player.x + (mx / len) * sp * dt;
+      const nz = w.player.z + (mz / len) * sp * dt;
+      if (!inBuilding(nx, nz)) {
+        w.player.x = clamp(nx, -780, 780);
+        w.player.z = clamp(nz, -780, 780);
+      }
+      w.player.angle = Math.atan2(mx / len, mz / len);
+    }
+  }
+  // Mission objectives: the car or the player can reach them.
+  if (w.state === 'MISSION' || w.missions.current <= MISSIONS.length) {
+    let ev = reachObjective(w.missions, w.car.x, w.car.z);
+    if (ev.event === 'none') ev = reachObjective(w.missions, w.player.x, w.player.z);
+    if (ev.event === 'objective') {
+      w.message = 'Objective reached — ' + (currentMission(w.missions) ? currentMission(w.missions).points[w.missions.objective].label : '');
+    } else if (ev.event === 'complete') {
+      w.money += ev.payout;
+      w.rp += ev.rp;
+      w.rank = rankCode(w.rp);
+      w.day += 1;
+      addMissionStanding(w.standing, ev.district);
+      w.message = 'MISSION COMPLETE +$' + ev.payout;
+      if (w.missions.current > MISSIONS.length) w.state = 'FREE-ROAM';
+    }
+  }
+  // District, hour, wanted decay, cover, traffic, police.
+  w.district = districtAt(w.player.x, w.player.z).id;
+  w.hour = (w.hour + dt / 90) % 24;
+  decayWanted(w.wanted, dt, w.time);
+  updateCover(w.cover, dt, w.player.x, w.player.z, w.cover.witnesses.length > 0);
+  updateTraffic(w.traffic, dt, w.player.x, w.player.z);
+  updatePolice(w.police, w, dt, w.time);
+  return w;
 }

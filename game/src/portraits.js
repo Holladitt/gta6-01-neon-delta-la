@@ -1,36 +1,54 @@
-// Character portraits for the dialogue boxes of Neon Delta LA.
-// Procedural low-poly faces drawn on a canvas: skin, hair, jacket
-// and the contact's signature colour, so every dialogue box carries
-// a readable face next to the speaker's name.
-export const PORTRAITS = {
-  mara: { skin: 0xd9a066, hair: 0x2c1a12, jacket: 0xe74c3c, accent: 0x2471a3 },
-  inez: { skin: 0xc98a5a, hair: 0x1a1a1a, jacket: 0x8e44ad, accent: 0xf1c40f },
-  orin: { skin: 0xe0ac69, hair: 0x6b4f2a, jacket: 0x2c3e50, accent: 0x1abc9c },
-  eden: { skin: 0xd9a066, hair: 0x3a3a3a, jacket: 0x16a085, accent: 0xf39c12 },
-  harlan: { skin: 0xc98a5a, hair: 0x2c1a12, jacket: 0x7f8c8d, accent: 0xe74c3c },
-};
+// portraits.js — stylised bust portraits drawn on canvas, one per contact.
+const SKIN = { mara: '#e8b48c', inez: '#d9a06b', orin: '#c98f5f', harlan: '#b98a5e', eden: '#e8b48c', default: '#d9a06b' };
+const HAIR = { mara: '#1a1a1a', inez: '#2b1a12', orin: '#3a2a1a', harlan: '#111111', eden: '#6b3a1a', default: '#222222' };
+const JACKET = { mara: '#e74c3c', inez: '#8e44ad', orin: '#2e6fb0', harlan: '#27ae60', eden: '#f39c12', default: '#555555' };
 
-export function portraitColors(name) {
-  const key = String(name || 'mara').toLowerCase();
-  return PORTRAITS[key] || PORTRAITS.mara;
-}
-
-export function drawPortrait(ctx, name, x, y, size) {
-  const c = portraitColors(name);
-  const css = (n) => '#' + n.toString(16).padStart(6, '0');
-  ctx.fillStyle = css(c.accent);
-  ctx.fillRect(x, y, size, size);
-  ctx.fillStyle = css(c.skin);
-  ctx.beginPath();
-  ctx.arc(x + size / 2, y + size * 0.42, size * 0.28, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = css(c.hair);
-  ctx.beginPath();
-  ctx.arc(x + size / 2, y + size * 0.36, size * 0.28, Math.PI, 0);
-  ctx.fill();
-  ctx.fillStyle = css(c.jacket);
-  ctx.fillRect(x + size * 0.18, y + size * 0.72, size * 0.64, size * 0.28);
-  ctx.fillStyle = '#111';
-  ctx.fillRect(x + size * 0.42, y + size * 0.42, size * 0.05, size * 0.05);
-  ctx.fillRect(x + size * 0.56, y + size * 0.42, size * 0.05, size * 0.05);
+export function drawPortrait(canvas, name) {
+  const key = (name || 'default').toLowerCase();
+  const c = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  c.clearRect(0, 0, w, h);
+  // Backdrop.
+  const g = c.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, '#2c1a3a');
+  g.addColorStop(1, '#12081f');
+  c.fillStyle = g;
+  c.fillRect(0, 0, w, h);
+  // Shoulders / jacket.
+  c.fillStyle = JACKET[key] || JACKET.default;
+  c.beginPath();
+  c.moveTo(w * 0.08, h);
+  c.quadraticCurveTo(w * 0.2, h * 0.62, w * 0.5, h * 0.62);
+  c.quadraticCurveTo(w * 0.8, h * 0.62, w * 0.92, h);
+  c.closePath();
+  c.fill();
+  // Neck.
+  c.fillStyle = SKIN[key] || SKIN.default;
+  c.fillRect(w * 0.44, h * 0.5, w * 0.12, h * 0.18);
+  // Head.
+  c.beginPath();
+  c.ellipse(w * 0.5, h * 0.36, w * 0.19, h * 0.22, 0, 0, Math.PI * 2);
+  c.fill();
+  // Hair.
+  c.fillStyle = HAIR[key] || HAIR.default;
+  c.beginPath();
+  c.ellipse(w * 0.5, h * 0.2, w * 0.2, h * 0.14, 0, Math.PI, Math.PI * 2);
+  c.fill();
+  c.fillRect(w * 0.3, h * 0.18, w * 0.05, h * 0.22);
+  c.fillRect(w * 0.65, h * 0.18, w * 0.05, h * 0.22);
+  // Eyes.
+  c.fillStyle = '#111111';
+  c.beginPath();
+  c.arc(w * 0.43, h * 0.35, w * 0.018, 0, Math.PI * 2);
+  c.arc(w * 0.57, h * 0.35, w * 0.018, 0, Math.PI * 2);
+  c.fill();
+  // Mouth.
+  c.strokeStyle = '#7a3a2a';
+  c.lineWidth = Math.max(1, w * 0.012);
+  c.beginPath();
+  c.moveTo(w * 0.45, h * 0.47);
+  c.quadraticCurveTo(w * 0.5, h * 0.5, w * 0.55, h * 0.47);
+  c.stroke();
+  return canvas;
 }

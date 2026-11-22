@@ -1,42 +1,47 @@
-// Neon Delta LA: District Wars — local static server.
-// Serves game/ on http://localhost:8080 so the game can be played and
-// screenshotted offline from static files. Node 22, standard library
-// only. Run: node serve.ts
-import { createReadStream, existsSync, statSync } from 'node:fs';
-import { join, extname } from 'node:path';
-import { createServer } from 'node:http';
+// serve.ts — static server for the game. Serves the repo root on port 8080;
+// GET / serves game/index.html.
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const repoRoot = fileURLToPath(new URL('.', import.meta.url));
-const gameRoot = join(repoRoot, 'game');
-const port = Number(process.env.PORT || 8080);
-
-const mimeTypes = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.ts': 'text/typescript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
+const root = path.dirname(fileURLToPath(import.meta.url));
+const PORT = Number(process.env.PORT || 8080);
+const MIME: Record<string, string> = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.ts': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
 };
 
-const server = createServer((req, res) => {
-  const urlPath = decodeURIComponent(new URL(req.url || '/', 'http://localhost').pathname);
-  const rel = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '');
-  const file = join(gameRoot, rel);
-  if (!file.startsWith(gameRoot) || !existsSync(file) || !statSync(file).isFile()) {
-    res.writeHead(404, { 'content-type': 'text/plain' });
-    res.end('not found');
+const server = http.createServer((req, res) => {
+  const url = new URL(req.url || '/', 'http://localhost');
+  let rel = decodeURIComponent(url.pathname);
+  if (rel === '/') rel = '/game/index.html';
+  const file = path.join(root, rel);
+  if (!file.startsWith(root)) {
+    res.writeHead(403);
+    res.end('forbidden');
     return;
   }
-  res.writeHead(200, { 'content-type': mimeTypes[extname(file)] || 'application/octet-stream' });
-  createReadStream(file).pipe(res);
+  fs.readFile(file, (err, data) => {
+    if (err) {
+      res.writeHead(404);
+      res.end('not found');
+      return;
+    }
+    const ext = path.extname(file);
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    res.end(data);
+  });
 });
 
-server.listen(port, () => {
-  console.log('Neon Delta LA serving game/ on http://localhost:' + port);
+server.listen(PORT, () => {
+  console.log('Neon Delta LA serving on http://localhost:' + PORT);
 });

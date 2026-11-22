@@ -1,40 +1,31 @@
-// People of Neon Delta LA: Mara Solano, the crew, the contacts and the
-// pedestrian archetypes that dress the sidewalks.
+// characters.js — Mara, the crew contacts and the ped archetypes.
+import { MISSIONS } from './config.js';
+
 export const MARA = {
   name: 'Mara Solano',
-  role: 'ex-getaway driver',
+  role: 'Ex-getaway driver',
+  age: 28,
   jacket: 0xe74c3c,
-  backpack: 0x2471a3,
-  district: 'downtown',
-  bio: 'Ex-getaway driver. Her vanished sister held proof of corruption: a mayor, a port businessman, the police.',
+  backpack: 0x2e6fb0,
+  bio: 'A getaway driver who walked away from the life — until her sister vanished with proof of a corruption ring.',
 };
 
-export const CONTACTS = [
-  { name: 'Eden Voss', district: 'downtown', role: 'fixer' },
-  { name: 'Harlan Dray', district: 'venice', role: 'smuggler' },
-  { name: 'Lucia Marlow', district: 'marina', role: 'mechanic' },
-  { name: 'Dante Kovac', district: 'hills', role: 'lookout' },
-  { name: 'Sable Okonkwo', district: 'downtown', role: 'fence' },
-  { name: 'Vera Lindqvist', district: 'port', role: 'broker' },
-  { name: 'Inez Vargas', district: 'pier', role: 'ledger keeper' },
-  { name: 'Orin Beck', district: 'port', role: 'whistleblower' },
-  { name: 'Lena Marsh', district: 'marina', role: 'diver' },
-  { name: 'Elias Frost', district: 'hills', role: 'witness' },
-];
-
-export function contactByName(name) {
-  return CONTACTS.find((c) => c.name === name) || CONTACTS[0];
-}
-
 const ARCHETYPES = [
-  { name: 'commuter', shirt: 0x34495e, speed: 1.2 },
-  { name: 'tourist', shirt: 0xf39c12, speed: 0.8 },
-  { name: 'dockworker', shirt: 0xe67e22, speed: 1.0 },
-  { name: 'student', shirt: 0x3498db, speed: 1.5 },
-  { name: 'vendor', shirt: 0x2ecc71, speed: 0.6 },
-  { name: 'runner', shirt: 0xe74c3c, speed: 2.0 },
+  { name: 'commuter', speed: 1.2, color: 0x8a8f98 },
+  { name: 'tourist', speed: 0.9, color: 0xf2c14e },
+  { name: 'dockworker', speed: 1.1, color: 0xe67e22 },
+  { name: 'vendor', speed: 0.8, color: 0x9b59b6 },
+  { name: 'jogger', speed: 2.4, color: 0x1abc9c },
+  { name: 'student', speed: 1.4, color: 0x3498db },
+  { name: 'officer', speed: 1.3, color: 0x2c3e50 },
+  { name: 'dealer', speed: 1.0, color: 0x27ae60 },
 ];
-
 export function pedArchetype(i) {
-  return ARCHETYPES[((i % ARCHETYPES.length) + ARCHETYPES.length) % ARCHETYPES.length];
+  return ARCHETYPES[i % ARCHETYPES.length];
+}
+export function contacts() {
+  return MISSIONS.map((m) => ({ name: m.contact, district: m.district, mission: m.id }));
+}
+export function contactByName(name) {
+  return contacts().find((c) => c.name === name);
 }

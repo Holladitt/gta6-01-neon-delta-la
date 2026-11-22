@@ -6,107 +6,122 @@
 <title>Neon Delta LA: District Wars</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0f1a; font-family: 'Segoe UI', Arial, sans-serif; color: #fff; }
-  #game { position: fixed; inset: 0; }
-  #game canvas { width: 100%; height: 100%; display: block; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0e18; font-family: 'Segoe UI', system-ui, sans-serif; color: #fff; }
+  #game-container { position: fixed; inset: 0; }
+  #game-container canvas { width: 100%; height: 100%; display: block; }
   #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
-  #hud-money { position: absolute; top: 14px; right: 18px; font-size: 26px; font-weight: 800; color: #2ecc71; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
-  #hud-speed { position: absolute; bottom: 18px; right: 22px; font-size: 44px; font-weight: 900; font-style: italic; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.85); }
-  #hud-district { position: absolute; bottom: 84px; left: 50%; transform: translateX(-50%); font-size: 34px; font-weight: 900; font-style: italic; letter-spacing: 3px; color: #ffd76a; text-shadow: 0 2px 10px rgba(0,0,0,.9); }
-  #hud-cover { position: absolute; top: 14px; left: 18px; font-size: 15px; font-weight: 700; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.8); }
-  #minimap { position: absolute; bottom: 18px; left: 18px; width: 160px; height: 160px; border: 3px solid rgba(255,255,255,.7); border-radius: 50%; background: #2c3e50; }
-  #mission-bar { position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%); text-align: center; z-index: 11; pointer-events: none; text-shadow: 0 2px 8px rgba(0,0,0,.9); }
-  #mb-title { font-size: 22px; font-weight: 900; letter-spacing: 1px; color: #ffd76a; }
-  #mb-objective { font-size: 18px; font-weight: 700; color: #fff; }
-  #mb-next { font-size: 14px; font-weight: 600; color: #9fc3e8; }
-  #dialogue { position: fixed; bottom: 210px; left: 50%; transform: translateX(-50%); width: 640px; max-width: 90vw; background: rgba(10,15,26,.85); border: 2px solid #ffd76a; border-radius: 10px; padding: 14px 16px 14px 96px; z-index: 12; min-height: 100px; }
-  /* v26 shot 1 only: the hero car is the hero of the frame and fills the
-     lower half, so the bottom-centre HUD would cover it. For shot 1 the
-     dialogue moves to the top-left and the mission bar to the top-right
-     (over empty sky), leaving the whole lower frame to the car. main.js
-     adds body.shot1 only while shot 1 is staged; other shots keep the
-     default bottom-centre HUD. */
-  body.shot1 #dialogue { top: 90px; bottom: auto; left: 20px; transform: none; }
-  /* v28: right 20px put the longest line (NEXT: Lose the tail) hard
-     against the right frame edge. 48px clears the edge with room. */
-  body.shot1 #mission-bar { top: 90px; bottom: auto; left: auto; right: 48px; transform: none; text-align: right; }
-  /* v28 shot 2 only: the bottom-centre mission bar and the VENICE
-     label sat on Mara's legs (she fills the centre of the frame down
-     to the bottom edge). For this shot they move to the bottom-left
-     over the empty forecourt grass — left of the minimap's right edge,
-     clear of Mara entirely — keeping the same bottom offsets. */
-  body.shot2 #mission-bar { left: 200px; transform: none; text-align: left; }
-  body.shot2 #hud-district { left: 200px; transform: none; text-align: left; }
-  /* v27 declutter: in staged shots the abstract property panels are
-     hidden so the 3D scene dominates the frame — big car / big Mara /
-     landmark / dusk light, no big text block competing with the scene.
-     The game HUD and all game logic are untouched; only the staged
-     screenshot presentation changes. The weapon wheel (tier + price
-     list), the shop tier panel (tier + price + OWNED list), the top
-     stat bar (COVER / TAPES / RADIO) and the money + stars all hide in
-     every staged shot. Story UI stays: dialogue + portrait, mission
-     bar, district label, minimap, speed, game title. */
-  body.shot1 #wheel, body.shot2 #wheel, body.shot3 #wheel, body.shot4 #wheel { display: none !important; }
-  body.shot1 #shop-panel, body.shot2 #shop-panel, body.shot3 #shop-panel, body.shot4 #shop-panel { display: none !important; }
-  body.shot1 #hud-cover, body.shot2 #hud-cover, body.shot3 #hud-cover, body.shot4 #hud-cover { display: none !important; }
-  body.shot1 #hud-money, body.shot2 #hud-money, body.shot3 #hud-money, body.shot4 #hud-money { display: none !important; }
-  .dlg-portrait { position: absolute; left: 12px; top: 12px; width: 72px; height: 72px; border-radius: 6px; }
-  .dlg-name { font-size: 15px; font-weight: 900; letter-spacing: 2px; color: #ffd76a; margin-bottom: 4px; }
-  .dlg-line { font-size: 17px; line-height: 1.4; color: #fff; }
-  #wheel { position: fixed; top: 50%; left: 18px; transform: translateY(-50%); width: 340px; background: rgba(10,15,26,.88); border: 2px solid #e74c3c; border-radius: 12px; padding: 16px; z-index: 13; display: none; }
-  .wheel-title { font-size: 18px; font-weight: 900; letter-spacing: 2px; color: #e74c3c; margin-bottom: 10px; text-align: center; }
-  .wheel-row { font-size: 16px; font-weight: 700; padding: 8px 10px; border-radius: 6px; color: #bbb; }
-  .wheel-row.owned { color: #fff; background: rgba(46,204,113,.25); }
-  #shop-panel { position: fixed; top: 90px; right: 18px; width: 300px; background: rgba(10,15,26,.88); border: 2px solid #1abc9c; border-radius: 12px; padding: 14px; z-index: 13; display: none; }
-  .shop-title { font-size: 22px; font-weight: 900; letter-spacing: 2px; color: #1abc9c; margin-bottom: 8px; }
-  .shop-row { font-size: 15px; font-weight: 700; padding: 7px 4px; border-bottom: 1px solid rgba(255,255,255,.15); color: #ddd; }
-  .shop-row.owned { color: #2ecc71; }
-  .shop-tier { color: #ffd76a; }
-  .shop-note { font-size: 12px; color: #9fc3e8; margin-top: 8px; }
-  #title-screen { position: fixed; inset: 0; z-index: 20; background: linear-gradient(160deg, #0a0f1a 0%, #1a2340 55%, #3a1a2a 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-  #title-screen h1 { font-size: 72px; font-weight: 900; font-style: italic; letter-spacing: 4px; color: #ffd76a; text-shadow: 0 4px 24px rgba(255,150,60,.5); }
-  #title-screen h2 { font-size: 34px; font-weight: 800; letter-spacing: 10px; color: #e74c3c; margin-bottom: 12px; }
-  #title-screen p { font-size: 16px; color: #cfe3f5; margin-bottom: 28px; }
-  .title-btn { display: block; width: 320px; margin: 8px auto; padding: 14px; font-size: 20px; font-weight: 800; letter-spacing: 2px; color: #fff; background: #c0392b; border: none; border-radius: 8px; cursor: pointer; }
-  .title-btn:hover { background: #e74c3c; }
-  .title-btn.secondary { background: #1a5276; }
-  #title-slots { margin-top: 22px; font-size: 15px; color: #9fc3e8; }
-  .slot-row { padding: 4px; }
-  #game-title { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); text-align: center; z-index: 11; pointer-events: none; text-shadow: 0 2px 10px rgba(0,0,0,.9); }
-  #game-title .gt-main { font-size: 30px; font-weight: 900; font-style: italic; letter-spacing: 4px; color: #ffd76a; }
-  #game-title .gt-sub { font-size: 15px; font-weight: 800; letter-spacing: 8px; color: #e74c3c; }
-  #pause-menu { position: fixed; inset: 0; z-index: 30; background: rgba(10,15,26,.8); display: none; text-align: center; padding-top: 18vh; }
-  #pause-menu h2 { font-size: 48px; font-weight: 900; letter-spacing: 6px; color: #ffd76a; margin-bottom: 20px; }
-  #pause-menu p { font-size: 16px; color: #cfe3f5; line-height: 1.8; }
+  .hidden { display: none !important; }
+  /* In-game title (staged shots only — the title screen covers it in free-roam). */
+  #game-title { display: none; position: absolute; top: 14px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; z-index: 5; }
+  #game-title .t1 { font-size: 26px; font-weight: 800; font-style: italic; letter-spacing: 5px; color: #f2c14e; text-shadow: 0 0 16px rgba(242,193,78,0.6), 0 2px 0 rgba(0,0,0,0.7); }
+  #game-title .t2 { font-size: 13px; letter-spacing: 8px; color: #ff5a3c; text-shadow: 0 2px 6px rgba(0,0,0,0.8); margin-top: 2px; }
+  body.shot1 #game-title, body.shot2 #game-title, body.shot3 #game-title, body.shot4 #game-title { display: block; }
+  /* Title screen */
+  #title-screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, rgba(20,8,40,0.92), rgba(10,6,20,0.96)); pointer-events: auto; text-align: center; }
+  #title-screen h1 { font-size: 64px; letter-spacing: 6px; color: #ff5a3c; text-shadow: 0 0 24px rgba(255,90,60,0.8), 0 4px 0 #7a1a0a; }
+  #title-screen h2 { font-size: 22px; letter-spacing: 10px; color: #1abc9c; margin-top: 6px; }
+  #title-screen p { margin-top: 14px; color: #ffd27a; font-size: 15px; }
+  #slot-list { margin-top: 28px; display: flex; flex-direction: column; gap: 10px; }
+  .slot-btn { pointer-events: auto; background: rgba(255,255,255,0.08); border: 1px solid #ffd27a; color: #fff; font-size: 16px; padding: 12px 28px; cursor: pointer; min-width: 420px; text-align: left; }
+  .slot-btn:hover { background: rgba(255,210,122,0.25); }
+  /* Dialogue */
+  #dialogue { position: absolute; top: 18px; left: 18px; display: flex; gap: 12px; align-items: flex-start; max-width: 560px; background: rgba(10,10,20,0.72); border-left: 4px solid #e74c3c; padding: 12px 16px; border-radius: 4px; }
+  #portrait { width: 64px; height: 64px; border-radius: 50%; flex: none; }
+  #dialogue-name { font-size: 13px; letter-spacing: 3px; color: #ffd27a; }
+  #dialogue-text { font-size: 17px; line-height: 1.35; margin-top: 4px; }
+  /* Mission bar */
+  #mission-bar { position: absolute; top: 18px; right: 18px; text-align: right; background: rgba(10,10,20,0.72); border-right: 4px solid #1abc9c; padding: 12px 16px; border-radius: 4px; max-width: 480px; }
+  #mission-title { font-size: 15px; letter-spacing: 2px; color: #1abc9c; }
+  #mission-objective { font-size: 18px; margin-top: 4px; }
+  #mission-next { font-size: 13px; color: #ffd27a; margin-top: 4px; }
+  /* District + minimap + speed */
+  #district-label { position: absolute; left: 18px; bottom: 18px; font-size: 20px; letter-spacing: 4px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+  #minimap { position: absolute; right: 18px; bottom: 18px; width: 180px; height: 180px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.5); }
+  #speed { position: absolute; right: 210px; bottom: 24px; font-size: 22px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+  #radio-label { position: absolute; right: 210px; bottom: 56px; font-size: 13px; letter-spacing: 2px; color: #ffd27a; }
+  /* Standing / cover / tapes / money / weapon */
+  #standing-bar { position: absolute; left: 18px; bottom: 56px; width: 220px; height: 10px; background: rgba(255,255,255,0.2); border-radius: 5px; overflow: hidden; }
+  #standing-fill { height: 100%; width: 0%; background: #1abc9c; }
+  #hud-cover { position: absolute; left: 18px; bottom: 76px; width: 220px; }
+  #hud-cover .label { font-size: 11px; letter-spacing: 2px; color: #ccc; }
+  #cover-fill { height: 8px; background: #e74c3c; width: 100%; border-radius: 4px; }
+  #hud-tapes { position: absolute; left: 18px; bottom: 100px; font-size: 13px; letter-spacing: 2px; color: #ffd27a; }
+  #hud-money { position: absolute; left: 18px; top: 150px; font-size: 22px; color: #7dff9a; text-shadow: 0 2px 8px rgba(0,0,0,0.8); }
+  #hud-weapon { position: absolute; right: 210px; bottom: 90px; font-size: 14px; letter-spacing: 2px; color: #fff; }
+  /* Wheel / shop / dispatch */
+  #wheel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; gap: 8px; background: rgba(10,10,20,0.8); padding: 16px; border-radius: 8px; pointer-events: auto; }
+  .wheel-item { padding: 8px 18px; border: 1px solid #444; color: #bbb; font-size: 14px; letter-spacing: 1px; }
+  .wheel-item.owned { color: #fff; }
+  .wheel-item.active { border-color: #ffd27a; background: rgba(255,210,122,0.2); }
+  .wheel-item.locked { opacity: 0.55; }
+  #shop-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(10,10,20,0.92); padding: 20px; border-radius: 8px; pointer-events: auto; min-width: 420px; }
+  #shop-panel h3 { color: #ffd27a; letter-spacing: 3px; margin-bottom: 12px; }
+  .shop-item { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.12); font-size: 14px; }
+  .shop-item button { background: #1abc9c; border: none; color: #fff; padding: 4px 14px; cursor: pointer; }
+  #dispatch-panel { position: absolute; right: 18px; top: 150px; background: rgba(10,10,20,0.72); padding: 10px 14px; border-radius: 4px; font-size: 13px; max-width: 320px; }
+  #dispatch-panel h4 { color: #ff6a5a; letter-spacing: 2px; margin-bottom: 6px; }
+  .dispatch-row { padding: 2px 0; color: #ddd; }
+  /* Toast + pause */
+  #toast { position: absolute; left: 50%; top: 120px; transform: translateX(-50%); background: rgba(10,10,20,0.85); border: 1px solid #ffd27a; color: #ffd27a; padding: 10px 22px; border-radius: 4px; font-size: 16px; }
+  #pause-menu { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); pointer-events: auto; }
+  #pause-menu div { font-size: 40px; letter-spacing: 8px; color: #fff; }
+  /* v27 declutter: in staged shots, hide the abstract property panels.
+     Story UI (dialogue, mission bar, district, minimap, speed) stays. */
+  body.shot1 #wheel, body.shot2 #wheel, body.shot3 #wheel, body.shot4 #wheel,
+  body.shot1 #shop-panel, body.shot2 #shop-panel, body.shot3 #shop-panel, body.shot4 #shop-panel,
+  body.shot1 #hud-cover, body.shot2 #hud-cover, body.shot3 #hud-cover, body.shot4 #hud-cover,
+  body.shot1 #hud-money, body.shot2 #hud-money, body.shot3 #hud-money, body.shot4 #hud-money,
+  body.shot1 #hud-tapes, body.shot2 #hud-tapes, body.shot3 #hud-tapes, body.shot4 #hud-tapes,
+  body.shot1 #standing-bar, body.shot2 #standing-bar, body.shot3 #standing-bar, body.shot4 #standing-bar,
+  body.shot1 #dispatch-panel, body.shot2 #dispatch-panel, body.shot3 #dispatch-panel, body.shot4 #dispatch-panel,
+  body.shot1 #hud-weapon, body.shot2 #hud-weapon, body.shot3 #hud-weapon, body.shot4 #hud-weapon { display: none !important; }
 </style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./game/vendor/three.module.min.js"
+  }
+}
+</script>
 </head>
 <body>
-<div id="game"></div>
+<div id="game-container"></div>
 <div id="hud">
-  <div id="hud-cover"></div>
-  <div id="hud-money"></div>
-  <div id="hud-speed"></div>
-  <div id="hud-district"></div>
-  <canvas id="minimap" width="160" height="160"></canvas>
+  <div id="title-screen">
+    <h1>NEON DELTA LA</h1>
+    <h2>DISTRICT WARS</h2>
+    <p>6 districts · 10 story jobs · SWAT roadblocks · 4 weapon tiers · 3 save slots · street races</p>
+    <div id="slot-list"></div>
+    <p style="margin-top:18px;color:#aaa;font-size:13px">WASD drive · E enter car · Q weapon wheel · 1-4 weapons · C/V/X crew · F fire · P pause</p>
+  </div>
+  <div id="game-title"><div class="t1">NEON DELTA LA</div><div class="t2">DISTRICT WARS</div></div>
+  <div id="dialogue" class="hidden">
+    <canvas id="portrait" width="64" height="64"></canvas>
+    <div>
+      <div id="dialogue-name">MARA</div>
+      <div id="dialogue-text"></div>
+    </div>
+  </div>
+  <div id="mission-bar" class="hidden">
+    <div id="mission-title"></div>
+    <div id="mission-objective"></div>
+    <div id="mission-next"></div>
+  </div>
+  <div id="district-label">DOWNTOWN</div>
+  <canvas id="minimap" width="180" height="180"></canvas>
+  <div id="speed">0 km/h</div>
+  <div id="radio-label">RADIO: NEON 88</div>
+  <div id="standing-bar"><div id="standing-fill"></div></div>
+  <div id="hud-cover"><div class="label">COVER</div><div id="cover-fill"></div></div>
+  <div id="hud-tapes">TAPES 0/20</div>
+  <div id="hud-money">$500</div>
+  <div id="hud-weapon">PISTOL · TIER 1</div>
+  <div id="wheel" class="hidden"></div>
+  <div id="shop-panel" class="hidden"><h3>DELTA ARMS</h3><div id="shop-list"></div></div>
+  <div id="dispatch-panel" class="hidden"><h4>NDPD DISPATCH</h4><div id="dispatch-list"></div></div>
+  <div id="toast" class="hidden"></div>
+  <div id="pause-menu" class="hidden"><div>PAUSED</div></div>
 </div>
-<div id="game-title" style="display:none"><div class="gt-main">NEON DELTA LA</div><div class="gt-sub">DISTRICT WARS</div></div>
-<div id="mission-bar"><div id="mb-title"></div><div id="mb-objective"></div><div id="mb-next"></div></div>
-<div id="dialogue" style="display:none"></div>
-<div id="wheel"></div>
-<div id="shop-panel"></div>
-<div id="title-screen">
-  <h1>NEON DELTA LA</h1>
-  <h2>DISTRICT WARS</h2>
-  <p>6 districts &middot; 10 story jobs &middot; SWAT roadblocks &middot; 4 weapon tiers &middot; 3 save slots &middot; street races</p>
-  <button class="title-btn" id="btn-new">NEW GAME</button>
-  <button class="title-btn secondary" id="btn-continue">CONTINUE</button>
-  <button class="title-btn secondary" id="btn-load">LOAD SLOT 1</button>
-  <div id="title-slots"></div>
-</div>
-<div id="pause-menu"><h2>PAUSED</h2><p>WASD drive &middot; E enter/exit car &middot; Q weapon wheel &middot; 1-4 weapon tiers<br>C / V / X crew abilities &middot; Enter start mission &middot; Tab resume</p></div>
-<script type="importmap">
-{ "imports": { "three": "./vendor/three.module.min.js" } }
-</script>
-<script type="module" src="./src/main.js"></script>
+<script type="module" src="./game/src/main.js"></script>
 </body>
 </html>

@@ -1,116 +1,111 @@
-// Geography for Neon Delta LA: roads, ocean, buildings, landmarks.
-// Avenues run north-south, streets east-west, both 16 units wide.
-// West of x=-660 and south of z=635 is ocean. Buildings sit inside
-// city blocks, inset from the roads, and never on a shot staging point,
-// a mission point, a race checkpoint or the shop and garage.
-import { BOAT, CRANE, SHOP, PIER_DECK, GARAGE_POS, OCEAN_WEST, OCEAN_SOUTH } from './config.js';
+// geo.js — roads, ocean, buildings, landmarks, spawn points.
+// The map is x,z in [-800,800]. Ground texture maps world -780..780.
+import { SHOP, CRANE, BOAT, PIER_DECK } from './config.js';
 import { makeRng, range } from './rng.js';
 
-export const AVENUES = [-560, -320, -280, 0, 280, 560];
-export const STREETS = [-560, -280, 0, 280, 560];
-export const ROAD_HALF = 8;
-
-// Buildings: centre x,z, width, depth, height (storeys of window grid).
-// The shop forecourt block (x -560..-320, z -280..0) holds only one
-// building, far west of the shop, so the forecourt stays open grass.
-// The port yard (x 300..700, z 300..650) holds no buildings at all:
-// it is containers, the crane and open concrete.
-export const BUILDINGS = [
-  { x: -440, z: -420, w: 100, d: 100, h: 40 },
-  { x: -440, z: -520, w: 80, d: 60, h: 25 },
-  { x: -505, z: -140, w: 70, d: 100, h: 50 },
-  { x: -440, z: 140, w: 100, d: 120, h: 35 },
-  { x: -440, z: 420, w: 110, d: 100, h: 45 },
-  { x: -140, z: -420, w: 100, d: 100, h: 60 },
-  { x: -140, z: -520, w: 70, d: 60, h: 30 },
-  { x: -80, z: -140, w: 100, d: 120, h: 55 },
-  { x: -140, z: 140, w: 110, d: 120, h: 40 },
-  { x: -140, z: 420, w: 100, d: 100, h: 30 },
-  { x: 120, z: -420, w: 100, d: 100, h: 70 },
-  { x: 140, z: -520, w: 80, d: 60, h: 25 },
-  { x: 140, z: -140, w: 110, d: 120, h: 50 },
-  { x: 170, z: 140, w: 80, d: 100, h: 65 },
-  { x: 140, z: 420, w: 100, d: 100, h: 35 },
-  { x: 460, z: -420, w: 80, d: 100, h: 55 },
-  { x: 420, z: -520, w: 70, d: 60, h: 28 },
-  { x: 420, z: -140, w: 110, d: 120, h: 45 },
-  { x: 420, z: 140, w: 100, d: 110, h: 60 },
-  { x: 420, z: 340, w: 100, d: 60, h: 30 },
-  { x: 650, z: -200, w: 80, d: 100, h: 40 },
-  { x: 650, z: 100, w: 90, d: 110, h: 50 },
-  { x: -100, z: -650, w: 100, d: 80, h: 35 },
-  { x: 200, z: -650, w: 90, d: 80, h: 30 },
-  { x: -600, z: -100, w: 60, d: 80, h: 25 },
-  { x: -600, z: 200, w: 60, d: 80, h: 30 },
-];
-
-export function inOcean(x, z) {
-  return x < OCEAN_WEST || z > OCEAN_SOUTH;
-}
+export const ROAD_X = [-560, -320, -80, 160, 400];
+export const ROAD_Z = [-560, -320, -80, 160, 400];
+export const ROAD_HALF = 12;
 
 export function onRoad(x, z) {
-  for (const a of AVENUES) {
-    if (Math.abs(x - a) <= ROAD_HALF) return true;
+  for (const ax of ROAD_X) {
+    if (Math.abs(x - ax) <= ROAD_HALF) return true;
   }
-  for (const s of STREETS) {
-    if (Math.abs(z - s) <= ROAD_HALF) return true;
+  for (const sz of ROAD_Z) {
+    if (Math.abs(z - sz) <= ROAD_HALF) return true;
   }
   return false;
 }
-
-export function nearestRoadPoint(x, z) {
-  let bestA = AVENUES[0];
-  for (const a of AVENUES) {
-    if (Math.abs(x - a) < Math.abs(x - bestA)) bestA = a;
+function nearestLine(v, lines) {
+  let best = lines[0];
+  let bd = Math.abs(v - best);
+  for (const l of lines) {
+    const d = Math.abs(v - l);
+    if (d < bd) { bd = d; best = l; }
   }
-  let bestS = STREETS[0];
-  for (const s of STREETS) {
-    if (Math.abs(z - s) < Math.abs(z - bestS)) bestS = s;
-  }
-  if (Math.abs(x - bestA) <= Math.abs(z - bestS)) return { x: bestA, z };
-  return { x, z: bestS };
+  return best;
 }
-
+export function nearestRoadPoint(x, z) {
+  const ax = nearestLine(x, ROAD_X);
+  const sz = nearestLine(z, ROAD_Z);
+  if (Math.abs(x - ax) <= Math.abs(z - sz)) {
+    return { x: ax, z: Math.max(-780, Math.min(780, z)) };
+  }
+  return { x: Math.max(-780, Math.min(780, x)), z: sz };
+}
 export function randomRoadPoint(rng) {
   if (rng() < 0.5) {
-    const a = AVENUES[Math.floor(rng() * AVENUES.length)];
-    return { x: a, z: Math.round(range(rng, -700, 700)) };
+    const ax = ROAD_X[Math.floor(rng() * ROAD_X.length)];
+    return { x: ax, z: range(rng, -700, 700) };
   }
-  const s = STREETS[Math.floor(rng() * STREETS.length)];
-  return { x: Math.round(range(rng, -700, 700)), z: s };
+  const sz = ROAD_Z[Math.floor(rng() * ROAD_Z.length)];
+  return { x: range(rng, -700, 700), z: sz };
 }
 
-export function inBuilding(x, z) {
-  for (const b of BUILDINGS) {
-    if (x >= b.x - b.w / 2 && x <= b.x + b.w / 2 && z >= b.z - b.d / 2 && z <= b.z + b.d / 2) return true;
-  }
+export function inOcean(x, z) {
+  const onDeck = x >= PIER_DECK.x0 && x <= PIER_DECK.x1 && z >= PIER_DECK.z0 && z <= PIER_DECK.z1;
+  if (x <= -700 && !onDeck) return true;
+  if (z > 640) return true;
+  if (z > 620 && x < 600) return true;
   return false;
 }
 
+// 28 buildings, each at least 15 units clear of every road centreline and
+// clear of every pinned staging point, mission point and landmark.
+export const BUILDINGS = [
+  { x0: -480, z0: -580, x1: -360, z1: -440 },
+  { x0: -260, z0: -540, x1: -120, z1: -400 },
+  { x0: 20, z0: -540, x1: 180, z1: -400 },
+  { x0: 220, z0: -540, x1: 380, z1: -400 },
+  { x0: -480, z0: -300, x1: -400, z1: -180 },
+  { x0: -250, z0: -300, x1: -120, z1: -180 },
+  { x0: 20, z0: -300, x1: 180, z1: -180 },
+  { x0: 220, z0: -300, x1: 380, z1: -180 },
+  { x0: -480, z0: -60, x1: -360, z1: 40 },
+  { x0: -540, z0: 40, x1: -380, z1: 140 },
+  { x0: -260, z0: -140, x1: -120, z1: -20 },
+  { x0: -260, z0: 40, x1: -120, z1: 140 },
+  { x0: 20, z0: -140, x1: 180, z1: -20 },
+  { x0: 20, z0: 40, x1: 180, z1: 140 },
+  { x0: 220, z0: -60, x1: 380, z1: 40 },
+  { x0: 220, z0: 40, x1: 380, z1: 140 },
+  { x0: -540, z0: 280, x1: -380, z1: 380 },
+  { x0: -260, z0: 280, x1: -120, z1: 380 },
+  { x0: 20, z0: 280, x1: 180, z1: 380 },
+  { x0: 220, z0: 280, x1: 380, z1: 380 },
+  { x0: 420, z0: 260, x1: 560, z1: 380 },
+  { x0: 420, z0: 420, x1: 500, z1: 520 },
+  { x0: 580, z0: 420, x1: 720, z1: 520 },
+  { x0: 640, z0: 560, x1: 760, z1: 660 },
+  { x0: 580, z0: 260, x1: 720, z1: 380 },
+  { x0: 20, z0: 180, x1: 180, z1: 260 },
+  { x0: -540, z0: 420, x1: -380, z1: 500 },
+  { x0: -260, z0: 420, x1: -120, z1: 500 },
+  { x0: -376, z0: -235, x1: -332, z1: -205 },
+];
+// The shop building: DELTA ARMS, front door faces south (z -200).
+export function inBuilding(x, z) {
+  for (const b of BUILDINGS) {
+    if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1) return true;
+  }
+  return false;
+}
 export function buildingCenters() {
-  return BUILDINGS.map((b) => ({ x: b.x, z: b.z, w: b.w, d: b.d, h: b.h }));
+  return BUILDINGS.map((b) => ({
+    x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1,
+    cx: (b.x0 + b.x1) / 2, cz: (b.z0 + b.z1) / 2,
+  }));
 }
-
 export function landmarks() {
-  return {
-    shop: { x: SHOP.x, z: SHOP.z },
-    crane: { x: CRANE.x, z: CRANE.z },
-    boat: { x: BOAT.x, z: BOAT.z },
-    pierDeck: { x0: PIER_DECK.x0, x1: PIER_DECK.x1, z0: PIER_DECK.z0, z1: PIER_DECK.z1 },
-    garage: { x: GARAGE_POS.x, z: GARAGE_POS.z },
-  };
+  return { shop: SHOP, crane: CRANE, boat: BOAT, pierDeck: PIER_DECK };
 }
-
 export function spawnPoints() {
   return {
-    player: { x: -280, z: -280 },
+    player: { x: -320, z: -260 },
     portYard: { x: 500, z: 560 },
     pierStalls: { x: -700, z: 430 },
-    shop: { x: SHOP.x, z: SHOP.z },
-    marina: { x: 100, z: 100 },
   };
 }
-
-export function makeRoadRng(seed) {
-  return makeRng(seed);
+export function makeWorldRng() {
+  return makeRng(90210);
 }

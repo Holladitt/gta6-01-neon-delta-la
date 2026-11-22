@@ -1,180 +1,110 @@
-// Screenshot staging for Neon Delta LA: District Wars.
-// Four frozen dioramas. Shot mode freezes hour, mission, wanted,
-// standing, cover, tapes and money; vehicles, police and the helicopter
-// still move visually. Mara is large in shots 2, 3 and 4 (red jacket,
-// blue backpack, back view, whole) and the boat reads as a boat in
-// shot 4. Unstaged pedestrians stand on validated grids, never near
-// the camera: the port-yard grid keeps every ped at least 60 units
-// from the shot-4 camera, the forecourt grid at least 32 from the
-// shot-2 camera, so no foreground ped reads as a random block.
-import { SHOP, BOAT, CRANE, PIER_DECK } from './config.js';
-import { inBuilding, inOcean, onRoad } from './geo.js';
-import { dist2 } from './rng.js';
+// shots.js — pure shot data: staging positions and density grids.
+// No three.js here: the sim imports this module in Node.
+import { SHOP, BOAT, CRANE } from './config.js';
+import { inBuilding, inOcean } from './geo.js';
 
-export const SHOT2_CAMERA = { x: SHOP.x - 12, y: 4, z: SHOP.z + 52 };
-export const SHOT4_CAMERA = { x: 645, y: 3, z: 626 };
-export const SHOT2_MARA = { x: SHOP.x - 10, z: SHOP.z + 40 };
-export const SHOT4_MARA = { x: 632, z: 618 };
-export const SHOT4_BOAT = { x: 565, z: 648 };
-export const SHOP_FOOTPRINT = { x0: -350, x1: -290, z0: -230, z1: -170 };
+export const SHOTS = {
+  1: {
+    mission: 1, hour: 18, wanted: 5, standing: 20, cover: 100, tapes: 0, money: 500,
+    car: { x: -320, z: -261 },
+    camera: { x: -314, y: 2.6, z: -249 },
+    look: { x: -320, y: 2.2, z: -272 },
+    heli: { x: -320, y: 24, z: -300 },
+    roadblock: { x: -320, z: -295 },
+    swat: { x: -300, z: -298 },
+    peds: [
+      { x: -308, z: -250 }, { x: -332, z: -300 }, { x: -308, z: -340 }, { x: -332, z: -260 },
+      { x: -308, z: -270 }, { x: -332, z: -380 }, { x: -308, z: -290 }, { x: -332, z: -315 },
+    ],
+    title: 'M1 THE GETAWAY · TAHAP 1/2',
+    objective: 'Pick up Eden',
+    next: 'Lose the tail',
+    dialogue: { name: 'MARA', text: 'Five stars and a roadblock ahead — punch through, don\'t stop.' },
+  },
+  2: {
+    mission: 2, hour: 10, wanted: 0, standing: 10, cover: 100, tapes: 1, money: 900,
+    mara: { x: SHOP.x - 10, z: SHOP.z + 40 },
+    parkedCar: { x: SHOP.x - 45, z: SHOP.z - 35 },
+    camera: { x: SHOP.x - 10, y: 3.5, z: SHOP.z + 47 },
+    look: { x: SHOP.x - 10, y: 2.6, z: SHOP.z + 40 },
+    peds: [
+      { x: -342, z: -160 }, { x: -310, z: -165 }, { x: -342, z: -185 }, { x: -305, z: -190 }, { x: -340, z: -200 },
+    ],
+    foregroundPeds: [
+      { x: -348, z: -152 }, { x: -312, z: -152 }, { x: -346, z: -168 }, { x: -316, z: -170 },
+    ],
+    title: 'M2 VENICE CANALS · TAHAP 1/2',
+    objective: 'Meet Harlan',
+    next: 'Drop the package',
+    dialogue: { name: 'HARLAN', text: 'The canals are quiet tonight. Keep the package moving.' },
+  },
+  3: {
+    mission: 7, hour: 21, wanted: 0, standing: 40, cover: 100, tapes: 5, money: 2900,
+    mara: { x: -652, z: 428 },
+    camera: { x: -639, y: 1.8, z: 428 },
+    look: { x: -652, y: 2.2, z: 428 },
+    peds: [
+      { x: -670, z: 415 }, { x: -668, z: 445 }, { x: -675, z: 425 }, { x: -672, z: 450 },
+      { x: -680, z: 440 }, { x: -678, z: 420 }, { x: -685, z: 435 }, { x: -682, z: 455 },
+      { x: -690, z: 430 }, { x: -688, z: 448 },
+    ],
+    foregroundPeds: [
+      { x: -664, z: 418 }, { x: -668, z: 414 }, { x: -660, z: 422 }, { x: -664, z: 438 },
+      { x: -668, z: 442 }, { x: -660, z: 434 }, { x: -650, z: 440 }, { x: -654, z: 422 },
+    ],
+    foregroundProps: [
+      { x: -674, z: 412 }, { x: -674, z: 444 }, { x: -662, z: 424 }, { x: -662, z: 432 },
+      { x: -660, z: 446 }, { x: -668, z: 448 }, { x: -658, z: 428 }, { x: -666, z: 422 }, { x: -666, z: 434 },
+    ],
+    title: 'M7 THE NIGHT LEDGER · TAHAP 1/2',
+    objective: 'Meet Inez',
+    next: 'Take the ledger',
+    dialogue: { name: 'INEZ', text: 'The ledger is under the boards. Take it and go before the lights come on.' },
+  },
+  4: {
+    mission: 8, hour: 18, wanted: 2, standing: 60, cover: 80, tapes: 8, money: 4500,
+    mara: { x: 632, z: 618 },
+    car: { x: 615, z: 615 },
+    boat: { x: BOAT.x, z: BOAT.z },
+    crane: { x: CRANE.x, z: CRANE.z },
+    camera: { x: 645, y: 3, z: 626 },
+    look: { x: 590, y: 4, z: 615 },
+    peds: [
+      { x: 400, z: 520 }, { x: 440, z: 560 }, { x: 500, z: 540 }, { x: 460, z: 600 },
+      { x: 540, z: 580 }, { x: 380, z: 560 }, { x: 470, z: 600 }, { x: 585, z: 605 },
+    ],
+    apron: [
+      { x: 608, z: 620 }, { x: 600, z: 624 }, { x: 598, z: 610 }, { x: 628, z: 624 }, { x: 620, z: 628 },
+    ],
+    road: [
+      { x: 633.9, z: 608.4 }, { x: 637.6, z: 634.1 }, { x: 630.2, z: 582.7 },
+    ],
+    title: 'M8 THE LAST SIGNAL · TAHAP 1/3',
+    objective: 'Marina drop',
+    next: 'Pier drop',
+    dialogue: { name: 'ORIN', text: 'Two drops left and the proof goes out tonight. Keep the car running.' },
+  },
+};
 
-// Port yard grid: 13 columns x 9 rows over the open yard, filtered to
-// spots clear of buildings and water and at least 60 units from the
-// shot-4 camera, so no ped ever blocks the foreground.
-export function shot4YardSpots() {
-  const spots = [];
-  for (let i = 0; i < 13; i += 1) {
-    for (let j = 0; j < 9; j += 1) {
-      const x = 380 + i * 20;
-      const z = 500 + j * 15;
-      if (inBuilding(x, z)) continue;
-      if (inOcean(x, z)) continue;
-      if (dist2(x, z, SHOT4_CAMERA.x, SHOT4_CAMERA.z) < 60) continue;
-      if (dist2(x, z, CRANE.x, CRANE.z) < 12) continue;
-      spots.push({ x, z });
-    }
-  }
-  return spots;
-}
-
-// Shop forecourt grid: a wide sweep of the forecourt, filtered to spots
-// clear of buildings and water, off the road, clear of the shop front
-// and at least 32 units from the shot-2 camera.
 export function shot2ForecourtSpots() {
   const spots = [];
-  for (let i = 0; i < 16; i += 1) {
-    for (let j = 0; j < 14; j += 1) {
-      const x = -460 + i * 20;
-      const z = -300 + j * 20;
+  for (let x = -420; x <= -288; x += 11) {
+    for (let z = -240; z <= -120; z += 11) {
       if (inBuilding(x, z)) continue;
       if (inOcean(x, z)) continue;
-      if (onRoad(x, z)) continue;
-      if (x >= SHOP_FOOTPRINT.x0 && x <= SHOP_FOOTPRINT.x1 && z >= SHOP_FOOTPRINT.z0 && z <= SHOP_FOOTPRINT.z1) continue;
-      if (dist2(x, z, SHOT2_CAMERA.x, SHOT2_CAMERA.z) < 32) continue;
       spots.push({ x, z });
     }
   }
   return spots;
 }
-
-// Staged pedestrians the shots place by hand (visible in the frame).
-export const SHOT1_PEDS = [
-  { x: -308, z: -250 }, { x: -332, z: -300 }, { x: -308, z: -340 },
-  { x: -332, z: -260 }, { x: -308, z: -270 }, { x: -332, z: -380 },
-  { x: -308, z: -290 }, { x: -332, z: -315 },
-];
-export const SHOT2_PEDS = [
-  { x: -342, z: -160 }, { x: -310, z: -165 }, { x: -342, z: -185 },
-  { x: -305, z: -190 }, { x: -340, z: -200 },
-];
-export const SHOT2_FOREGROUND_PEDS = [
-  { x: -348, z: -152 }, { x: -312, z: -152 }, { x: -346, z: -168 }, { x: -316, z: -170 },
-];
-export const SHOT3_PEDS = [
-  { x: -670, z: 415 }, { x: -668, z: 445 }, { x: -675, z: 425 }, { x: -672, z: 450 },
-  { x: -680, z: 440 }, { x: -678, z: 420 }, { x: -685, z: 435 }, { x: -682, z: 455 },
-  { x: -690, z: 430 }, { x: -688, z: 448 },
-];
-// v28: a closer pier crowd for shot 3, filling the empty deck between
-// the camera and Mara. Six peds at 23-29 units from the camera, three
-// on each side of the sightline to Mara (never on it, so she stays
-// clear). Plus two NEAR peds at 12-16 units, one at each frame edge in
-// the lower third — v15's pier does the same (a big yellow-shirt ped
-// at the left edge, a pink one right): a clear humanoid at the edge
-// reads as a person, not a block. All on the deck, all inside the
-// camera's view cone (the camera looks ~12 degrees north of west,
-// half-FOV ~46 degrees), so none of them is a giant block at the
-// frame edge or a ped cut off mid-body.
-export const SHOT3_FOREGROUND_PEDS = [
-  { x: -664, z: 418 }, { x: -668, z: 414 }, { x: -660, z: 422 },
-  { x: -664, z: 438 }, { x: -668, z: 442 }, { x: -660, z: 434 },
-  { x: -650, z: 440 }, { x: -654, z: 422 },
-];
-export const SHOT4_PEDS = [
-  { x: 400, z: 520 }, { x: 440, z: 560 }, { x: 500, z: 540 }, { x: 460, z: 600 },
-  { x: 540, z: 580 }, { x: 380, z: 560 }, { x: 470, z: 600 }, { x: 585, z: 605 },
-];
-
-// The four shots: hour, mission, wanted and the full staging.
-// Mara is the hero of shots 2-4; the car is the hero of shot 1.
-export const SHOTS = [
-  {
-    n: 1, name: 'chase', hour: 18, mission: 1, wanted: 5, money: 1250, day: 3,
-    // v26 round 2: the first attempt (z -257, scale 1.7) put the car's
-    // rear 5 units from the camera, so the car filled the frame but was
-    // cropped at the bottom (wheels below the frame edge). Pulled back
-    // to z -261 at scale 1.8: the rear is 8 units out, so the whole car
-    // (roof, cabin, red body, wheels) fits above the district label
-    // while the roof stays clear of the roadblock sightline.
-    // v28: the car sits angled on the road (nose swung west) so the
-    // camera sees its LEFT flank + rear — a 3/4 rear view that reads as
-    // a car, not a flat red box. The camera stays dead behind on the
-    // same axis, so the car stays big, whole and centred; only its own
-    // rotation changed (position, scale and the roadblock sightline are
-    // untouched, and the heli beam still lands on the car).
-    car: { x: -320, z: -261, angle: Math.PI + 0.5, scale: 1.8 },
-    camera: { x: -320, y: 3.5, z: -248 },
-    look: { x: -320, y: 3, z: -320 },
-    heli: { x: -320, y: 28, z: -310 },
-    roadblock: { x: -320, z: -295 },
-    swat: { x: -300, z: -308 },
-    police: [{ x: -342, z: -298 }, { x: -300, z: -282 }],
-    traffic: [{ x: -300, z: -330 }, { x: -340, z: -345 }, { x: -320, z: -370 }, { x: -340, z: -270 }],
-    peds: SHOT1_PEDS,
-    dialogue: { name: 'MARA SOLANO', line: 'Five stars and a roadblock ahead — punch through, don\'t stop.' },
-    missionBar: { title: 'M1 THE GETAWAY', stage: 'TAHAP 1/2', objective: 'Pick up Eden', next: 'Lose the tail' },
-    wheelOpen: true,
-  },
-  {
-    n: 2, name: 'shop', hour: 10, mission: 2, wanted: 0, money: 850, day: 2,
-    mara: { x: SHOT2_MARA.x, z: SHOT2_MARA.z, scale: 1.8, angle: Math.PI },
-    camera: { x: SHOT2_CAMERA.x, y: SHOT2_CAMERA.y, z: SHOT2_CAMERA.z },
-    look: { x: -328, y: 10, z: -180 },
-    parkedCar: { x: SHOP.x - 45, z: SHOP.z - 35, angle: 0.4 },
-    peds: SHOT2_PEDS,
-    foregroundPeds: SHOT2_FOREGROUND_PEDS,
-    dialogue: null,
-    missionBar: { title: 'M2 VENICE CANALS', stage: 'TAHAP 1/2', objective: 'Meet Harlan', next: 'Drop the package' },
-    wheelOpen: false,
-  },
-  {
-    n: 3, name: 'pier', hour: 21, mission: 7, wanted: 1, money: 2100, day: 7,
-    mara: { x: -652, z: 428, scale: 1.8, angle: Math.PI * 0.5 },
-    camera: { x: -639, y: 1.8, z: 428 },
-    look: { x: -720, y: 2, z: 445 },
-    peds: SHOT3_PEDS,
-    foregroundPeds: SHOT3_FOREGROUND_PEDS,
-    dialogue: { name: 'INEZ VARGAS', line: 'Meet me where the lights are loudest. The ledger pages are already moving.' },
-    missionBar: { title: 'M7 THE NIGHT LEDGER', stage: 'TAHAP 1/2', objective: 'Meet Inez', next: 'Take the ledger' },
-    wheelOpen: false,
-  },
-  {
-    n: 4, name: 'port', hour: 18, mission: 8, wanted: 2, money: 3400, day: 8,
-    mara: { x: SHOT4_MARA.x, z: SHOT4_MARA.z, scale: 2, angle: -1.28 },
-    car: { x: 615, z: 615, angle: 0, scale: 1.8 },
-    // v26 round 2: the first attempt (scale 5.5 at (578,648)) was too
-    // big — the sail went off the top of the frame and the hull crowded
-    // the bridge. Scale 4.5 at (565,648) keeps the boat prominent with
-    // the mast + sail fully in frame. Still in open water (z 648 > 635),
-    // clear of the hero car, Mara and the apron crates.
-    boat: { x: SHOT4_BOAT.x, z: SHOT4_BOAT.z, scale: 4.5, angle: 0.4 },
-    camera: { x: SHOT4_CAMERA.x, y: SHOT4_CAMERA.y, z: SHOT4_CAMERA.z },
-    look: { x: 560, y: 2, z: 638 },
-    peds: SHOT4_PEDS,
-    dialogue: { name: 'ORIN BECK', line: 'Two drops left and the proof goes out tonight. Keep the car running.' },
-    missionBar: { title: 'M8 THE LAST SIGNAL', stage: 'TAHAP 1/3', objective: 'Marina drop', next: 'Pier drop' },
-    wheelOpen: false,
-  },
-];
-
-export function shotByNumber(n) {
-  return SHOTS.find((s) => s.n === n) || SHOTS[0];
-}
-
-export function pierDeck() {
-  return { x0: PIER_DECK.x0, x1: PIER_DECK.x1, z0: PIER_DECK.z0, z1: PIER_DECK.z1 };
-}
-
-export function boatSpot() {
-  return { x: BOAT.x, z: BOAT.z };
+export function shot4YardSpots() {
+  const spots = [];
+  for (let x = 380; x <= 620; x += 20) {
+    for (let z = 500; z <= 608; z += 12) {
+      if (inBuilding(x, z)) continue;
+      if (inOcean(x, z)) continue;
+      spots.push({ x, z });
+    }
+  }
+  return spots;
 }

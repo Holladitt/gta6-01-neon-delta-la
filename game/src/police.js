@@ -1,67 +1,46 @@
-// NDPD pursuit for Neon Delta LA.
-// Two patrol cars at wanted 0, more as the level rises (2 + level x 2,
-// capped at 12). The helicopter AIR-1 spawns at wanted 3 and its beam
-// tracks the car. Two roadblocks appear at wanted 4, a black SWAT van
-// at wanted 5. Dropping to wanted 0 clears the helicopter, the van
-// and the roadblocks.
-import { policeCarCount, heliActive, roadblockCount, swatActive } from './wanted.js';
+// police.js — NDPD presence scales with the wanted level.
+import { policeCarCount, roadblockCount, heliActive, swatActive } from './wanted.js';
 import { dist2 } from './rng.js';
-import { randomRoadPoint } from './geo.js';
-import { makeRng } from './rng.js';
+import { callsigns } from './dispatch.js';
 
 export function createPolice() {
-  return { cars: [], heli: null, swat: null, roadblocks: [], rng: makeRng(777) };
+  return { cars: [], heli: null, swat: null, roadblocks: [] };
 }
-
-export function updatePolice(p, world, dt, now) {
-  const level = world.wanted.level;
-  const target = policeCarCount(world.wanted);
-  const car = world.car || { x: 0, z: 0 };
-  while (p.cars.length < target) {
-    const rp = randomRoadPoint(p.rng);
-    p.cars.push({ x: rp.x, z: rp.z, angle: 0, speed: 0, scripted: p.cars.length % 3 === 2 });
-  }
-  while (p.cars.length > target) p.cars.pop();
-  for (const c of p.cars) {
-    const d = dist2(c.x, c.z, car.x, car.z);
-    if (d > 12) {
-      const a = Math.atan2(car.x - c.x, car.z - c.z);
-      c.angle = a;
-      const sp = Math.min(26, 10 + level * 2);
-      c.x += Math.sin(a) * sp * dt;
-      c.z += Math.cos(a) * sp * dt;
-    }
-  }
-  if (heliActive(world.wanted)) {
-    if (!p.heli) p.heli = { x: car.x, z: car.z, y: 60, angle: 0 };
-    p.heli.x = car.x;
-    p.heli.z = car.z - 10;
-    p.heli.angle += dt * 2;
-  } else {
-    p.heli = null;
-  }
-  const rb = roadblockCount(world.wanted);
-  if (p.roadblocks.length !== rb) {
-    p.roadblocks = [];
-    for (let i = 0; i < rb; i += 1) {
-      p.roadblocks.push({ x: car.x - 20 + i * 40, z: car.z - 90, angle: 0 });
-    }
-  }
-  if (swatActive(world.wanted)) {
-    if (!p.swat) p.swat = { x: car.x + 40, z: car.z + 30, angle: 0, speed: 0 };
-    const d = dist2(p.swat.x, p.swat.z, car.x, car.z);
-    if (d > 20) {
-      const a = Math.atan2(car.x - p.swat.x, car.z - p.swat.z);
-      p.swat.x += Math.sin(a) * 18 * dt;
-      p.swat.z += Math.cos(a) * 18 * dt;
-    }
-  } else {
-    p.swat = null;
-  }
+export function beamOnCar(pol, world) {
+  if (!pol.heli || !world) return false;
+  const target = (world.car && world.car.x !== undefined) ? world.car : world.player;
+  if (!target) return false;
+  return dist2(pol.heli.x, pol.heli.z, target.x, target.z) < 40;
 }
-
-export function beamOnCar(p, world) {
-  if (!p.heli) return false;
-  const car = world.car || { x: 0, z: 0 };
-  return dist2(p.heli.x, p.heli.z, car.x, car.z) < 100;
+export function updatePolice(pol, world, dt, time) {
+  const level = world && world.wanted ? world.wanted.level : (typeof world === 'number' ? world : 0);
+  const player = (world && world.player) || { x: 0, z: 0 };
+  const px = player.x;
+  const pz = player.z;
+  const want = policeCarCount({ level });
+  while (pol.cars.length < want) {
+    const i = pol.cars.length;
+    pol.cars.push({
+      x: px + 60 + i * 30, z: pz - 40 - i * 20,
+      callsign: callsigns()[i % 3], role: i % 2 === 0 ? 'FLANKING' : 'PURSUIT',
+    });
+  }
+  pol.cars.length = want;
+  for (let i = 0; i < pol.cars.length; i += 1) {
+    const c = pol.cars[i];
+    const dx = px - c.x;
+    const dz = pz - c.z;
+    const d = Math.hypot(dx, dz) || 1;
+    const sp = 14 * (dt || 0.016);
+    c.x += (dx / d) * sp;
+    c.z += (dz / d) * sp;
+  }
+  const rb = roadblockCount({ level });
+  while (pol.roadblocks.length < rb) {
+    pol.roadblocks.push({ x: px, z: pz - 60 - pol.roadblocks.length * 30 });
+  }
+  pol.roadblocks.length = rb;
+  pol.heli = heliActive({ level }) ? { x: px, y: 28, z: pz - 10 } : null;
+  pol.swat = swatActive({ level }) ? { x: px + 40, z: pz - 30, callsign: 'SWAT-1' } : null;
+  return pol;
 }

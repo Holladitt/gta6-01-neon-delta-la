@@ -1,54 +1,43 @@
 # Neon Delta LA: District Wars
 
-An original open-world crime game for the make.fun gta6-01 bounty: a GTA-style
-Los Angeles with 6 districts, 10 story jobs, SWAT roadblocks, 4 weapon tiers,
-3 save slots and street races. Runs offline in a desktop browser from static
-files — no network, no build step.
+![make.fun](https://make.fun/badge/gta6-01.svg)
+![rank](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/rank.svg)
+![reward](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/reward.svg)
 
-## Play
+An original open-world crime game set on the Los Angeles coast: Downtown,
+Hollywood Hills, Venice canals, the Marina, Coral Pier and Long Beach Port.
+You are Mara Solano, an ex-getaway driver whose sister vanished with proof
+of a corruption ring. Ten story jobs, street races, taxi and courier side
+jobs, 20 collectible Aurora tapes, and a police force that escalates from
+patrol cars to SWAT roadblocks, spike strips and the AIR-1 helicopter.
 
-Serve it locally and open http://localhost:8080:
+## The eight systems
 
-```sh
-node serve.ts
-```
-
-Or open `game/index.html` directly from a static server. `?shot=1..4` opens a
-frozen diorama of one of the four submission shots.
+1. **District standing** — 6 districts. Missions +10, races +5, jobs +3.
+   Standing 50+ unlocks a 10% shop discount and a crew ability per district.
+2. **Tactical police** — roadblocks at wanted 4, a black SWAT van at wanted 5,
+   spike strips that cap your speed for 5 s, and AIR-1: hold its spotlight
+   for 5 unbroken seconds and your wanted level rises with two more cars.
+3. **Weapon tiers + wheel** — Tier 1 PISTOL / SMG / SHOTGUN owned; Tier 2
+   DELTA CARBINE $900, Tier 3 LONGSHOT $1,800, Tier 4 MARAUDER $2,500.
+   Hold Q for the radial wheel, keys 1–4 to swap.
+4. **Title screen + 3 save slots** — each slot shows money, day and rank.
+5. **Street races** (5 checkpoints, pays money + standing) and side jobs.
+6. **Density** — 104 peds and 22 traffic cars across the map.
+7. **COVER meter** — commit a crime in a ped's view and they become a
+   witness ("!"). Three seconds in view and the wanted level rises.
+8. **Garage tuning** (Engine / Armour / Nitro, all with real effects) and a
+   drivable boat at the Marina.
 
 ## Controls
 
-- **WASD / arrows** — drive (or walk on foot)
-- **E** — enter / exit a car
-- **Enter** — start the next story job
-- **Q (hold)** — weapon wheel, **1–4** pick a weapon tier
-- **C / V / X** — crew abilities: Clean Plates, Field Repair, Overwatch
-- **Tab** — pause
+WASD drive · E enter/exit car · Q weapon wheel · 1–4 weapons · F fire ·
+C clean plates · V field repair · X overwatch · P pause · M mute.
 
-## The game
+## Run it
 
-Mara Solano, ex-getaway driver, is back in Los Angeles to find her vanished
-sister — and the proof of corruption her sister held. Six districts, each with
-its own standing (0–100): finish jobs, win street races and run taxi and
-courier work to raise it. At 50+ standing a district's shop gives a 10%
-discount and its crew ability unlocks. The NDPD escalates from patrol cars to
-a helicopter at wanted 3, roadblocks at 4 and a black SWAT van at 5 — and the
-AIR-1 spotlight can raise your wanted level if it holds you for five seconds.
-Commit a crime in front of a pedestrian and they become a witness: break line
-of sight within three seconds or your wanted level rises. Twenty Aurora tapes
-are hidden across the city. The garage tunes engine, armour and nitro, and a
-drivable boat waits at the Marina.
-
-## Structure
-
-- `game/index.html` — the page, HUD, title screen and dialogue
-- `game/src/` — the game modules (world, scene, missions, police, traffic,
-  shop, garage, races, cover, standing, crew, combat, wanted, save, shots)
-- `game/vendor/three.module.min.js` — vendored three.js
-- `main.ts` — submission entry point: stages game/ + screenshots/ and
-  writes dossier.json
-- `serve.ts` — local static server on port 8080
-
-## License
-
-MIT. Original work; nothing from Rockstar. Los Angeles is a real city.
+```sh
+node serve.ts
+# open http://localhost:8080
+# staged shots: http://localhost:8080/?shot=1 … ?shot=4
+```
