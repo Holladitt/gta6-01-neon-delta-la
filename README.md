@@ -1,97 +1,48 @@
-[![gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
-[![rank](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/rank.svg)](https://make.fun/bounty/gta6-01)
-[![reward](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/reward.svg)](https://make.fun/bounty/gta6-01)
-
 # Neon Delta LA
 
-An open-world crime game set in a sun-soaked coastal Los Angeles, built for the
-[make.fun gta6-01 bounty](https://make.fun/bounty/gta6-01). Explore the city on
-foot and by car, steal vehicles, outrun the police, and work through a story of
-corruption that runs from City Hall to the port.
+[![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun)
+[![rank](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/rank.svg)](https://make.fun)
+[![reward](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/reward.svg)](https://make.fun)
 
-## Story
+An original open-world crime game set on a fictional LA coast — Downtown,
+Venice canals, Santa Monica-style pier, Long Beach port, Marina, Hollywood
+Hills, and the freeways between them. You are **Mara Solano**, an ex-getaway
+driver hunting the truth about her vanished sister, who held proof of
+corruption reaching the mayor, the port, and the NDPD.
 
-Mara Solano used to drive getaway cars. She is back in Neon Delta because her
-sister vanished — and her sister was holding proof of corruption linking the
-mayor, a port businessman, and the police. Ten main missions follow Mara from
-her return to the city to the final confrontation, plus side jobs around town.
-
-## Features
-
-- **A living city** — Downtown glass towers, Venice canals, a Santa
-  Monica-style pier, Long Beach container port, Marina, Hollywood Hills, and
-  freeways.
-- **Drive anything** — sedans, SUVs, pickups, sports cars, and police
-  cruisers, each with its own arcade handling, drift, and handbrake. Parked
-  cars can be stolen — but a witness may call it in.
-- **Wanted system (1–5 stars)** — police cruisers pursue with A* pathfinding
-  and flanking; at wanted 3+ a helicopter joins the hunt with a searchlight.
-  At wanted 2, officers step out of their cruisers and open fire.
-- **Traffic and pedestrians** — moving traffic, working traffic lights, and
-  crowds on the sidewalks and the pier boardwalk, with extra night crowds.
-- **Combat** — six weapons (pistol, SMG, shotgun, carbine, longshot,
-  marauder) with reload, tracers, and spread; three more are sold at DELTA
-  ARMS.
-- **Missions and story** — a mission scripting engine with GPS waypoints,
-  stage tracker, HUD dialogue, and win/fail conditions. Ten missions,
-  $13,750 in payouts, rank S DELTA LEGEND.
-- **Crew** — Juno (clean plates), Petra (field repair), Cassia (overwatch:
-  police callsigns and distances on the minimap).
-- **HUD and save** — circular minimap, wanted stars, big speed readout,
-  district names with standing, NDPD dispatch panel, rank panel, pause menu,
-  city map, career stats, and localStorage save/load.
-- **Coral Pier** — boardwalk amusement pier with a ferris wheel, roller
-  coaster, festival lights, stalls, and crowds — lit warm at night by pier
-  lamps, stall bulbs, and a boat with lit windows on the water.
-- **Radio** — three procedural WebAudio stations while driving.
-
-Everything in the game — the city, characters, vehicles, names, story, art,
-and music — is original. Nothing is taken from any commercial game.
-
-## How to play
-
-Serve the `game/` folder with any static HTTP server and open `index.html` in
-desktop Chrome:
+## Play
 
 ```sh
 node serve.ts
-# or: python3 -m http.server --directory game 8080
+# open http://localhost:8080/
 ```
 
-No build step, no network requests: the game runs offline from static files.
+## The game
 
-| Key | Action |
-| --- | --- |
-| WASD | Move / drive |
-| Mouse | Look / aim |
-| Click | Shoot |
-| F | Enter / steal car |
-| Space | Handbrake / drift |
-| Shift | Sprint |
-| 1–6 | Weapons |
-| R | Reload |
-| E | Interact |
-| Q | Radio station |
-| H | Horn |
-| M | Next mission |
-| J | Side job |
-| B | Weapon shop |
-| C | Clean plates |
-| V | Field repair |
-| X | Overwatch |
-| N | Save |
-| Tab | City map |
-| Esc | Pause |
+- **10 missions** across 11 days, $13,750 in payouts, from a $400 first gear
+  run to a $3,000 last witness. Contacts: Eden Voss, Harlan Dray, Lucia
+  Marlow, Dante Kovac, Sable Okonkwo, Vera Lindqvist, Inez Vargas, Orin Beck,
+  Lena Marsh, Elias Frost.
+- **Wanted 1–5** with NDPD patrol cars that flank with A* pathfinding and a
+  helicopter from level 3, its beam landing exactly on your car.
+- **Crew abilities**: Juno's CLEAN PLATES [C] drops a wanted star, Petra's
+  FIELD REPAIR [V] restores the car for $150, Cassia's OVERWATCH [X] watches
+  the roofs for 20 seconds.
+- **DELTA ARMS shop** [TAB]: Pistol, SMG and Shotgun come with the kit;
+  Delta Carbine $900, Longshot $1,800, Marauder $2,500 — all six fireable.
+- **Arcade driving** with drift, collision damage, day/night cycle, traffic
+  lights, 104 pedestrians and 22 traffic cars.
+- **Ranks** from D GREENHORN to S DELTA LEGEND (1,000 RP). Progress saves
+  locally (`neon-delta-la.save.v3`).
 
-## Technology
+## Controls
 
-- [Three.js](https://threejs.org/) (vendored, `game/vendor/`) — low-poly 3D
-  rendering.
-- Plain JavaScript modules, no build step, no external assets: every texture
-  is painted procedurally at runtime.
-- `main.ts` at the repository root hands the game in with the make.fun kit
-  (`vendor/makefun-game.ts`).
+WASD drive · E enter/exit car · F interact · Space handbrake / fire ·
+R reload · C clean plates · V field repair · X overwatch · 1–6 weapons ·
+Tab shop · M radio · Enter start mission
 
-## License
+## Tech
 
-MIT — see [LICENSE](LICENSE).
+Three.js (vendored) for the 3D city, plain ES modules, no build step.
+`main.ts` copies `game/` and `screenshots/` into the output directory and
+writes `dossier.json` via the kit's `buildDossier`.

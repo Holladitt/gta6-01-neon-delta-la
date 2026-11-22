@@ -1,3 +1,4 @@
-# Exclude generated build output and installed dependencies.
-out/
 node_modules/
+out/
+.DS_Store
+*.log

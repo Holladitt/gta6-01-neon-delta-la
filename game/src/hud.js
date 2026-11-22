@@ -1,577 +1,220 @@
-// HUD: DOM overlay, circular minimap, city map, title + pause screens.
-// NDPD dispatch panel, rank panel, crew bar, weapon slots, DAY counter,
-// WANTED banner, stage tracker, district standing, vehicle identity,
-// dialog portraits, DELTA ARMS shop overlay, minimap OVERWATCH labels.
-// Every panel shows only state the game actually tracks.
-// Matches the element ids in index.html.
-import { WORLD, DISTRICTS, WEAPONS } from './config.js';
+// The HUD: money and wanted stars, circular minimap, speed, mission bar,
+// district name, NDPD dispatch panel, crew panel, dialogue, shop, toasts.
 
-export class HUD {
-  constructor() {
-    const $ = (id) => document.getElementById(id);
-    this.el = {
-      clock: $('clock'),
-      day: $('day'),
-      radio: $('radio'),
-      weaponStrip: $('weapon-strip'),
-      money: $('money'),
-      stars: $('stars'),
-      healthFill: $('health-fill'),
-      armorFill: $('armor-fill'),
-      healthNum: $('health-num'),
-      armorNum: $('armor-num'),
-      district: $('district-name'),
-      districtSub: $('district-sub'),
-      standing: $('standing'),
-      districtWrap: $('district'),
-      speedNum: $('speed-num'),
-      vehName: $('veh-name'),
-      vehCond: $('veh-cond'),
-      mission: $('mission-text'),
-      missionStage: $('mission-stage'),
-      stageFill: $('stage-fill'),
-      missionNext: $('mission-next'),
-      dialog: $('dialog'),
-      dialogPortrait: $('dialog-portrait'),
-      dialogName: $('dialog-name'),
-      dialogText: $('dialog-text'),
-      prompt: $('prompt'),
-      crosshair: $('crosshair'),
-      vignette: $('vignette'),
-      title: $('title-screen'),
-      titleContinue: $('btn-continue'),
-      titleContinueLabel: $('continue-label'),
-      pause: $('pause-menu'),
-      map: $('map-screen'),
-      toast: $('toast'),
-      wantedBanner: $('wanted-banner'),
-      wantedBannerText: $('wanted-banner-text'),
-      wantedBannerSub: $('wanted-banner-sub'),
-      dispatch: $('dispatch'),
-      dispatchBody: $('dispatch-body'),
-      dispatchHead: $('dispatch-head'),
-      rankPanel: $('rank-panel'),
-      rankTitle: $('rank-title'),
-      rankBar: $('rank-bar'),
-      rankRp: $('rank-rp'),
-      crewBar: $('crew-bar'),
-      shop: $('shop-screen'),
-      shopRows: $('shop-rows'),
-      shopMoney: $('shop-money'),
-      stats: $('stats-screen'),
-      statsRows: $('stats-rows'),
-    };
-    this.minimap = $('minimap').getContext('2d');
-    this.citymap = $('citymap').getContext('2d');
-    this.dialogTimer = null;
-    this.portraits = null;
-    // stars: 5 slots
-    this.el.stars.innerHTML = '<span>★</span>'.repeat(5);
+import { WEAPONS, RANKS } from './config.js';
+import { rankFor } from './rank.js';
+import { districtAt } from './geo.js';
+import { shopItems } from './shop.js';
+
+export function createHud() {
+  const root = document.getElementById('hud');
+  root.innerHTML = `
+    <div id="hud-money"></div>
+    <div id="hud-dispatch"></div>
+    <div id="hud-crew"></div>
+    <div id="hud-district"></div>
+    <div id="hud-mission"></div>
+    <div id="hud-minimap-wrap"><canvas id="hud-minimap" width="220" height="220"></canvas></div>
+    <div id="hud-speed"></div>
+    <div id="hud-weapon"></div>
+    <div id="hud-radio">RADIO: NEON 88</div>
+    <div id="hud-hint">WASD DRIVE &nbsp;·&nbsp; E ENTER/EXIT &nbsp;·&nbsp; F INTERACT &nbsp;·&nbsp; R RELOAD &nbsp;·&nbsp; C PLATES &nbsp;·&nbsp; V REPAIR &nbsp;·&nbsp; X OVERWATCH &nbsp;·&nbsp; TAB SHOP &nbsp;·&nbsp; M RADIO</div>
+    <div id="hud-dialogue"></div>
+    <div id="hud-shop"></div>
+    <div id="hud-toast"></div>
+    <div id="hud-center"></div>
+  `;
+  const el = (id) => document.getElementById(id);
+  const minimap = el('hud-minimap');
+  const mctx = minimap.getContext('2d');
+  let toastTimer = 0;
+  let districtTimer = 0;
+  let lastDistrict = '';
+  let dialogueTimer = 0;
+
+  function stars(n) {
+    let out = '';
+    for (let i = 0; i < 5; i++) out += i < n ? '★' : '☆';
+    return out;
   }
 
-  setPortraits(map) {
-    this.portraits = map;
-    // crew bar is built once portraits exist
-    if (this.el.crewBar && map) {
-      const crew = [
-        { id: 'juno', name: 'JUNO REYES', role: 'DRIVER' },
-        { id: 'petra', name: 'PETRA HALE', role: 'MECHANIC' },
-        { id: 'cassia', name: 'CASSIA WREN', role: 'LOOKOUT' },
-      ];
-      this.el.crewBar.innerHTML = '<div class="crew-head">CREW</div>' + crew.map((c) => `
-        <div class="crew-row"><img src="${map[c.id]}" alt="">
-        <div><div class="crew-name">${c.name}</div><div class="crew-role">${c.role}</div></div></div>`).join('')
-        + '<div class="crew-ability" id="crew-ability">CLEAN PLATES [C] — READY</div>'
-        + '<div class="crew-ability" id="crew-ability-repair">FIELD REPAIR [V] — READY</div>'
-        + '<div class="crew-ability" id="crew-ability-watch">OVERWATCH [X] — READY</div>';
-      this.el.crewAbility = document.getElementById('crew-ability');
-      this.el.crewAbilityRepair = document.getElementById('crew-ability-repair');
-      this.el.crewAbilityWatch = document.getElementById('crew-ability-watch');
-    }
-  }
-
-  setMoney(n) {
-    this.el.money.textContent = '$' + n.toLocaleString('en-US');
-  }
-
-  setWanted(level) {
-    const spans = this.el.stars.children;
-    for (let i = 0; i < spans.length; i++) spans[i].classList.toggle('on', i < level);
-    // Big WANTED banner at wanted 3+: the "you are being hunted" read.
-    if (this.el.wantedBanner) {
-      this.el.wantedBanner.style.display = level >= 3 ? 'block' : 'none';
-      if (level >= 3) this.el.wantedBannerText.textContent = 'WANTED ' + '★'.repeat(level);
-    }
-  }
-
-  setWantedStatus(text) {
-    if (this.el.wantedBannerSub) this.el.wantedBannerSub.textContent = text;
-  }
-
-  setHealth(h, a) {
-    this.el.healthFill.style.width = Math.max(0, h) + '%';
-    this.el.armorFill.style.width = Math.max(0, a) + '%';
-    if (this.el.healthNum) this.el.healthNum.textContent = Math.round(Math.max(0, h));
-    if (this.el.armorNum) this.el.armorNum.textContent = Math.round(Math.max(0, a));
-  }
-
-  // 6 weapon slots with live ammo. Locked shop weapons show their REAL
-  // price (never a fake LOCKED label) — the price is the buy path.
-  setWeaponSlots(combat) {
-    if (!this.el.weaponStrip) return;
-    let html = '';
-    for (let i = 0; i < WEAPONS.length; i++) {
-      const w = WEAPONS[i];
-      const active = combat.current === i;
-      const owned = combat.owned.includes(i);
-      const label = owned
-        ? `${i + 1} ${w.name} ${combat.ammo[i]}/${combat.reserves[i]}`
-        : `${i + 1} ${w.name} $${w.price.toLocaleString('en-US')}`;
-      html += `<span class="wslot${active ? ' active' : ''}${owned ? '' : ' locked'}">${label}</span>`;
-    }
-    this.el.weaponStrip.innerHTML = html;
-  }
-
-  setWeapon(text) {
-    // legacy shim: single-line fallback (main.js now uses setWeaponSlots)
-    if (this.el.weaponStrip) this.el.weaponStrip.textContent = text;
-  }
-
-  setClock(hour, day) {
-    // Round total minutes first: (hour % 1) * 60 floors 18.4 to 23
-    // (0.3999… * 60) — the clock must show the staged hour, not one less.
-    const tm = Math.round(hour * 60);
-    const h = Math.floor(tm / 60) % 24;
-    const m = tm % 60;
-    this.el.clock.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-    if (day != null && this.el.day) this.el.day.textContent = 'DAY ' + day;
-  }
-
-  setRadio(name) {
-    this.el.radio.textContent = name;
-  }
-
-  setDistrict(name, sub, standingText) {
-    if (this.el.district.textContent !== name) {
-      this.el.district.textContent = name;
-      this.el.districtSub.textContent = sub;
-      this.el.district.parentElement.classList.remove('pop');
-      void this.el.district.parentElement.offsetWidth;
-      this.el.district.parentElement.classList.add('pop');
-    }
-    if (standingText != null && this.el.standing) this.el.standing.textContent = standingText;
-  }
-
-  // veh: model name; cond: "62% DENTED" (health); gear: "G2" / "N".
-  setSpeed(kmh, veh, cond, gear) {
-    this.el.speedNum.textContent = Math.round(kmh);
-    this.el.vehName.textContent = veh || '';
-    if (this.el.vehCond) this.el.vehCond.textContent = cond && gear ? `${cond} · ${gear}` : (cond || '');
-  }
-
-  setMission(text) {
-    this.el.mission.textContent = text;
-  }
-
-  // Stage tracker: label + "TAHAP s/S: title", progress bar (done/total
-  // inside the stage), NEXT step text. stage comes from stageOf().
-  setMissionStage(label, stage) {
-    if (!this.el.missionStage) return;
-    if (!stage) {
-      this.el.missionStage.textContent = '';
-      this.el.stageFill.style.width = '0%';
-      this.el.missionNext.textContent = '';
-      return;
-    }
-    this.el.missionStage.textContent = `${label} · TAHAP ${stage.index + 1}/${stage.total}: ${stage.title}`;
-    const pct = stage.totalSteps > 0 ? Math.min(1, stage.done / stage.totalSteps) * 100 : 0;
-    this.el.stageFill.style.width = pct + '%';
-    this.el.missionNext.textContent = stage.next ? 'NEXT: ' + stage.next : '';
-  }
-
-  // speaker: {name, img} or null (defaults to Mara). Portrait is a
-  // procedural canvas bust drawn at boot from the speaker's own colors.
-  setDialog(text, ms = 5000, speaker) {
-    const sp = speaker || { name: 'MARA', img: this.portraits ? this.portraits.mara : null };
-    if (this.el.dialogPortrait) {
-      if (sp.img) {
-        this.el.dialogPortrait.src = sp.img;
-        this.el.dialogPortrait.style.display = 'block';
-      } else this.el.dialogPortrait.style.display = 'none';
-    }
-    if (this.el.dialogName) this.el.dialogName.textContent = sp.name;
-    if (this.el.dialogText) this.el.dialogText.textContent = text;
-    else this.el.dialog.textContent = text;
-    this.el.dialog.style.opacity = '1';
-    clearTimeout(this.dialogTimer);
-    this.dialogTimer = setTimeout(() => { this.el.dialog.style.opacity = '0'; }, ms);
-  }
-
-  setPrompt(text) {
-    this.el.prompt.textContent = text || '';
-    this.el.prompt.style.display = text ? 'block' : 'none';
-  }
-
-  showCrosshair(on) {
-    this.el.crosshair.style.display = on ? 'block' : 'none';
-  }
-
-  setVisible(on) {
-    document.getElementById('hud').style.display = on ? 'block' : 'none';
-  }
-
-  flashDamage() {
-    this.el.vignette.style.opacity = '0.55';
-    setTimeout(() => { this.el.vignette.style.opacity = '0'; }, 180);
-  }
-
-  toast(text, ms = 3500) {
-    this.el.toast.textContent = text;
-    this.el.toast.style.opacity = '1';
-    setTimeout(() => { this.el.toast.style.opacity = '0'; }, ms);
-  }
-
-  // Dispatch panel: null hides it. Rows come from buildDispatch() — real
-  // units, real distances, real roles.
-  setDispatch(d) {
-    if (!this.el.dispatch) return;
-    if (!d) {
-      this.el.dispatch.style.display = 'none';
-      return;
-    }
-    this.el.dispatch.style.display = 'block';
-    this.el.dispatchHead.textContent = `NDPD DISPATCH · CODE ${d.code} — ${d.crime}`;
-    let html = '';
-    for (const u of d.units) {
-      html += `<div class="disp-row"><span class="disp-call">${u.callsign}</span><span class="disp-role">${u.role}</span><span class="disp-dist">${u.dist} m</span></div>`;
-    }
-    if (d.more > 0) html += `<div class="disp-more">+${d.more} more</div>`;
-    html += `<div class="disp-status">STATUS: ${d.status}</div>`;
-    this.el.dispatchBody.innerHTML = html;
-  }
-
-  setRank(r) {
-    if (!this.el.rankPanel) return;
-    this.el.rankTitle.textContent = `RANK ${r.letter} · ${r.title}`;
-    const pct = r.nextMin ? Math.min(1, r.rp / r.nextMin) * 100 : 100;
-    this.el.rankBar.style.width = pct + '%';
-    this.el.rankRp.textContent = r.nextMin
-      ? `${r.rp.toLocaleString('en-US')} / ${r.nextMin.toLocaleString('en-US')} RP`
-      : `${r.rp.toLocaleString('en-US')} RP · MAX`;
-  }
-
-  // Crew ability rows: cooldown seconds or READY. All three are real.
-  // state = crew state {cooldownT, repairT, watchT, watchCd}; ctx = the
-  // live context the repair ability needs {inCar, condition, money}.
-  setCrewAbility(state, wanted, ctx = {}) {
-    const cs = state || {};
-    if (this.el.crewAbility) {
-      if (wanted <= 0) this.el.crewAbility.textContent = 'CLEAN PLATES [C] — NO HEAT';
-      else if (cs.cooldownT > 0) this.el.crewAbility.textContent = `CLEAN PLATES [C] — ${Math.ceil(cs.cooldownT)}s`;
-      else this.el.crewAbility.textContent = 'CLEAN PLATES [C] — READY';
-      this.el.crewAbility.classList.toggle('ready', wanted > 0 && cs.cooldownT <= 0);
-    }
-    if (this.el.crewAbilityRepair) {
-      const cond = ctx.condition;
-      let text;
-      let ready = false;
-      if (!ctx.inCar) text = 'FIELD REPAIR [V] — NEED A CAR';
-      else if (cs.repairT > 0) text = `FIELD REPAIR [V] — ${Math.ceil(cs.repairT)}s`;
-      else if (cond != null && cond >= 100) text = 'FIELD REPAIR [V] — CAR OK';
-      else if ((ctx.money ?? 0) < 150) text = 'FIELD REPAIR [V] — NEED $150';
-      else {
-        text = 'FIELD REPAIR [V] — READY ($150)';
-        ready = true;
-      }
-      this.el.crewAbilityRepair.textContent = text;
-      this.el.crewAbilityRepair.classList.toggle('ready', ready);
-    }
-    if (this.el.crewAbilityWatch) {
-      let text;
-      let ready = false;
-      if (cs.watchT > 0) text = `OVERWATCH [X] — ${Math.ceil(cs.watchT)}s LEFT`;
-      else if (cs.watchCd > 0) text = `OVERWATCH [X] — ${Math.ceil(cs.watchCd)}s`;
-      else {
-        text = 'OVERWATCH [X] — READY';
-        ready = true;
-      }
-      this.el.crewAbilityWatch.textContent = text;
-      this.el.crewAbilityWatch.classList.toggle('ready', ready);
-    }
-  }
-
-  // ---- DELTA ARMS shop overlay ----
-  // state = {money, owned, ammo, reserves}. Every row shows the real state:
-  // owned weapons show live ammo, locked ones show the real price + a BUY
-  // button that is only enabled when the player can actually afford it.
-  showShop(state) {
-    if (!this.el.shop) return;
-    this.renderShop(state);
-    this.el.shop.style.display = 'flex';
-    // The rank panel's left edge sat behind the first shop row — hide it
-    // while the shop is open (its numbers are not shop-relevant).
-    if (this.el.rankPanel) this.el.rankPanel.style.display = 'none';
-    // The right-docked panel sits over the crew bar and the district
-    // title — both paint above the overlay, so hide them too while the
-    // shop is open (restored in hideShop, same as the rank panel).
-    if (this.el.crewBar) this.el.crewBar.style.display = 'none';
-    if (this.el.districtWrap) this.el.districtWrap.style.display = 'none';
-  }
-
-  hideShop() {
-    if (this.el.shop) this.el.shop.style.display = 'none';
-    if (this.el.rankPanel) this.el.rankPanel.style.display = '';
-    if (this.el.crewBar) this.el.crewBar.style.display = '';
-    if (this.el.districtWrap) this.el.districtWrap.style.display = '';
-  }
-
-  renderShop(state) {
-    if (!this.el.shopRows) return;
-    if (this.el.shopMoney) this.el.shopMoney.textContent = 'YOUR CASH: $' + (state.money || 0).toLocaleString('en-US');
-    let html = '';
-    for (const w of WEAPONS) {
-      const owned = state.owned.includes(w.id);
-      const afford = (state.money || 0) >= w.price;
-      const status = owned
-        ? `<span class="shop-owned">OWNED · ${state.ammo[w.id]}/${state.reserves[w.id]} ammo</span>`
-        : `<button class="shop-buy" data-buy="${w.id}" ${afford ? '' : 'disabled'}>BUY $${w.price.toLocaleString('en-US')}</button>`;
-      html += `<div class="shop-row">
-        <div class="shop-num">${w.id + 1}</div>
-        <div class="shop-info"><div class="shop-name">${w.name}</div>
-        <div class="shop-stats">DMG ${w.dmg} · MAG ${w.mag} · RANGE ${w.range}m${w.auto ? ' · AUTO' : ''}${w.pellets ? ` · ${w.pellets} PELLETS` : ''}</div></div>
-        ${status}</div>`;
-    }
-    this.el.shopRows.innerHTML = html;
-  }
-
-  showTitle(save) {
-    this.el.title.style.display = 'flex';
-    if (save) {
-      this.el.titleContinue.style.display = 'block';
-      this.el.titleContinueLabel.textContent = `$${save.money.toLocaleString('en-US')}`;
-    } else {
-      this.el.titleContinue.style.display = 'none';
-    }
-  }
-
-  hideTitle() {
-    this.el.title.style.display = 'none';
-  }
-
-  showPause(on) {
-    this.el.pause.style.display = on ? 'flex' : 'none';
-  }
-
-  showMap(on) {
-    this.el.map.style.display = on ? 'flex' : 'none';
-  }
-
-  // ---- career-stats modal ----
-  // state = { missionsDone, missionsTotal, totalEarned, carsStolen, days,
-  // rank, rp, nextRp, weaponsOwned, weaponsTotal } — every number is real
-  // tracked game state; nothing here is invented or decorative.
-  showStats(state) {
-    if (!this.el.stats) return;
-    const row = (label, value) => `<div class="stats-row"><span>${label}</span><b>${value}</b></div>`;
-    const next = state.nextRp ? ` · NEXT ${state.nextRp} RP` : ' · MAX RANK';
-    this.el.statsRows.innerHTML =
-      row('MISSIONS COMPLETED', `${state.missionsDone} / ${state.missionsTotal}`) +
-      row('TOTAL EARNED', `$${state.totalEarned.toLocaleString('en-US')}`) +
-      row('CARS STOLEN', `${state.carsStolen}`) +
-      row('DAYS PLAYED', `${state.days}`) +
-      row('RANK', `${state.rank}${next}`) +
-      row('RESPECT (RP)', `${state.rp}`) +
-      row('WEAPONS OWNED', `${state.weaponsOwned} / ${state.weaponsTotal}`);
-    this.el.stats.style.display = 'flex';
-  }
-
-  hideStats() {
-    if (this.el.stats) this.el.stats.style.display = 'none';
-  }
-
-  // ---- minimap (circular, 180px) ----
-  drawMinimap(d) {
-    const g = this.minimap;
-    const S = 180;
-    const C = S / 2;
-    const sc = (x) => ((x + WORLD.HALF) / (WORLD.HALF * 2)) * S;
-    g.clearRect(0, 0, S, S);
-    g.save();
-    g.beginPath();
-    g.arc(C, C, C - 2, 0, Math.PI * 2);
-    g.clip();
-    g.fillStyle = '#0d1b2a';
-    g.fillRect(0, 0, S, S);
-    // water + beach
-    g.fillStyle = '#1e6f9e';
-    g.fillRect(0, 0, sc(-720), S);
-    g.fillStyle = '#e8cf9a';
-    g.fillRect(sc(-720), 0, sc(-660) - sc(-720), S);
+  function drawMinimap(state) {
+    const W = 220;
+    const H = 220;
+    const R = 104;
+    const scale = R / 720;
+    mctx.clearRect(0, 0, W, H);
+    mctx.save();
+    mctx.beginPath();
+    mctx.arc(W / 2, H / 2, R, 0, Math.PI * 2);
+    mctx.clip();
+    mctx.fillStyle = 'rgba(10,18,26,0.82)';
+    mctx.fillRect(0, 0, W, H);
+    const px = state.x;
+    const pz = state.z;
+    const toMap = (x, z) => [W / 2 + (x - px) * scale, H / 2 + (z - pz) * scale];
+    // water
+    mctx.fillStyle = '#1b6ca8';
+    mctx.fillRect(W / 2 + (540 - px) * scale, 0, W, H);
     // roads
-    g.strokeStyle = '#5a6a7a';
-    g.lineWidth = 3;
-    for (const x of WORLD.AVENUES) {
-      g.beginPath();
-      g.moveTo(sc(x), 0);
-      g.lineTo(sc(x), S);
-      g.stroke();
+    mctx.strokeStyle = 'rgba(200,200,200,0.5)';
+    mctx.lineWidth = 2;
+    for (let k = -8; k <= 8; k++) {
+      const gx = W / 2 + (k * 80 - px) * scale;
+      const gz = H / 2 + (k * 80 - pz) * scale;
+      mctx.beginPath(); mctx.moveTo(gx, 0); mctx.lineTo(gx, H); mctx.stroke();
+      mctx.beginPath(); mctx.moveTo(0, gz); mctx.lineTo(W, gz); mctx.stroke();
     }
-    for (const z of WORLD.STREETS) {
-      g.beginPath();
-      g.moveTo(0, sc(z));
-      g.lineTo(S, sc(z));
-      g.stroke();
+    // pier
+    mctx.fillStyle = '#8a6a4a';
+    const [pierX, pierY] = toMap(615, 422);
+    mctx.fillRect(pierX - 22, pierY - 6, 44, 12);
+    // mission marker
+    if (state.missionTarget) {
+      const [mx, my] = toMap(state.missionTarget.x, state.missionTarget.z);
+      mctx.fillStyle = '#ffc300';
+      mctx.beginPath();
+      mctx.arc(mx, my, 7, 0, Math.PI * 2);
+      mctx.fill();
+      mctx.fillStyle = '#111';
+      mctx.font = 'bold 10px Arial';
+      mctx.textAlign = 'center';
+      mctx.textBaseline = 'middle';
+      mctx.fillText('!', mx, my);
     }
-    // landmark icons: pier (wheel), port (crates), hospital (cross)
-    g.font = 'bold 10px Arial';
-    g.textAlign = 'center';
-    g.fillStyle = '#ffd23d';
-    g.fillText('◉', sc(-725), sc(300) + 3); // Coral Pier
-    g.fillStyle = '#ff7e5f';
-    g.fillText('▦', sc(530), sc(530) + 3); // Long Beach Port
-    g.fillStyle = '#ff5a5a';
-    g.fillText('+', sc(200), sc(-440) + 3); // Delta General Hospital
-    // route guide line: dashed from player to waypoint (direction aid)
-    if (d.waypoint) {
-      const wx = sc(d.waypoint.x);
-      const wz = sc(d.waypoint.z);
-      g.strokeStyle = '#ffd23d';
-      g.lineWidth = 2;
-      g.setLineDash([5, 4]);
-      g.beginPath();
-      g.moveTo(sc(d.px), sc(d.pz));
-      g.lineTo(wx, wz);
-      g.stroke();
-      g.setLineDash([]);
-      g.fillStyle = '#ffd23d';
-      g.beginPath();
-      g.moveTo(wx, wz - 7);
-      g.lineTo(wx + 6, wz);
-      g.lineTo(wx, wz + 7);
-      g.lineTo(wx - 6, wz);
-      g.closePath();
-      g.fill();
-    }
-    // traffic
-    g.fillStyle = '#9aa5b1';
-    for (const t of d.traffic || []) {
-      g.fillRect(sc(t.x) - 1.5, sc(t.z) - 1.5, 3, 3);
-    }
-    // police (red dots). OVERWATCH (Cassia, 20s): each unit also shows its
-    // real callsign + real distance in meters, with a gold tracking ring.
-    for (const p of d.police || []) {
-      g.fillStyle = '#ff4444';
-      g.beginPath();
-      g.arc(sc(p.x), sc(p.z), d.overwatch ? 5 : 3.5, 0, Math.PI * 2);
-      g.fill();
-      if (d.overwatch) {
-        g.strokeStyle = '#ffd23d';
-        g.lineWidth = 2;
-        g.beginPath();
-        g.arc(sc(p.x), sc(p.z), 8, 0, Math.PI * 2);
-        g.stroke();
-        if (p.call) {
-          const dist = Math.round(Math.hypot(p.x - d.px, p.z - d.pz));
-          g.fillStyle = '#ffd23d';
-          g.font = 'bold 9px Arial';
-          g.textAlign = 'left';
-          g.fillText(`${p.call} ${dist}m`, sc(p.x) + 9, sc(p.z) + 3);
-        }
-      }
+    // police
+    mctx.fillStyle = '#4a90ff';
+    for (const car of state.policeCars || []) {
+      const [cx, cy] = toMap(car.x, car.z);
+      mctx.beginPath();
+      mctx.arc(cx, cy, 4, 0, Math.PI * 2);
+      mctx.fill();
     }
     // player arrow
-    const px = sc(d.px);
-    const pz = sc(d.pz);
-    g.save();
-    g.translate(px, pz);
-    g.rotate(-d.heading);
-    g.fillStyle = '#ffffff';
-    g.beginPath();
-    g.moveTo(0, -7);
-    g.lineTo(5, 6);
-    g.lineTo(-5, 6);
-    g.closePath();
-    g.fill();
-    g.restore();
-    // north tick
-    g.fillStyle = '#ffffff';
-    g.font = 'bold 11px Arial';
-    g.textAlign = 'center';
-    g.fillText('N', C, 14);
-    g.restore();
-    g.strokeStyle = '#2ec4b6';
-    g.lineWidth = 3;
-    g.beginPath();
-    g.arc(C, C, C - 2, 0, Math.PI * 2);
-    g.stroke();
+    mctx.save();
+    mctx.translate(W / 2, H / 2);
+    mctx.rotate(state.heading || 0);
+    mctx.fillStyle = '#ff5a5f';
+    mctx.beginPath();
+    mctx.moveTo(0, -9);
+    mctx.lineTo(6, 7);
+    mctx.lineTo(-6, 7);
+    mctx.closePath();
+    mctx.fill();
+    mctx.restore();
+    mctx.restore();
+    mctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    mctx.lineWidth = 3;
+    mctx.beginPath();
+    mctx.arc(W / 2, H / 2, R, 0, Math.PI * 2);
+    mctx.stroke();
   }
 
-  // ---- full city map (800x600) ----
-  drawCityMap(d) {
-    const g = this.citymap;
-    const W = 800;
-    const H = 600;
-    const sc = (x) => ((x + WORLD.HALF) / (WORLD.HALF * 2)) * W;
-    const sz = (z) => ((z + WORLD.HALF) / (WORLD.HALF * 2)) * H;
-    g.clearRect(0, 0, W, H);
-    g.fillStyle = '#12233d';
-    g.fillRect(0, 0, W, H);
-    g.fillStyle = '#1e6f9e';
-    g.fillRect(0, 0, sc(-720), H);
-    g.fillStyle = '#e8cf9a';
-    g.fillRect(sc(-720), 0, sc(-660) - sc(-720), H);
-    // districts
-    g.font = 'bold 13px Arial';
-    g.textAlign = 'center';
-    for (const dist of DISTRICTS) {
-      g.fillStyle = 'rgba(46,196,182,0.14)';
-      g.fillRect(sc(dist.x0), sz(dist.z0), sc(dist.x1) - sc(dist.x0), sz(dist.z1) - sz(dist.z0));
-      g.fillStyle = '#2ec4b6';
-      g.fillText(dist.name, (sc(dist.x0) + sc(dist.x1)) / 2, (sz(dist.z0) + sz(dist.z1)) / 2);
-    }
-    // roads
-    g.strokeStyle = '#8a9ab0';
-    g.lineWidth = 4;
-    for (const x of WORLD.AVENUES) {
-      g.beginPath();
-      g.moveTo(sc(x), 0);
-      g.lineTo(sc(x), H);
-      g.stroke();
-    }
-    for (const z of WORLD.STREETS) {
-      g.beginPath();
-      g.moveTo(0, sz(z));
-      g.lineTo(W, sz(z));
-      g.stroke();
-    }
-    if (d.waypoint) {
-      g.fillStyle = '#ffd23d';
-      const wx = sc(d.waypoint.x);
-      const wz = sz(d.waypoint.z);
-      g.beginPath();
-      g.moveTo(wx, wz - 10);
-      g.lineTo(wx + 9, wz);
-      g.lineTo(wx, wz + 10);
-      g.lineTo(wx - 9, wz);
-      g.closePath();
-      g.fill();
-    }
-    g.save();
-    g.translate(sc(d.px), sz(d.pz));
-    g.rotate(-d.heading);
-    g.fillStyle = '#ffffff';
-    g.beginPath();
-    g.moveTo(0, -10);
-    g.lineTo(8, 9);
-    g.lineTo(-8, 9);
-    g.closePath();
-    g.fill();
-    g.restore();
-    g.fillStyle = '#ff4444';
-    for (const p of d.police || []) {
-      g.beginPath();
-      g.arc(sc(p.x), sz(p.z), 5, 0, Math.PI * 2);
-      g.fill();
-    }
-  }
+  return {
+    toast(msg) {
+      el('hud-toast').textContent = msg;
+      el('hud-toast').style.opacity = '1';
+      toastTimer = 3;
+    },
+    showDialogue(name, color, line) {
+      el('hud-dialogue').innerHTML = `<div class="dlg-name" style="color:${color}">${name}</div><div class="dlg-line">${line}</div>`;
+      el('hud-dialogue').style.display = 'block';
+      dialogueTimer = 6;
+    },
+    hideDialogue() {
+      el('hud-dialogue').style.display = 'none';
+    },
+    update(state, dt) {
+      if (toastTimer > 0) {
+        toastTimer -= dt;
+        if (toastTimer <= 0) el('hud-toast').style.opacity = '0';
+      }
+      if (dialogueTimer > 0) {
+        dialogueTimer -= dt;
+        if (dialogueTimer <= 0) el('hud-dialogue').style.display = 'none';
+      }
+      const rank = rankFor(state.rp);
+      el('hud-money').innerHTML =
+        `<div class="money">$${state.money.toLocaleString('en-US')}</div>` +
+        `<div class="stars">${stars(state.wanted)}</div>` +
+        `<div class="rankline">${rank.title} · ${state.rp} RP · DAY ${state.day}</div>` +
+        `<div class="healthline">HP ${Math.round(state.health)} &nbsp; ARMOR ${Math.round(state.armor)}</div>`;
+      const d = districtAt(state.x, state.z);
+      if (d.name !== lastDistrict) {
+        lastDistrict = d.name;
+        districtTimer = 3.5;
+        el('hud-district').innerHTML = `<div class="dist-name">${d.name}</div><div class="dist-sub">${d.sub}</div>`;
+        el('hud-district').style.opacity = '1';
+      }
+      if (districtTimer > 0) {
+        districtTimer -= dt;
+        if (districtTimer <= 0) el('hud-district').style.opacity = '0';
+      }
+      if (state.mission) {
+        const m = state.mission;
+        const step = m.def.steps[m.step];
+        el('hud-mission').innerHTML =
+          `<div class="m-title">MISSION ${m.index + 1} — ${m.def.name}</div>` +
+          `<div class="m-stage">TAHAP ${m.step + 1}/${m.def.steps.length}: ${step ? step.label.toUpperCase() : 'DONE'}</div>` +
+          `<div class="m-contact">${m.def.contact} · $${m.def.reward}</div>`;
+        el('hud-mission').style.display = 'block';
+      } else if (state.nextMission != null) {
+        el('hud-mission').innerHTML =
+          `<div class="m-title">FREE ROAM</div>` +
+          `<div class="m-stage">PRESS ENTER TO START MISSION ${state.nextMission + 1}</div>`;
+        el('hud-mission').style.display = 'block';
+      } else {
+        el('hud-mission').style.display = 'none';
+      }
+      const kmh = Math.round(Math.abs(state.speedKmh || 0));
+      el('hud-speed').innerHTML = `<div class="speed-num">${kmh}</div><div class="speed-unit">KM/H</div>`;
+      const w = WEAPONS[state.weapon];
+      el('hud-weapon').innerHTML =
+        `<div class="w-name">${w.name}</div>` +
+        `<div class="w-ammo">${state.ammo} / ${state.reserve}</div>`;
+      if (state.dispatch) {
+        const dp = state.dispatch;
+        let html = `<div class="dp-head">NDPD DISPATCH — CODE ${dp.code} · ${dp.crime}</div>`;
+        html += `<div class="dp-status">${dp.status}</div>`;
+        for (const u of dp.units) {
+          html += `<div class="dp-unit"><span class="dp-call">${u.callsign}</span> <span class="dp-role">${u.role}</span> <span class="dp-dist">${u.dist}m</span></div>`;
+        }
+        if (dp.more > 0) html += `<div class="dp-more">+${dp.more} MORE UNITS</div>`;
+        el('hud-dispatch').innerHTML = html;
+        el('hud-dispatch').style.display = 'block';
+      } else {
+        el('hud-dispatch').style.display = 'none';
+      }
+      let crewHtml = '<div class="crew-head">CREW</div>';
+      for (const member of state.crew) {
+        crewHtml += `<div class="crew-row"><span class="crew-dot" style="background:${member.color}"></span><span class="crew-name">${member.name.toUpperCase()}</span><span class="crew-role">${member.role}</span></div>`;
+      }
+      crewHtml += `<div class="crew-keys">[C] CLEAN PLATES ${state.plateT > 0 ? Math.ceil(state.plateT) + 's' : 'READY'} &nbsp; [V] FIELD REPAIR ${state.repairT > 0 ? Math.ceil(state.repairT) + 's' : '$150'} &nbsp; [X] OVERWATCH ${state.watchT > 0 ? Math.ceil(state.watchT) + 's' : state.watchCd > 0 ? Math.ceil(state.watchCd) + 's' : 'READY'}</div>`;
+      el('hud-crew').innerHTML = crewHtml;
+      el('hud-radio').textContent = state.radioOn ? 'RADIO: NEON 88 ●' : 'RADIO: NEON 88';
+      drawMinimap(state);
+    },
+    renderShop(state, onBuy) {
+      const items = shopItems();
+      let html = '<div class="shop-head">DELTA ARMS</div><div class="shop-sub">GUNS • AMMO • GEAR</div>';
+      for (const item of items) {
+        const owned = state.ownedWeapons.includes(item.index);
+        html += `<div class="shop-row"><div class="shop-name">${item.name}</div>` +
+          `<div class="shop-stats">DMG ${item.dmg} &nbsp; MAG ${item.mag} &nbsp; RANGE ${item.range}m${item.auto ? ' &nbsp; AUTO' : ''}${item.pellets > 1 ? ` &nbsp; ${item.pellets} PELLETS` : ''}</div>` +
+          `<button class="shop-buy" data-idx="${item.index}" ${owned ? 'disabled' : ''}>${owned ? 'OWNED' : 'BUY $' + item.price}</button></div>`;
+      }
+      html += `<div class="shop-cash">CASH $${state.money.toLocaleString('en-US')} &nbsp;·&nbsp; PRESS TAB TO CLOSE</div>`;
+      el('hud-shop').innerHTML = html;
+      el('hud-shop').style.display = state.shopOpen ? 'block' : 'none';
+      if (state.shopOpen) {
+        el('hud-shop').querySelectorAll('.shop-buy').forEach((btn) => {
+          btn.onclick = () => onBuy(parseInt(btn.dataset.idx, 10));
+        });
+      }
+    },
+    center(text) {
+      el('hud-center').textContent = text;
+      el('hud-center').style.opacity = text ? '1' : '0';
+    },
+  };
 }

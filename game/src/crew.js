@@ -1,65 +1,47 @@
-// Crew abilities (pure state machines). Each of the three crew members
-// has one real ability — nothing decorative on the crew bar:
-//  - CLEAN PLATES (Juno): swap plates, wanted -1, 45 s cooldown.
-//  - FIELD REPAIR (Petra): fix the current car to 100% condition,
-//    $150 in parts, 60 s cooldown. Needs a car, and a damaged car.
-//  - OVERWATCH (Cassia): police callsigns + distances on the minimap
-//    for 20 s, 45 s cooldown.
-// State: { cooldownT (plates), repairT, watchT (reveal remaining),
-//           watchCd (overwatch cooldown) }. All timers tick down in
-// real seconds; every field defaults to 0 on old saves.
+// Crew abilities and their cooldowns. Plates drop the heat, Petra fixes the
+// car, Cassia watches the street from above.
+
 export function newCrewState() {
   return { cooldownT: 0, repairT: 0, watchT: 0, watchCd: 0 };
 }
 
 export function canSwap(state, wanted) {
-  return wanted > 0 && (state.cooldownT || 0) <= 0;
+  if (wanted <= 0) return { ok: false, reason: 'no-heat' };
+  if (state.cooldownT > 0) return { ok: false, reason: 'cooldown' };
+  return { ok: true };
 }
 
-export function applySwap(state, wanted, cooldown) {
-  if (!canSwap(state, wanted)) {
-    return { ok: false, wanted, reason: wanted <= 0 ? 'no-heat' : 'cooldown' };
-  }
+export function applySwap(state, wanted, cooldown = 45) {
+  if (wanted <= 0) return { ok: false, reason: 'no-heat', wanted };
+  if (state.cooldownT > 0) return { ok: false, reason: 'cooldown', wanted };
   state.cooldownT = cooldown;
-  return { ok: true, wanted: Math.max(0, wanted - 1) };
+  return { ok: true, wanted: wanted - 1 };
 }
 
-// Repair the current car. inCar = the vehicle object, or null on foot.
-// Returns {ok, condition, money, reason}: condition is the car's real
-// health after the repair (100 on success); money is the player's cash
-// after the $150 parts cost (unchanged on failure).
-export function applyRepair(state, inCar, money, cost, cooldown) {
-  if (!inCar) return { ok: false, condition: null, money, reason: 'no-car' };
-  // Cooldown is checked BEFORE full condition: pressing V again during
-  // the 60 s recharge must report the cooldown, not "already in top
-  // shape" — a repaired car sits at 100 while the timer still runs.
-  if ((state.repairT || 0) > 0) {
-    return { ok: false, condition: Math.round(inCar.health), money, reason: 'cooldown' };
-  }
-  if ((inCar.health ?? 100) >= 100) {
-    return { ok: false, condition: Math.round(inCar.health), money, reason: 'full' };
-  }
-  if (money < cost) {
-    return { ok: false, condition: Math.round(inCar.health), money, reason: 'no-funds' };
-  }
+export function applyRepair(state, car, money, cost = 150, cooldown = 60) {
+  if (state.repairT > 0) return { ok: false, reason: 'cooldown', money };
+  if (!car) return { ok: false, reason: 'no-car', money };
+  if (money < cost) return { ok: false, reason: 'no-funds', money };
+  const health = car.health != null ? car.health : car.condition;
+  if (health != null && health >= 100) return { ok: false, reason: 'full', money };
+  car.health = 100;
+  if ('condition' in car) car.condition = 100;
   state.repairT = cooldown;
-  inCar.health = 100;
-  return { ok: true, condition: 100, money: money - cost, reason: null };
+  return { ok: true, condition: 100, money: money - cost };
 }
 
-// Overwatch: reveal police identity on the minimap for `duration` seconds.
-export function applyOverwatch(state, duration, cooldown) {
-  if ((state.watchT || 0) > 0) return { ok: false, reason: 'active' };
-  if ((state.watchCd || 0) > 0) return { ok: false, reason: 'cooldown' };
+export function applyOverwatch(state, duration = 20, cooldown = 45) {
+  if (state.watchT > 0) return { ok: false, reason: 'active' };
+  if (state.watchCd > 0) return { ok: false, reason: 'cooldown' };
   state.watchT = duration;
   state.watchCd = cooldown;
-  return { ok: true, reason: null };
+  return { ok: true };
 }
 
 export function tickCooldown(state, dt) {
-  state.cooldownT = Math.max(0, (state.cooldownT || 0) - dt);
-  state.repairT = Math.max(0, (state.repairT || 0) - dt);
-  state.watchT = Math.max(0, (state.watchT || 0) - dt);
-  state.watchCd = Math.max(0, (state.watchCd || 0) - dt);
-  return state;
+  for (const key of ['cooldownT', 'repairT', 'watchT', 'watchCd']) {
+    if (typeof state[key] === 'number') {
+      state[key] = Math.max(0, state[key] - dt);
+    }
+  }
 }

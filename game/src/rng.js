@@ -1,6 +1,5 @@
-// Seeded random numbers (mulberry32) — deterministic city generation.
-// The game never calls Math.random for layout; every seeded stream gets a
-// fixed seed so the city, traffic and crowd are identical every boot.
+// Seeded random numbers (mulberry32) so the city layout is stable per run.
+
 export function mulberry32(seed) {
   let a = seed >>> 0;
   return function next() {
@@ -12,18 +11,21 @@ export function mulberry32(seed) {
   };
 }
 
-export function pick(rng, arr) {
-  return arr[Math.floor(rng() * arr.length)];
-}
-
-export function range(rng, min, max) {
-  return min + rng() * (max - min);
-}
-
-export function rangeInt(rng, min, max) {
-  return Math.floor(range(rng, min, max + 1));
-}
-
-export function chance(rng, p) {
-  return rng() < p;
+export function makeRng(seed) {
+  const next = mulberry32(seed);
+  return {
+    next,
+    range(min, max) {
+      return min + next() * (max - min);
+    },
+    int(min, max) {
+      return Math.floor(min + next() * (max - min + 1));
+    },
+    pick(list) {
+      return list[Math.floor(next() * list.length)];
+    },
+    chance(p) {
+      return next() < p;
+    },
+  };
 }

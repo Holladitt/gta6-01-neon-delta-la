@@ -1,13 +1,9 @@
-// NDPD dispatch panel data (pure). Every row is built from live state:
-// unit positions come from the real police cars, distances are real meters,
-// roles match the behavior the code actually runs (flanking cars aim at an
-// offset node, pursuit cars aim straight at the player, staged cruisers hold
-// an intercept offset, the helicopter orbits). Nothing is invented.
+// NDPD dispatch panel: which unit is doing what, and how far away it is.
+// Roles are fixed by the car's place in the pursuit; distances are real
+// metres measured from the live police positions.
+
 import { CALLSIGNS } from './config.js';
 
-// Role of one patrol car. index = position in the live police list.
-// police.js: even-index cars aim at a node offset from the player (flank),
-// odd-index cars aim straight at the player (pursuit).
 export function unitRole(car, index) {
   if (car.script) return 'INTERCEPT';
   return index % 2 === 0 ? 'FLANKING' : 'PURSUIT';
@@ -15,10 +11,10 @@ export function unitRole(car, index) {
 
 export function buildDispatch({ cars, heli, px, pz, wanted, crime, seen }) {
   if (!wanted || wanted <= 0) return null;
-  const units = cars.slice(0, 4).map((c, i) => ({
-    callsign: c.callsign || CALLSIGNS[i % CALLSIGNS.length],
-    role: unitRole(c, i),
-    dist: Math.round(Math.hypot(c.x - px, c.z - pz)),
+  const units = cars.slice(0, 4).map((car, i) => ({
+    callsign: car.callsign || CALLSIGNS[i % CALLSIGNS.length],
+    role: unitRole(car, i),
+    dist: Math.round(Math.hypot(car.x - px, car.z - pz)),
   }));
   if (heli) {
     units.push({
@@ -27,11 +23,12 @@ export function buildDispatch({ cars, heli, px, pz, wanted, crime, seen }) {
       dist: Math.round(Math.hypot(heli.x - px, heli.z - pz)),
     });
   }
+  const extra = Math.max(0, cars.length - 4);
   return {
     code: wanted,
     crime: crime || 'EVADING POLICE',
     status: seen ? 'IN PURSUIT' : 'SEARCHING',
     units,
-    more: Math.max(0, cars.length - 4),
+    more: extra,
   };
 }

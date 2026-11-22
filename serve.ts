@@ -1,124 +1,78 @@
-// Tiny static file server for local development of the game.
-// Serves the game/ directory over HTTP on localhost. Node 22 stdlib only.
-// Usage: node serve.ts [--port <n>]   (default port 8080)
+// Neon Delta LA — tiny dev server. Serves game/ on http://localhost:8080
+// (or --port N) so the game can be played and screenshotted locally.
+// Nothing leaves the game/ directory; missing files get a plain 404.
 
-import { createServer } from "node:http";
-import { readFile, stat } from "node:fs/promises";
-import { extname, join, resolve, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { join, extname, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const SCRIPT_DIR = fileURLToPath(new URL(".", import.meta.url));
-const GAME_ROOT = resolve(SCRIPT_DIR, "game");
+const here = fileURLToPath(new URL('.', import.meta.url));
+const gameDir = resolve(join(here, 'game'));
 
-const MIME: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-  ".woff2": "font/woff2",
-  ".glb": "model/gltf-binary",
-  ".gltf": "model/gltf+json",
-  ".bin": "application/octet-stream",
-  ".wasm": "application/wasm",
-  ".wav": "audio/wav",
-  ".mp3": "audio/mpeg",
-  ".ogg": "audio/ogg",
-  ".txt": "text/plain; charset=utf-8",
+const TYPES = {
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.glb': 'model/gltf-binary',
+  '.gltf': 'model/gltf+json',
+  '.bin': 'application/octet-stream',
+  '.wasm': 'application/wasm',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
+  '.ogg': 'audio/ogg',
+  '.txt': 'text/plain',
 };
 
-function parsePort(argv: string[]): number {
-  const i = argv.indexOf("--port");
-  if (i === -1) return 8080;
-  const n = Number(argv[i + 1]);
-  if (!Number.isInteger(n) || n < 1 || n > 65535) {
-    console.error("usage: node serve.ts [--port <1-65535>]");
-    process.exit(1);
+function portFromArgs() {
+  const idx = process.argv.indexOf('--port');
+  if (idx >= 0 && process.argv[idx + 1]) {
+    const p = parseInt(process.argv[idx + 1], 10);
+    if (!Number.isNaN(p)) return p;
   }
-  return n;
+  return 8080;
 }
 
-function send(
-  res: import("node:http").ServerResponse,
-  status: number,
-  body: string | Buffer,
-  type = "text/plain; charset=utf-8",
-): void {
-  const data = typeof body === "string" ? Buffer.from(body, "utf-8") : body;
-  res.writeHead(status, {
-    "content-type": type,
-    "content-length": data.length,
-    "cache-control": "no-store",
-  });
-  res.end(data);
-}
+const port = portFromArgs();
 
 const server = createServer(async (req, res) => {
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    send(res, 405, "method not allowed");
-    return;
-  }
-
-  let rawPath: string;
   try {
-    rawPath = new URL(req.url ?? "/", "http://127.0.0.1").pathname;
-  } catch {
-    send(res, 400, "bad request");
-    return;
-  }
-
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(rawPath);
-  } catch {
-    send(res, 400, "bad request");
-    return;
-  }
-
-  const rel = decoded.replace(/^\/+/, "");
-  const target = resolve(GAME_ROOT, rel);
-  if (target !== GAME_ROOT && !target.startsWith(GAME_ROOT + sep)) {
-    send(res, 403, "forbidden");
-    return;
-  }
-
-  let filePath = target;
-  try {
-    const info = await stat(filePath);
-    if (info.isDirectory()) filePath = join(filePath, "index.html");
-    const fileInfo = await stat(filePath);
-    if (!fileInfo.isFile()) {
-      send(res, 404, "not found");
+    let path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    if (path === '/') path = '/index.html';
+    const full = resolve(join(gameDir, path));
+    if (!full.startsWith(gameDir + sep) && full !== gameDir) {
+      res.writeHead(403, { 'content-type': 'text/plain' });
+      res.end('Forbidden');
       return;
     }
-  } catch {
-    send(res, 404, "not found");
-    return;
-  }
-
-  try {
-    const data = await readFile(filePath);
-    const type = MIME[extname(filePath).toLowerCase()] ?? "application/octet-stream";
+    if (!existsSync(full)) {
+      res.writeHead(404, { 'content-type': 'text/plain' });
+      res.end('Not found');
+      return;
+    }
+    const body = await readFile(full);
     res.writeHead(200, {
-      "content-type": type,
-      "content-length": data.length,
-      "cache-control": "no-store",
+      'content-type': TYPES[extname(full).toLowerCase()] || 'application/octet-stream',
+      'cache-control': 'no-store',
     });
-    if (req.method === "GET") res.end(data);
-    else res.end();
+    res.end(body);
   } catch {
-    send(res, 500, "internal error");
+    res.writeHead(500, { 'content-type': 'text/plain' });
+    res.end('Server error');
   }
 });
 
-const port = parsePort(process.argv.slice(2));
-server.listen(port, "127.0.0.1", () => {
-  console.log(`Serving game/ at http://127.0.0.1:${port}/`);
+server.listen(port, () => {
+  console.log(`Neon Delta LA dev server: http://localhost:${port}/`);
 });

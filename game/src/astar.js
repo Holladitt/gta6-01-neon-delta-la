@@ -1,59 +1,70 @@
-// A* pathfinding over the road graph: nodes are {id: {x, z, links: [{id, cost}]}}.
-// Pure — no THREE, no DOM — so police flanking routes are deterministic
-// and testable outside the browser.
-export function astar(nodes, startId, goalId) {
-  if (!nodes[startId] || !nodes[goalId]) return null;
-  if (startId === goalId) return [startId];
+// A* pathfinding over a coarse grid, so police cars route around buildings
+// instead of driving through them. The grid is a plain 2D array of 0/1,
+// 1 meaning blocked, with a fixed cell size in metres.
 
-  const open = new Map([[startId, 0]]);
-  const came = new Map();
-  const gScore = new Map([[startId, 0]]);
-  const heuristic = (id) => {
-    const a = nodes[id];
-    const b = nodes[goalId];
-    return Math.abs(a.x - b.x) + Math.abs(a.z - b.z);
-  };
-  const fScore = new Map([[startId, heuristic(startId)]]);
-
-  while (open.size > 0) {
-    let cur = null;
-    let best = Infinity;
-    for (const [id, fv] of fScore) {
-      if (open.has(id) && fv < best) {
-        best = fv;
-        cur = id;
-      }
+export function astar(grid, sx, sz, gx, gz) {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const key = (x, z) => z * cols + x;
+  const open = [{ x: sx, z: sz, g: 0, f: 0, parent: null }];
+  const best = new Map([[key(sx, sz), 0]]);
+  const closed = new Set();
+  const heuristic = (x, z) => Math.abs(x - gx) + Math.abs(z - gz);
+  while (open.length > 0) {
+    let bi = 0;
+    for (let i = 1; i < open.length; i++) {
+      if (open[i].f < open[bi].f) bi = i;
     }
-    if (cur === null) break;
-    if (cur === goalId) {
-      const path = [cur];
-      while (came.has(path[0])) path.unshift(came.get(path[0]));
+    const node = open.splice(bi, 1)[0];
+    if (node.x === gx && node.z === gz) {
+      const path = [];
+      let cur = node;
+      while (cur) {
+        path.unshift([cur.x, cur.z]);
+        cur = cur.parent;
+      }
       return path;
     }
-    open.delete(cur);
-    for (const link of nodes[cur].links) {
-      const tentative = (gScore.get(cur) ?? Infinity) + link.cost;
-      if (tentative < (gScore.get(link.id) ?? Infinity)) {
-        came.set(link.id, cur);
-        gScore.set(link.id, tentative);
-        fScore.set(link.id, tentative + heuristic(link.id));
-        open.set(link.id, tentative + heuristic(link.id));
-      }
+    closed.add(key(node.x, node.z));
+    const neighbours = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    for (const [dx, dz] of neighbours) {
+      const nx = node.x + dx;
+      const nz = node.z + dz;
+      if (nx < 0 || nz < 0 || nx >= cols || nz >= rows) continue;
+      if (grid[nz][nx] === 1) continue;
+      const k = key(nx, nz);
+      if (closed.has(k)) continue;
+      const stepCost = dx !== 0 && dz !== 0 ? 1.414 : 1;
+      const g = node.g + stepCost;
+      if (best.has(k) && best.get(k) <= g) continue;
+      best.set(k, g);
+      open.push({ x: nx, z: nz, g, f: g + heuristic(nx, nz), parent: node });
     }
   }
   return null;
 }
 
-// Id of the graph node nearest to a point (squared distance, no sqrt).
-export function nearestNode(nodes, x, z) {
-  let best = null;
-  let bestD = Infinity;
-  for (const [id, n] of Object.entries(nodes)) {
-    const d = (n.x - x) * (n.x - x) + (n.z - z) * (n.z - z);
-    if (d < bestD) {
-      bestD = d;
-      best = id;
+// Convenience wrapper: path in world metres between two points, using a
+// blocked(x, z) predicate and a cell size. Returns waypoints in metres.
+export function findPath(startX, startZ, goalX, goalZ, blocked, cell = 10, span = 90) {
+  const half = span * cell;
+  const cols = span * 2 + 1;
+  const rows = span * 2 + 1;
+  const grid = [];
+  for (let rz = 0; rz < rows; rz++) {
+    const row = [];
+    for (let cx = 0; cx < cols; cx++) {
+      const wx = startX - half + cx * cell;
+      const wz = startZ - half + rz * cell;
+      row.push(blocked(wx, wz) ? 1 : 0);
     }
+    grid.push(row);
   }
-  return best;
+  const sx = Math.round((startX - (startX - half)) / cell);
+  const sz = Math.round((startZ - (startZ - half)) / cell);
+  const gx = Math.max(0, Math.min(cols - 1, Math.round((goalX - (startX - half)) / cell)));
+  const gz = Math.max(0, Math.min(rows - 1, Math.round((goalZ - (startZ - half)) / cell)));
+  const path = astar(grid, sx, sz, gx, gz);
+  if (!path) return null;
+  return path.map(([cx, rz]) => [startX - half + cx * cell, startZ - half + rz * cell]);
 }
