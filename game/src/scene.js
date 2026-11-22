@@ -101,7 +101,7 @@ function groundTexture() {
     const d1 = w2c(PIER_DECK.x1, PIER_DECK.z1);
     ctx.fillStyle = '#8a6d3b';
     ctx.fillRect(d0.x, d0.y, d1.x - d0.x, d1.y - d0.y);
-    ctx.fillStyle = 'rgba(255,220,150,0.32)';
+    ctx.fillStyle = 'rgba(255,220,150,0.4)';
     for (let z = PIER_DECK.z0; z <= PIER_DECK.z1; z += 16) {
       const p = w2c(PIER_DECK.x0, z);
       ctx.fillRect(p.x, p.y, d1.x - d0.x, w2c(0, z + 8).y - p.y);
@@ -427,10 +427,28 @@ function makeTree() {
   return g;
 }
 
+// A pier bench: wooden seat + backrest on iron legs. Same build as the
+// shop bench, as its own helper so the pier foreground can use it.
+function makeBench() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshLambertMaterial({ color: 0x8a6d3b });
+  const iron = new THREE.MeshLambertMaterial({ color: 0x333333 });
+  const seat = box(8, 0.8, 2, 0, 0, 1, 0, wood);
+  const back = box(8, 1.6, 0.5, 0, 0, 1.8, -0.9, wood);
+  const leg1 = box(0.6, 1, 1.8, 0, -3.4, 0.5, 0, iron);
+  const leg2 = box(0.6, 1, 1.8, 0, 3.4, 0.5, 0, iron);
+  g.add(seat, back, leg1, leg2);
+  return g;
+}
+
 function skyColors(hour) {
-  if (hour >= 6 && hour < 17.5) return { sky: 0x87ceeb, sun: 0xffffff, sunI: 0.9, amb: 0.55, fog: 0x9fc3e8 };
-  if (hour >= 17.5 && hour < 19) return { sky: 0xff9a3c, sun: 0xffd76a, sunI: 0.7, amb: 0.45, fog: 0xe8956a };
-  if (hour >= 19 || hour < 5) return { sky: 0x1a2340, sun: 0x9fb4ff, sunI: 0.35, amb: 0.3, fog: 0x2a3550 };
+  // v28 grading toward v15: the dusk is a saturated orange-red (warmer
+  // sun, richer fog) instead of pale salmon; the day sky and its fog
+  // are a deeper blue; the night is a purple night, slightly lifted so
+  // the pier deck is not pitch black.
+  if (hour >= 6 && hour < 17.5) return { sky: 0x87ceeb, sun: 0xffffff, sunI: 0.9, amb: 0.55, fog: 0x86b8e0 };
+  if (hour >= 17.5 && hour < 19) return { sky: 0xff7a1a, sun: 0xffb84d, sunI: 0.8, amb: 0.5, fog: 0xdd6a45 };
+  if (hour >= 19 || hour < 5) return { sky: 0x1a2340, sun: 0x9fb4ff, sunI: 0.35, amb: 0.35, fog: 0x352a5e };
   return { sky: 0xff6b5e, sun: 0xffd76a, sunI: 0.6, amb: 0.4, fog: 0xd95f4e };
 }
 
@@ -438,22 +456,26 @@ function skyColors(hour) {
 // into a small canvas texture and cached (the sphere's v axis runs
 // pole-to-pole, so the canvas top is the zenith).
 function skyGradColors(hour) {
-  if (hour >= 6 && hour < 17.5) return ['#3d7ac2', '#bfe3f0'];
-  if (hour >= 17.5 && hour < 19) return ['#5a2340', '#ff9a3c'];
-  if (hour >= 19 || hour < 5) return ['#05070f', '#2a3550'];
-  return ['#7a3a5a', '#ff6b5e'];
+  // v28: three stops — a deep zenith, a saturated mid band, a bright
+  // horizon — so the dusk reads as v15's golden-hour orange and the
+  // night as deep purple instead of a flat two-colour wash.
+  if (hour >= 6 && hour < 17.5) return ['#1e5aa8', '#5f9fd0', '#a8d8f0'];
+  if (hour >= 17.5 && hour < 19) return ['#2a1030', '#c23a1e', '#ff8c1a'];
+  if (hour >= 19 || hour < 5) return ['#060312', '#241a4e', '#43307a'];
+  return ['#7a3a5a', '#c24a3a', '#ff6b5e'];
 }
 let skyTexCache = null;
 function updateSkyMat(skyMat, hour) {
   const bucket = hour >= 6 && hour < 17.5 ? 'day' : hour >= 17.5 && hour < 19 ? 'dusk' : hour >= 19 || hour < 5 ? 'night' : 'dawn';
   if (!skyTexCache || skyTexCache.bucket !== bucket) {
-    const [top, bottom] = skyGradColors(hour);
+    const [top, mid, bottom] = skyGradColors(hour);
     const cv = document.createElement('canvas');
     cv.width = 16;
     cv.height = 256;
     const cx = cv.getContext('2d');
     const grad = cx.createLinearGradient(0, 0, 0, 256);
     grad.addColorStop(0, top);
+    grad.addColorStop(0.55, mid);
     grad.addColorStop(1, bottom);
     cx.fillStyle = grad;
     cx.fillRect(0, 0, 16, 256);
@@ -508,19 +530,22 @@ export function createScene(container, world) {
     scene.add(cl);
     clouds.push(cl);
   }
-  // Buildings with lit windows.
+  // Buildings with lit windows: the window texture is also the
+  // emissive map, so the windows glow warm (v15's lit-window grids)
+  // instead of reading as flat dark glass. The dark wall texels emit
+  // almost nothing, so the walls stay walls.
   const winTex = windowTexture();
   const bColors = [0x9b8a7a, 0x7a8a9b, 0x8a7a6b, 0x6b7a8a, 0xa08a7a, 0x7a9b8a];
   for (let i = 0; i < BUILDINGS.length; i += 1) {
     const b = BUILDINGS[i];
-    const mat = new THREE.MeshLambertMaterial({ color: bColors[i % bColors.length], map: winTex });
+    const mat = new THREE.MeshLambertMaterial({ color: bColors[i % bColors.length], map: winTex, emissive: 0xffffff, emissiveMap: winTex, emissiveIntensity: 0.5 });
     const m = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), mat);
     m.position.set(b.x, b.h / 2, b.z);
     scene.add(m);
   }
   // DELTA ARMS shop: building, billboard, yellow door, bench, crates, tree.
   const shopG = new THREE.Group();
-  const shopBase = box(60, 26, 30, 0, 0, 13, 0, new THREE.MeshLambertMaterial({ color: 0x2c3e50, map: winTex }));
+  const shopBase = box(60, 26, 30, 0, 0, 13, 0, new THREE.MeshLambertMaterial({ color: 0x2c3e50, map: winTex, emissive: 0xffffff, emissiveMap: winTex, emissiveIntensity: 0.5 }));
   const billboard = new THREE.Mesh(new THREE.PlaneGeometry(32, 10), new THREE.MeshBasicMaterial({ map: signTexture('NEON DELTA LA', 'DISTRICT WARS', '#c0392b', '#ffffff') }));
   billboard.position.set(0, 25, 15.2);
   const frontSign = new THREE.Mesh(new THREE.PlaneGeometry(18, 5), new THREE.MeshBasicMaterial({ map: signTexture('DELTA ARMS', 'GUNS · AMMO · 4 TIERS', '#1a5276', '#ffffff') }));
@@ -583,17 +608,67 @@ export function createScene(container, world) {
     scene.add(pl);
     pierLights.push(pl);
   }
-  const fireworkM = new THREE.PointsMaterial({ color: 0xffd76a, size: 5, transparent: true, opacity: 0.9 });
+  // v28: a warm lamp over the shot-3 foreground (the old pier lights
+  // sit 60+ units from the camera, so the deck between the camera and
+  // Mara was lit by night ambient only). This one hangs above the
+  // foreground at (-660, 10, 428): it warms Mara's back and the
+  // foreground props without blowing them out (intensity 40, distance
+  // 100 — ~0.6 on Mara at 8 units, ~0.1 on the deck at 20).
+  const fgLamp = new THREE.PointLight(0xffd76a, 40, 100);
+  fgLamp.position.set(-660, 10, 428);
+  scene.add(fgLamp);
+  pierLights.push(fgLamp);
+  // v28 round 2: the benches turn 90 degrees (long side toward the
+  // camera) so they read as benches — seat + backrest + legs in
+  // profile — instead of end-on brown blocks; the crates shrink and
+  // move a step further out so they read as pier clutter, not lone
+  // giant cubes. All still on the deck, in-frame, clear of Mara and
+  // of the staged foreground peds.
+  const benchA = makeBench();
+  benchA.position.set(-674, 0, 412);
+  benchA.rotation.y = Math.PI / 2;
+  const benchB = makeBench();
+  benchB.position.set(-674, 0, 444);
+  benchB.rotation.y = Math.PI / 2;
+  scene.add(benchA, benchB);
+  const pierCrate1 = box(1.8, 1.8, 1.8, 0, -662, 0.9, 424, new THREE.MeshLambertMaterial({ color: 0x8a6d3b }));
+  const pierCrate2 = box(1.5, 1.5, 1.5, 0, -662, 0.75, 432, new THREE.MeshLambertMaterial({ color: 0xa08a5a }));
+  scene.add(pierCrate1, pierCrate2);
+  const barrelM = new THREE.MeshLambertMaterial({ color: 0x7a5a2a });
+  const barrelGeo = new THREE.CylinderGeometry(0.9, 0.9, 2.2, 10);
+  for (const [bx, bz] of [[-660, 446], [-668, 448]]) {
+    const barrel = new THREE.Mesh(barrelGeo, barrelM);
+    barrel.position.set(bx, 1.1, bz);
+    scene.add(barrel);
+  }
+  const poolM = new THREE.MeshBasicMaterial({ color: 0xffd76a, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+  for (const [px, pz, pr] of [[-658, 428, 5], [-666, 422, 4], [-666, 434, 4]]) {
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(pr, 20), poolM);
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(px, 0.06, pz);
+    scene.add(pool);
+  }
+  // Fireworks as multicolour confetti (v28, toward v15's pink/cyan/
+  // yellow burst over the wheel): each point gets its own colour from
+  // a confetti palette instead of one flat gold.
   const fwGeo = new THREE.BufferGeometry();
   const fwPos = new Float32Array(60 * 3);
+  const fwCol = new Float32Array(60 * 3);
+  const confetti = [0xff6b9d, 0x4dd0e1, 0xffd76a, 0xffffff, 0x69f0ae, 0xff9a3c];
   for (let i = 0; i < 60; i += 1) {
     const a = Math.random() * Math.PI * 2;
     const r = Math.random() * 12;
     fwPos[i * 3] = -760 + Math.cos(a) * r;
     fwPos[i * 3 + 1] = 45 + Math.random() * 15;
     fwPos[i * 3 + 2] = 470 + Math.sin(a) * r;
+    const c = new THREE.Color(confetti[i % confetti.length]);
+    fwCol[i * 3] = c.r;
+    fwCol[i * 3 + 1] = c.g;
+    fwCol[i * 3 + 2] = c.b;
   }
   fwGeo.setAttribute('position', new THREE.BufferAttribute(fwPos, 3));
+  fwGeo.setAttribute('color', new THREE.BufferAttribute(fwCol, 3));
+  const fireworkM = new THREE.PointsMaterial({ color: 0xffffff, vertexColors: true, size: 5, transparent: true, opacity: 0.9 });
   const fireworks = new THREE.Points(fwGeo, fireworkM);
   scene.add(fireworks);
   // Port: containers, crane, boat, bridge.
@@ -838,7 +913,7 @@ export function createScene(container, world) {
         // Frozen diorama: only the wheel, the rotors and the fireworks move.
         if (wheel.userData.wheel) wheel.userData.wheel.rotation.z += dt * 0.15;
         if (heli.userData.rotor) heli.userData.rotor.rotation.y += dt * 12;
-        fireworks.material.opacity = 0.5 + 0.5 * Math.sin(now * 0.004);
+        fireworks.material.opacity = 0.7 + 0.3 * Math.sin(now * 0.004);
       } else {
         // Free-roam follow camera.
         const car = world.car;

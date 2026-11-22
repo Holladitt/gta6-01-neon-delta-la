@@ -27,7 +27,16 @@
      adds body.shot1 only while shot 1 is staged; other shots keep the
      default bottom-centre HUD. */
   body.shot1 #dialogue { top: 90px; bottom: auto; left: 20px; transform: none; }
-  body.shot1 #mission-bar { top: 90px; bottom: auto; left: auto; right: 20px; transform: none; text-align: right; }
+  /* v28: right 20px put the longest line (NEXT: Lose the tail) hard
+     against the right frame edge. 48px clears the edge with room. */
+  body.shot1 #mission-bar { top: 90px; bottom: auto; left: auto; right: 48px; transform: none; text-align: right; }
+  /* v28 shot 2 only: the bottom-centre mission bar and the VENICE
+     label sat on Mara's legs (she fills the centre of the frame down
+     to the bottom edge). For this shot they move to the bottom-left
+     over the empty forecourt grass — left of the minimap's right edge,
+     clear of Mara entirely — keeping the same bottom offsets. */
+  body.shot2 #mission-bar { left: 200px; transform: none; text-align: left; }
+  body.shot2 #hud-district { left: 200px; transform: none; text-align: left; }
   /* v27 declutter: in staged shots the abstract property panels are
      hidden so the 3D scene dominates the frame — big car / big Mara /
      landmark / dusk light, no big text block competing with the scene.

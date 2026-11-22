@@ -75,6 +75,21 @@ export const SHOT3_PEDS = [
   { x: -680, z: 440 }, { x: -678, z: 420 }, { x: -685, z: 435 }, { x: -682, z: 455 },
   { x: -690, z: 430 }, { x: -688, z: 448 },
 ];
+// v28: a closer pier crowd for shot 3, filling the empty deck between
+// the camera and Mara. Six peds at 23-29 units from the camera, three
+// on each side of the sightline to Mara (never on it, so she stays
+// clear). Plus two NEAR peds at 12-16 units, one at each frame edge in
+// the lower third — v15's pier does the same (a big yellow-shirt ped
+// at the left edge, a pink one right): a clear humanoid at the edge
+// reads as a person, not a block. All on the deck, all inside the
+// camera's view cone (the camera looks ~12 degrees north of west,
+// half-FOV ~46 degrees), so none of them is a giant block at the
+// frame edge or a ped cut off mid-body.
+export const SHOT3_FOREGROUND_PEDS = [
+  { x: -664, z: 418 }, { x: -668, z: 414 }, { x: -660, z: 422 },
+  { x: -664, z: 438 }, { x: -668, z: 442 }, { x: -660, z: 434 },
+  { x: -650, z: 440 }, { x: -654, z: 422 },
+];
 export const SHOT4_PEDS = [
   { x: 400, z: 520 }, { x: 440, z: 560 }, { x: 500, z: 540 }, { x: 460, z: 600 },
   { x: 540, z: 580 }, { x: 380, z: 560 }, { x: 470, z: 600 }, { x: 585, z: 605 },
@@ -91,7 +106,13 @@ export const SHOTS = [
     // to z -261 at scale 1.8: the rear is 8 units out, so the whole car
     // (roof, cabin, red body, wheels) fits above the district label
     // while the roof stays clear of the roadblock sightline.
-    car: { x: -320, z: -261, angle: Math.PI, scale: 1.8 },
+    // v28: the car sits angled on the road (nose swung west) so the
+    // camera sees its LEFT flank + rear — a 3/4 rear view that reads as
+    // a car, not a flat red box. The camera stays dead behind on the
+    // same axis, so the car stays big, whole and centred; only its own
+    // rotation changed (position, scale and the roadblock sightline are
+    // untouched, and the heli beam still lands on the car).
+    car: { x: -320, z: -261, angle: Math.PI + 0.5, scale: 1.8 },
     camera: { x: -320, y: 3.5, z: -248 },
     look: { x: -320, y: 3, z: -320 },
     heli: { x: -320, y: 28, z: -310 },
@@ -122,6 +143,7 @@ export const SHOTS = [
     camera: { x: -639, y: 1.8, z: 428 },
     look: { x: -720, y: 2, z: 445 },
     peds: SHOT3_PEDS,
+    foregroundPeds: SHOT3_FOREGROUND_PEDS,
     dialogue: { name: 'INEZ VARGAS', line: 'Meet me where the lights are loudest. The ledger pages are already moving.' },
     missionBar: { title: 'M7 THE NIGHT LEDGER', stage: 'TAHAP 1/2', objective: 'Meet Inez', next: 'Take the ledger' },
     wheelOpen: false,
