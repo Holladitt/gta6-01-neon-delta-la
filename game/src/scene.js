@@ -598,22 +598,27 @@ export function createScene(container, world) {
   scene.add(fireworks);
   // Port: containers, crane, boat, bridge.
   const containerColors = [0x27ae60, 0xe74c3c, 0x3498db, 0xf39c12, 0x9b59b6, 0x1abc9c];
-  const containerSpots = [[600, 520, 0x27ae60], [560, 540, 0xe74c3c], [640, 560, 0x3498db], [480, 520, 0xf39c12], [520, 580, 0x9b59b6], [660, 600, 0x1abc9c], [440, 580, 0x27ae60], [380, 600, 0xe74c3c], [600, 600, 0xe74c3c], [560, 595, 0x27ae60], [520, 610, 0xf39c12]];
+  // v27: the red container at [600, 600] is gone — it stood right behind
+  // Mara in the shot-4 frame and her red jacket bled into the red wall.
+  // With it gone Mara pops against sky and road instead.
+  const containerSpots = [[600, 520, 0x27ae60], [560, 540, 0xe74c3c], [640, 560, 0x3498db], [480, 520, 0xf39c12], [520, 580, 0x9b59b6], [660, 600, 0x1abc9c], [440, 580, 0x27ae60], [380, 600, 0xe74c3c], [560, 595, 0x27ae60], [520, 610, 0xf39c12]];
   for (const [cx, cz, cc] of containerSpots) {
     const cont = box(14, 6, 6, 0, cx, 3, cz, new THREE.MeshLambertMaterial({ color: cc }));
     scene.add(cont);
   }
-  // Foreground dressing for the shot-4 camera: crates and a small
-  // container on the dock apron, breaking up the flat concrete in the
-  // lower frame. All on land, clear of the hero car, Mara and the boat.
+  // Foreground dressing for the shot-4 camera: small crates on the dock
+  // apron, breaking up the flat concrete in the lower frame. All on
+  // land, clear of the hero car, Mara and the boat. v27: the big tan
+  // cube (3x3x3 at 600,624) and the green 8x4x4 box at 598,610 are gone
+  // — the box stood in front of the boat's hull and the cube was the
+  // biggest abstract block in the mid-ground; three small crates are
+  // enough dressing now that the boat and Mara dominate the frame.
   const apronCrate1 = box(2.5, 2.5, 2.5, 0, 608, 1.25, 620, new THREE.MeshLambertMaterial({ color: 0x8a6d3b }));
-  const apronCrate2 = box(3, 3, 3, 0, 600, 1.5, 624, new THREE.MeshLambertMaterial({ color: 0xa08a5a }));
-  const apronBox = box(8, 4, 4, 0, 598, 2, 610, new THREE.MeshLambertMaterial({ color: 0x27ae60 }));
   // Two small crates low in the frame, on the apron right in front of
   // the camera, so the bottom third is not one flat surface.
   const apronCrate3 = box(2, 2, 2, 0, 628, 1, 624, new THREE.MeshLambertMaterial({ color: 0xa08a5a }));
   const apronCrate4 = box(2.5, 2.5, 2.5, 0, 620, 1.25, 628, new THREE.MeshLambertMaterial({ color: 0x8a6d3b }));
-  scene.add(apronCrate1, apronCrate2, apronBox, apronCrate3, apronCrate4);
+  scene.add(apronCrate1, apronCrate3, apronCrate4);
   // Dockside road for the shot-4 camera: a dark asphalt strip with
   // yellow centre dashes running across the lower frame, so the
   // foreground reads as a road instead of flat tan concrete. It lies

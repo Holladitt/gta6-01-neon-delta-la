@@ -28,6 +28,19 @@
      default bottom-centre HUD. */
   body.shot1 #dialogue { top: 90px; bottom: auto; left: 20px; transform: none; }
   body.shot1 #mission-bar { top: 90px; bottom: auto; left: auto; right: 20px; transform: none; text-align: right; }
+  /* v27 declutter: in staged shots the abstract property panels are
+     hidden so the 3D scene dominates the frame — big car / big Mara /
+     landmark / dusk light, no big text block competing with the scene.
+     The game HUD and all game logic are untouched; only the staged
+     screenshot presentation changes. The weapon wheel (tier + price
+     list), the shop tier panel (tier + price + OWNED list), the top
+     stat bar (COVER / TAPES / RADIO) and the money + stars all hide in
+     every staged shot. Story UI stays: dialogue + portrait, mission
+     bar, district label, minimap, speed, game title. */
+  body.shot1 #wheel, body.shot2 #wheel, body.shot3 #wheel, body.shot4 #wheel { display: none !important; }
+  body.shot1 #shop-panel, body.shot2 #shop-panel, body.shot3 #shop-panel, body.shot4 #shop-panel { display: none !important; }
+  body.shot1 #hud-cover, body.shot2 #hud-cover, body.shot3 #hud-cover, body.shot4 #hud-cover { display: none !important; }
+  body.shot1 #hud-money, body.shot2 #hud-money, body.shot3 #hud-money, body.shot4 #hud-money { display: none !important; }
   .dlg-portrait { position: absolute; left: 12px; top: 12px; width: 72px; height: 72px; border-radius: 6px; }
   .dlg-name { font-size: 15px; font-weight: 900; letter-spacing: 2px; color: #ffd76a; margin-bottom: 4px; }
   .dlg-line { font-size: 17px; line-height: 1.4; color: #fff; }

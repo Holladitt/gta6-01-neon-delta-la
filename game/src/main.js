@@ -211,7 +211,13 @@ if (shotN >= 1 && shotN <= 4) {
   api.applyShot(shotN);
   // v26: shot 1 stages the hero car big in the lower frame, so its HUD
   // (dialogue + mission bar) moves to the top for this shot only.
+  // v27: every staged shot gets its own body class so the shot-mode CSS
+  // can hide the abstract property panels (wheel, shop tier panel, top
+  // stat bar, money) and leave the 3D scene to dominate the frame.
   document.body.classList.toggle('shot1', shotN === 1);
+  document.body.classList.toggle('shot2', shotN === 2);
+  document.body.classList.toggle('shot3', shotN === 3);
+  document.body.classList.toggle('shot4', shotN === 4);
   world.state = 'FREE_ROAM';
   const anchor = api.shot.mara || api.shot.car;
   if (anchor) world.district = districtAt(anchor.x, anchor.z).id;
