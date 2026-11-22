@@ -1,32 +1,44 @@
-// title.js — title screen and the three save slots.
-import { TITLE, SAVE_KEY } from './config.js';
-import { slotKey, slotSummary, slotCount, saveGame, loadGame } from './save.js';
+// Title screen: NEON DELTA LA: DISTRICT WARS, NEW GAME / CONTINUE / LOAD + 3 slots.
+import { slotCount, slotSummary, loadGame } from './save.js';
 
-export function titleText() {
-  return TITLE;
-}
-export function slotSummaries() {
-  const out = [];
-  for (let i = 1; i <= slotCount(); i += 1) {
-    const s = slotSummary(i);
-    out.push(s ? { slot: i, ...s } : { slot: i, empty: true });
+export function createTitle(world, game) {
+  const el = document.getElementById('title-screen');
+  const slotsEl = document.getElementById('title-slots');
+  function show() {
+    el.classList.remove('hidden');
+    world.state = 'TITLE';
+    renderSlots();
   }
-  return out;
-}
-export function startNewGame(slot) {
-  const data = {
-    money: 500, day: 1, rp: 0, rank: 'D', district: 'downtown', hour: 10,
-    missionsDone: [], standing: {}, owned: ['pistol', 'smg', 'shotgun'],
-  };
-  saveGame(slot, data);
-  return data;
-}
-export function continueGame(slot) {
-  return loadGame(slot);
-}
-export function saveKeyFor(slot) {
-  return slotKey(slot);
-}
-export function baseSaveKey() {
-  return SAVE_KEY;
+  function hide() { el.classList.add('hidden'); }
+  function renderSlots() {
+    let html = '';
+    for (let s = 1; s <= slotCount(); s++) {
+      const sum = slotSummary(s);
+      html += '<button class="slot" data-slot="' + s + '">' + (sum ? ('SLOT ' + s + ' · $' + sum.money + ' · DAY ' + sum.day + ' · RANK ' + sum.rank) : ('SLOT ' + s + ' · EMPTY')) + '</button>';
+    }
+    slotsEl.innerHTML = html;
+    slotsEl.querySelectorAll('.slot').forEach((b) => {
+      b.addEventListener('click', () => loadSlot(+b.dataset.slot));
+    });
+  }
+  function loadSlot(s) {
+    const data = loadGame(s);
+    if (data) applySave(world, data);
+    start();
+  }
+  function applySave(w, data) {
+    w.money = data.money; w.day = data.day; w.rp = data.rp; w.rank = data.rank;
+    if (data.standing) w.standing = data.standing;
+    if (data.missionsDone) w.missionsDone = data.missionsDone;
+  }
+  function start() {
+    hide();
+    world.state = 'FREE_ROAM';
+    world.frozen = false;
+  }
+  const ng = document.getElementById('btn-new');
+  if (ng) ng.addEventListener('click', () => start());
+  const ct = document.getElementById('btn-continue');
+  if (ct) ct.addEventListener('click', () => loadSlot(1));
+  return { show, hide, start, renderSlots };
 }

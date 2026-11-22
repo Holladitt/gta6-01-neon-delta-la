@@ -1,54 +1,38 @@
-// portraits.js — stylised bust portraits drawn on canvas, one per contact.
-const SKIN = { mara: '#e8b48c', inez: '#d9a06b', orin: '#c98f5f', harlan: '#b98a5e', eden: '#e8b48c', default: '#d9a06b' };
-const HAIR = { mara: '#1a1a1a', inez: '#2b1a12', orin: '#3a2a1a', harlan: '#111111', eden: '#6b3a1a', default: '#222222' };
-const JACKET = { mara: '#e74c3c', inez: '#8e44ad', orin: '#2e6fb0', harlan: '#27ae60', eden: '#f39c12', default: '#555555' };
-
-export function drawPortrait(canvas, name) {
-  const key = (name || 'default').toLowerCase();
-  const c = canvas.getContext('2d');
-  const w = canvas.width;
-  const h = canvas.height;
-  c.clearRect(0, 0, w, h);
-  // Backdrop.
-  const g = c.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#2c1a3a');
-  g.addColorStop(1, '#12081f');
-  c.fillStyle = g;
-  c.fillRect(0, 0, w, h);
-  // Shoulders / jacket.
-  c.fillStyle = JACKET[key] || JACKET.default;
-  c.beginPath();
-  c.moveTo(w * 0.08, h);
-  c.quadraticCurveTo(w * 0.2, h * 0.62, w * 0.5, h * 0.62);
-  c.quadraticCurveTo(w * 0.8, h * 0.62, w * 0.92, h);
-  c.closePath();
-  c.fill();
-  // Neck.
-  c.fillStyle = SKIN[key] || SKIN.default;
-  c.fillRect(w * 0.44, h * 0.5, w * 0.12, h * 0.18);
-  // Head.
-  c.beginPath();
-  c.ellipse(w * 0.5, h * 0.36, w * 0.19, h * 0.22, 0, 0, Math.PI * 2);
-  c.fill();
-  // Hair.
-  c.fillStyle = HAIR[key] || HAIR.default;
-  c.beginPath();
-  c.ellipse(w * 0.5, h * 0.2, w * 0.2, h * 0.14, 0, Math.PI, Math.PI * 2);
-  c.fill();
-  c.fillRect(w * 0.3, h * 0.18, w * 0.05, h * 0.22);
-  c.fillRect(w * 0.65, h * 0.18, w * 0.05, h * 0.22);
-  // Eyes.
-  c.fillStyle = '#111111';
-  c.beginPath();
-  c.arc(w * 0.43, h * 0.35, w * 0.018, 0, Math.PI * 2);
-  c.arc(w * 0.57, h * 0.35, w * 0.018, 0, Math.PI * 2);
-  c.fill();
-  // Mouth.
-  c.strokeStyle = '#7a3a2a';
-  c.lineWidth = Math.max(1, w * 0.012);
-  c.beginPath();
-  c.moveTo(w * 0.45, h * 0.47);
-  c.quadraticCurveTo(w * 0.5, h * 0.5, w * 0.55, h * 0.47);
-  c.stroke();
-  return canvas;
+// Canvas-drawn cartoon portraits for the dialogue box.
+const FACES = {
+  'Mara Solano': { skin: '#d9a066', hair: '#2c1a12', shirt: '#e74c3c', style: 'long' },
+  'Inez Vargas': { skin: '#c98a5a', hair: '#3a2a1a', shirt: '#8e44ad', style: 'bun' },
+  'Orin Beck': { skin: '#d9a066', hair: '#888888', shirt: '#2e6fb0', style: 'short' },
+  'Harlan Dray': { skin: '#b08050', hair: '#1a1a1a', shirt: '#27ae60', style: 'short' },
+  'Eden Voss': { skin: '#e8b88a', hair: '#f1c40f', shirt: '#1abc9c', style: 'long' },
+  'Juno Reyes': { skin: '#c98a5a', hair: '#2c1a12', shirt: '#3498db', style: 'short' },
+  'Petra Hale': { skin: '#e8b88a', hair: '#e74c3c', shirt: '#27ae60', style: 'bun' },
+  'Cassia Wren': { skin: '#d9a066', hair: '#5a3a1a', shirt: '#9b59b6', style: 'long' },
+};
+export function portraitDataURL(name) {
+  const f = FACES[name] || FACES['Mara Solano'];
+  const c = document.createElement('canvas');
+  c.width = 96; c.height = 96;
+  const g = c.getContext('2d');
+  g.fillStyle = '#1a2a3a'; g.fillRect(0, 0, 96, 96);
+  g.fillStyle = f.shirt;
+  g.beginPath(); g.moveTo(18, 96); g.quadraticCurveTo(48, 62, 78, 96); g.closePath(); g.fill();
+  g.fillStyle = f.skin;
+  g.beginPath(); g.arc(48, 42, 24, 0, Math.PI * 2); g.fill();
+  g.fillStyle = f.hair;
+  if (f.style === 'long') {
+    g.beginPath(); g.arc(48, 34, 25, Math.PI, 0); g.fill();
+    g.fillRect(22, 30, 8, 40); g.fillRect(66, 30, 8, 40);
+  } else if (f.style === 'bun') {
+    g.beginPath(); g.arc(48, 30, 22, Math.PI, 0); g.fill();
+    g.beginPath(); g.arc(48, 14, 9, 0, Math.PI * 2); g.fill();
+  } else {
+    g.beginPath(); g.arc(48, 32, 23, Math.PI, 0); g.fill();
+  }
+  g.fillStyle = '#1a1a1a';
+  g.beginPath(); g.arc(39, 42, 2.5, 0, Math.PI * 2); g.fill();
+  g.beginPath(); g.arc(57, 42, 2.5, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#7a3a2a'; g.lineWidth = 2;
+  g.beginPath(); g.arc(48, 54, 6, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke();
+  return c.toDataURL('image/png');
 }

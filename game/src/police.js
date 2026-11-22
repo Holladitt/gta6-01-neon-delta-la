@@ -1,46 +1,27 @@
-// police.js — NDPD presence scales with the wanted level.
-import { policeCarCount, roadblockCount, heliActive, swatActive } from './wanted.js';
-import { dist2 } from './rng.js';
-import { callsigns } from './dispatch.js';
+// NDPD units: cars scale with wanted level, heli at 3, roadblocks at 4, SWAT at 5.
+import { heliActive, roadblockCount, swatActive, policeCarCount } from './wanted.js';
 
-export function createPolice() {
-  return { cars: [], heli: null, swat: null, roadblocks: [] };
+export function createPolice() { return { cars: [], heli: null, swat: null, roadblocks: [] }; }
+export function updatePolice(p, w, dt, now) {
+  const want = policeCarCount(w.wanted);
+  while (p.cars.length < want) {
+    const i = p.cars.length;
+    p.cars.push({ x: w.car.x + 30 + i * 18, z: w.car.z - 40 - i * 6, angle: 0, speed: 0 });
+  }
+  while (p.cars.length > want) p.cars.pop();
+  if (heliActive(w.wanted)) {
+    if (!p.heli) p.heli = { x: w.car.x + 20, z: w.car.z - 30, y: 40 };
+    p.heli.x = w.car.x + 20; p.heli.z = w.car.z - 30;
+  } else p.heli = null;
+  if (swatActive(w.wanted)) {
+    if (!p.swat) p.swat = { x: w.car.x + 60, z: w.car.z + 20 };
+  } else p.swat = null;
+  const rb = roadblockCount(w.wanted);
+  while (p.roadblocks.length < rb) p.roadblocks.push({ x: w.car.x, z: w.car.z - 60 });
+  while (p.roadblocks.length > rb) p.roadblocks.pop();
+  return p;
 }
-export function beamOnCar(pol, world) {
-  if (!pol.heli || !world) return false;
-  const target = (world.car && world.car.x !== undefined) ? world.car : world.player;
-  if (!target) return false;
-  return dist2(pol.heli.x, pol.heli.z, target.x, target.z) < 40;
-}
-export function updatePolice(pol, world, dt, time) {
-  const level = world && world.wanted ? world.wanted.level : (typeof world === 'number' ? world : 0);
-  const player = (world && world.player) || { x: 0, z: 0 };
-  const px = player.x;
-  const pz = player.z;
-  const want = policeCarCount({ level });
-  while (pol.cars.length < want) {
-    const i = pol.cars.length;
-    pol.cars.push({
-      x: px + 60 + i * 30, z: pz - 40 - i * 20,
-      callsign: callsigns()[i % 3], role: i % 2 === 0 ? 'FLANKING' : 'PURSUIT',
-    });
-  }
-  pol.cars.length = want;
-  for (let i = 0; i < pol.cars.length; i += 1) {
-    const c = pol.cars[i];
-    const dx = px - c.x;
-    const dz = pz - c.z;
-    const d = Math.hypot(dx, dz) || 1;
-    const sp = 14 * (dt || 0.016);
-    c.x += (dx / d) * sp;
-    c.z += (dz / d) * sp;
-  }
-  const rb = roadblockCount({ level });
-  while (pol.roadblocks.length < rb) {
-    pol.roadblocks.push({ x: px, z: pz - 60 - pol.roadblocks.length * 30 });
-  }
-  pol.roadblocks.length = rb;
-  pol.heli = heliActive({ level }) ? { x: px, y: 28, z: pz - 10 } : null;
-  pol.swat = swatActive({ level }) ? { x: px + 40, z: pz - 30, callsign: 'SWAT-1' } : null;
-  return pol;
+export function beamOnCar(p, w) {
+  if (!p.heli) return false;
+  return Math.hypot(p.heli.x - w.car.x, p.heli.z - w.car.z) < 80;
 }

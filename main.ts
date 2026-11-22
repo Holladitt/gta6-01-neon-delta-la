@@ -1,20 +1,15 @@
-// main.ts — hands the game in. Copies game/ and screenshots/ from this
-// repository into the output directory and writes dossier.json there with
-// buildDossier from vendor/makefun-game.ts (bytes written raw, not stringified).
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
+import { cpSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 
-const repo = path.dirname(fileURLToPath(import.meta.url));
-const outDir = process.env.MAKEFUN_OUTPUT_DIR || '/output';
-
-fs.mkdirSync(outDir, { recursive: true });
-for (const dir of ['game', 'screenshots']) {
-  const src = path.join(repo, dir);
-  const dst = path.join(outDir, dir);
-  if (fs.existsSync(src)) fs.cpSync(src, dst, { recursive: true });
-}
-const bytes = buildDossier(outDir, { text_max_bytes: 163840 });
-fs.writeFileSync(path.join(outDir, 'dossier.json'), bytes);
-console.log('wrote ' + path.join(outDir, 'dossier.json') + ' (' + bytes.length + ' bytes)');
+const out = process.env.MAKEFUN_OUTPUT_DIR || '/output';
+mkdirSync(out, { recursive: true });
+cpSync('game', join(out, 'game'), { recursive: true });
+if (existsSync('screenshots')) cpSync('screenshots', join(out, 'screenshots'), { recursive: true });
+writeFileSync(join(out, 'dossier.json'), buildDossier(out, {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  game_max_files: 993,
+  game_max_bytes: 50331648,
+  game_path_max_bytes: 1000,
+}));

@@ -1,51 +1,33 @@
-// crew.js — Juno (clean plates), Petra (field repair), Cassia (overwatch).
+// Crew abilities: Juno clears a star, Petra repairs for $150, Cassia overwatch.
 import { CREW } from './config.js';
 
 export function createCrewState() {
-  return { lastUsed: {}, overwatchUntil: 0 };
+  const s = { overwatchUntil: 0 };
+  for (const c of CREW) s[c.id] = { readyAt: 0 };
+  return s;
 }
-function crewDef(id) {
-  return CREW.find((c) => c.id === id);
-}
-export function abilityReady(crew, id, now) {
-  const def = crewDef(id);
-  if (!def) return false;
-  const last = crew.lastUsed[id];
-  if (last === undefined) return true;
-  return now - last >= def.cooldown;
-}
-export function cooldownLeft(crew, id, now) {
-  const def = crewDef(id);
-  if (!def) return 0;
-  const last = crew.lastUsed[id];
-  if (last === undefined) return 0;
-  return Math.max(0, def.cooldown - (now - last));
-}
-export function overwatchActive(crew, now) {
-  return now < crew.overwatchUntil;
-}
+export function crewById(id) { return CREW.find((c) => c.id === id); }
+export function abilityReady(crew, id, now) { return now >= ((crew[id] && crew[id].readyAt) || 0); }
+export function cooldownLeft(crew, id, now) { return Math.max(0, ((crew[id] && crew[id].readyAt) || 0) - now); }
+export function overwatchActive(crew, now) { return now < (crew.overwatchUntil || 0); }
 export function useAbility(crew, id, now, game) {
-  const def = crewDef(id);
-  if (!def) return { ok: false, reason: 'unknown' };
   if (!abilityReady(crew, id, now)) return { ok: false, reason: 'recharging' };
   if (id === 'juno') {
-    if (!game || !game.wanted) return { ok: false, reason: 'no-wanted' };
-    game.wanted.level = Math.max(0, game.wanted.level - 1);
-    crew.lastUsed[id] = now;
-    return { ok: true };
+    if (game.wanted) game.wanted.level = Math.max(0, game.wanted.level - 1);
+    crew.juno.readyAt = now + 45;
+    return { ok: true, ability: 'CLEAN PLATES' };
   }
   if (id === 'petra') {
-    if (!game || game.money === undefined || !game.car) return { ok: false, reason: 'no-game' };
-    if (game.money < def.cost) return { ok: false, reason: 'broke' };
-    game.money -= def.cost;
-    game.car.condition = 100;
-    crew.lastUsed[id] = now;
-    return { ok: true };
+    if (game.money < 150) return { ok: false, reason: 'broke' };
+    game.money -= 150;
+    if (game.car) game.car.condition = 100;
+    crew.petra.readyAt = now + 60;
+    return { ok: true, ability: 'FIELD REPAIR' };
   }
   if (id === 'cassia') {
-    crew.overwatchUntil = now + def.duration;
-    crew.lastUsed[id] = now;
-    return { ok: true };
+    crew.overwatchUntil = now + 20;
+    crew.cassia.readyAt = now + 25;
+    return { ok: true, ability: 'OVERWATCH' };
   }
-  return { ok: false, reason: 'unknown' };
+  return { ok: false };
 }

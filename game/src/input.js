@@ -1,46 +1,22 @@
-// input.js — keyboard state for driving, combat and crew abilities.
+// Keyboard + mouse input: WASD/arrows drive, E enter/exit, Q wheel, 1-4 tiers,
+// C/V/X crew abilities, F fire, P pause.
 export function createInput() {
-  return {
-    forward: false, back: false, left: false, right: false,
-    brake: false, steer: 0, throttle: 0,
-    wheel: false, interact: false, pause: false, mute: false,
-    keys: {},
-  };
-}
-const KEYMAP = {
-  KeyW: 'forward', ArrowUp: 'forward',
-  KeyS: 'back', ArrowDown: 'back',
-  KeyA: 'left', ArrowLeft: 'left',
-  KeyD: 'right', ArrowRight: 'right',
-  Space: 'brake',
-  KeyQ: 'wheel',
-  KeyE: 'interact',
-  KeyP: 'pause',
-  KeyM: 'mute',
-};
-export function attachInput(input, target) {
-  const el = target || (typeof window !== 'undefined' ? window : null);
-  if (!el || !el.addEventListener) return () => {};
-  function down(e) {
-    input.keys[e.code] = true;
-    const name = KEYMAP[e.code];
-    if (name) input[name] = true;
-    if (name === 'brake') input.throttle = 0;
+  const state = { forward: false, back: false, left: false, right: false, brake: false, nitro: false };
+  const keys = {};
+  const handlers = [];
+  function key(e, down) {
+    const k = e.key.toLowerCase();
+    keys[k] = down;
+    state.forward = !!(keys['w'] || keys['arrowup']);
+    state.back = !!(keys['s'] || keys['arrowdown']);
+    state.left = !!(keys['a'] || keys['arrowleft']);
+    state.right = !!(keys['d'] || keys['arrowright']);
+    state.brake = !!keys[' '];
+    state.nitro = !!keys['shift'];
+    if (down) for (const h of handlers) h(k);
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
   }
-  function up(e) {
-    input.keys[e.code] = false;
-    const name = KEYMAP[e.code];
-    if (name) input[name] = false;
-  }
-  el.addEventListener('keydown', down);
-  el.addEventListener('keyup', up);
-  return () => {
-    el.removeEventListener('keydown', down);
-    el.removeEventListener('keyup', up);
-  };
-}
-export function readInput(input) {
-  input.throttle = input.forward ? 1 : 0;
-  input.steer = (input.left ? 1 : 0) - (input.right ? 1 : 0);
-  return input;
+  window.addEventListener('keydown', (e) => key(e, true));
+  window.addEventListener('keyup', (e) => key(e, false));
+  return { state, onKey: (h) => handlers.push(h) };
 }

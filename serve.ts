@@ -1,47 +1,29 @@
-// serve.ts — static server for the game. Serves the repo root on port 8080;
-// GET / serves game/index.html.
-import http from 'node:http';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { join, extname } from 'node:path';
 
-const root = path.dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.PORT || 8080);
-const MIME: Record<string, string> = {
+const MIME = {
   '.html': 'text/html',
   '.js': 'text/javascript',
   '.mjs': 'text/javascript',
-  '.ts': 'text/javascript',
   '.css': 'text/css',
   '.json': 'application/json',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
 };
-
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url || '/', 'http://localhost');
-  let rel = decodeURIComponent(url.pathname);
-  if (rel === '/') rel = '/game/index.html';
-  const file = path.join(root, rel);
-  if (!file.startsWith(root)) {
-    res.writeHead(403);
-    res.end('forbidden');
-    return;
-  }
-  fs.readFile(file, (err, data) => {
-    if (err) {
-      res.writeHead(404);
-      res.end('not found');
-      return;
-    }
-    const ext = path.extname(file);
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+const root = new URL('game', import.meta.url).pathname;
+const server = createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url || '/', 'http://127.0.0.1');
+    const p = url.pathname === '/' ? '/index.html' : url.pathname;
+    const file = join(root, p);
+    if (!file.startsWith(root)) { res.writeHead(403); res.end(); return; }
+    const data = await readFile(file);
+    res.writeHead(200, { 'content-type': MIME[extname(file)] || 'application/octet-stream' });
     res.end(data);
-  });
+  } catch {
+    res.writeHead(404);
+    res.end('not found');
+  }
 });
-
-server.listen(PORT, () => {
-  console.log('Neon Delta LA serving on http://localhost:' + PORT);
-});
+server.listen(8080, '127.0.0.1', () => console.log('listening on http://127.0.0.1:8080'));

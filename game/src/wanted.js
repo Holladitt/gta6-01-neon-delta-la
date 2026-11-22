@@ -1,67 +1,26 @@
-// wanted.js — wanted 1-5, heli, roadblocks, SWAT, spikes, AIR-1 takedown.
+// Wanted 0-5: heli at 3, roadblocks at 4, SWAT at 5, spikes, air takedown.
 import { WANTED_MAX } from './config.js';
-import { clamp } from './rng.js';
 
-export function createWanted() {
-  return { level: 0, spikes: [], slowedUntil: 0, airLock: 0, lastCrime: 0 };
-}
-export function setWanted(w, n) {
-  w.level = clamp(Math.round(n), 0, WANTED_MAX);
-  return w.level;
-}
-export function addWanted(w, n, now) {
-  if (now !== undefined) w.lastCrime = now;
-  return setWanted(w, w.level + n);
-}
-export function decayWanted(w, dt, now) {
-  if (w.level <= 0) return w.level;
-  if (now - w.lastCrime > 60) {
-    w.level = Math.max(0, w.level - dt / 30);
-    w.level = Math.floor(w.level);
-  }
-  return w.level;
-}
-export function heliActive(w) {
-  return w.level >= 3;
-}
-export function roadblockCount(w) {
-  return w.level >= 4 ? 2 : 0;
-}
-export function swatActive(w) {
-  return w.level >= 5;
-}
-export function policeCarCount(w) {
-  return 2 + w.level * 2;
-}
-export function dropSpike(w, x, z, now) {
-  w.spikes.push({ x, z, at: now });
-  return true;
-}
+export function createWanted() { return { level: 0, spikes: [], spikeHitAt: -999, airLock: 0 }; }
+export function setWanted(w, level) { w.level = Math.max(0, Math.min(WANTED_MAX, level)); return w.level; }
+export function addWanted(w, n, now) { return setWanted(w, w.level + n); }
+export function decayWanted(w, now) { return setWanted(w, w.level - 1); }
+export function heliActive(w) { return w.level >= 3; }
+export function roadblockCount(w) { return w.level >= 4 ? 2 : 0; }
+export function swatActive(w) { return w.level >= 5; }
+export function policeCarCount(w) { return 2 + w.level * 2; }
+export function dropSpike(w, x, z, now) { w.spikes.push({ x, z, at: now }); return w.spikes.length; }
 export function hitSpike(w, x, z, now) {
-  for (let i = 0; i < w.spikes.length; i += 1) {
-    const s = w.spikes[i];
-    const dx = x - s.x;
-    const dz = z - s.z;
-    if (dx * dx + dz * dz < 36) {
-      w.spikes.splice(i, 1);
-      w.slowedUntil = now + 5;
-      return true;
-    }
+  for (const s of w.spikes) {
+    if (now - s.at > 30) continue;
+    if (Math.hypot(x - s.x, z - s.z) <= 4) { w.spikeHitAt = now; return true; }
   }
   return false;
 }
-export function spikeSlowed(w, now) {
-  return now < w.slowedUntil;
-}
+export function spikeSlowed(w, now) { return now - w.spikeHitAt < 5; }
 export function updateAirLock(w, dt, beamOn) {
-  if (!beamOn) {
-    w.airLock = 0;
-    return null;
-  }
+  if (!beamOn) { w.airLock = 0; return null; }
   w.airLock += dt;
-  if (w.airLock >= 5) {
-    w.airLock = 0;
-    return 'takedown';
-  }
+  if (w.airLock >= 5) { w.airLock = 0; return 'takedown'; }
   return null;
 }
