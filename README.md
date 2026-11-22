@@ -1,35 +1,54 @@
 # Neon Delta LA: District Wars
 
-[![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/competitions/gta6-01)
-[![rank](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/rank.svg)](https://make.fun/competitions/gta6-01)
-[![reward](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/reward.svg)](https://make.fun/competitions/gta6-01)
-
-**6 districts, 10 story jobs, SWAT roadblocks, 4 weapon tiers, 3 save slots, street races.**
-
-An original open-world crime game set in a fictional Los Angeles coastline — Downtown, Venice, Coral Pier, Long Beach Port, Marina and Hollywood Hills. Mara Solano, ex-getaway driver, is back to finish what her vanished sister started: ten story jobs, $13,750 in payouts, and the rank of DELTA LEGEND waiting at the end.
+An original open-world crime game for the make.fun **gta6-01 "Make GTA 6"** bounty.
+A coastal Los Angeles of six districts — Downtown, Hollywood Hills, Venice, Marina,
+Coral Pier, Long Beach Port — at ember dusk. You are **Mara Solano**, an ex-getaway
+driver hunting the proof her vanished sister left behind. Nothing in here is from
+Rockstar; the city, the people and the story are invented.
 
 ## Play
 
-Open `game/index.html` in a desktop browser, or run `node serve.ts` and visit http://localhost:8080.
+Open `game/index.html` in a desktop browser (offline, static files), or run
+`node serve.ts` and open http://localhost:8080.
 
-- **WASD / arrows** — drive or walk
-- **E** — enter / exit car
-- **Q** — weapon wheel (hold), **1-4** — weapon tier
-- **F** / click — fire
-- **C** — Clean Plates (Juno, −1 wanted), **V** — Field Repair (Petra, $150), **X** — Overwatch (Cassia, 20 s)
-- **Shift** — nitro, **P** — pause
+- **WASD / arrows** — drive / walk. **E** — enter or exit a car (or steal a parked one).
+- **Q** — weapon wheel (keys **1–4** pick a tier). **C / V / X** — crew abilities
+  (Juno: clean plates, Petra: field repair $150, Cassia: overwatch).
+- **M** — current mission. **R** — GPS to the objective. **F** — board / leave the boat.
+- **G** — buy the engine upgrade at the garage. **Shift** — nitro. **P** — pause.
 
 ## Systems
 
-- **6 districts with standing** — missions +10, races +5, jobs +3; standing 50+ unlocks a 10% DELTA ARMS discount and crew abilities in that district.
-- **Wanted 1–5** — NDPD pursuit with A* flanking, heli spotlight at 3+, roadblocks at 4, black SWAT van at 5, spike strips, and the AIR-1 takedown (5 unbroken seconds in the beam).
-- **10 story missions** — $13,750 total, RP ladder D → S DELTA LEGEND, day +1 per mission.
-- **4 weapon tiers** — PISTOL / SMG / SHOTGUN owned, DELTA CARBINE $900, LONGSHOT $1,800, MARAUDER $2,500.
-- **Crew** — Juno (driver), Petra (mechanic), Cassia (lookout), each with a real cooldown ability.
-- **Street races** — 5 checkpoints per district, money + standing. **Side jobs** — taxi and courier. **20 Aurora tapes** to collect. **COVER meter** — commit a crime in a ped's view and they become a witness; 3 seconds in view raises your wanted level.
-- **Garage tuning** — Engine (+25% top speed), Armour (less damage), Nitro (boost) — plus a drivable boat at the Marina.
-- **3 save slots** — localStorage, each showing money / day / rank or EMPTY.
+- **10 story jobs** ($13,750 total, 1,375 RP, rank S "DELTA LEGEND"), each with a
+  contact, a payout and a district; one day passes per job.
+- **Wanted 1–5**: patrol cars flank with A*, the AIR-1 heli spotlights you from
+  level 3, roadblocks at 4, a black SWAT van at 5, spike strips, and a 5-second
+  spotlight lock that calls a takedown.
+- **6 districts with standing 0–100**: missions +10, races +5, jobs +3. At 50+ the
+  district shop gives a 10% discount and a crew ability unlocks there.
+- **DELTA ARMS**: 6 weapons in 4 tiers (Pistol / SMG / Shotgun owned; Delta Carbine
+  $900, Longshot $1,800, Marauder $2,500) with real BUY clicks.
+- **Street races** (5 checkpoints), **taxi + courier jobs**, **20 collectible Aurora
+  tapes** ($50 each), a **COVER meter** (witnesses raise the heat after 3 s in view),
+  **garage tuning** (Engine / Armour / Nitro) and a **drivable boat** at the Marina.
+- **Title screen + 3 save slots** (localStorage), a corner GPS minimap, dispatch
+  panel (DELTA-7, CORAL-3, CORAL-9, AIR-1), radio "NEON 88", day/dusk/night cycle.
 
 ## Tech
 
-Static files only, no build step. Three.js (vendored) for the 3D city, plain ES modules for the game logic. Every system above is implemented in `game/src/` and covered by the simulation driver in the QA folder.
+Three.js (vendored under `game/vendor/`), plain ES modules, no network, no build
+step. The ground is a single canvas texture (roads, lane dashes, zebra crossings,
+plaza tiles, wet-sand band); buildings carry per-storey facades with lit windows;
+the pier has stalls, string lights and a ferris wheel; the port has a gantry crane,
+containers and a freeway bridge. Lambert materials, no shadows, fixed 1280×720
+render buffer.
+
+## Screenshots
+
+`01-chase.jpg` — the dusk chase (heli beam, roadblock, SWAT, spike strips).
+`02-shop.jpg` — DELTA ARMS forecourt. `03-pier.jpg` — Coral Pier at night.
+`04-tracker.jpg` — Long Beach Port at dusk.
+
+## License
+
+MIT. See LICENSE.

@@ -1,67 +1,96 @@
-// Neon Delta LA: District Wars — all game data in one place.
+// Neon Delta LA: District Wars — all game constants, in one place.
+// Pure data + tiny lookups. No browser globals, no three.js.
 export const TITLE = 'Neon Delta LA: District Wars';
 export const ENTRY_TITLE =
   'Neon Delta LA: District Wars — 6 districts, 10 story jobs, SWAT roadblocks, 4 weapon tiers, 3 save slots, street races';
-export const MAP_COVERAGE = '6 districts across the Neon Delta LA coastal map';
+export const MAP_COVERAGE = 'A coastal city of 6 districts across 1560 m of shoreline, freeways and port.';
 
-// Districts: 2 columns (west/east) x 3 rows (north/mid/south), x in [-780,780), z in [-700,780).
-// The north/mid row boundary sits at z=-250 so the DELTA ARMS shop (z -220)
-// and its forecourt read as Venice, the district of mission 2.
+// --- Districts (rectangles in world metres; x east, z south) ---
 export const DISTRICTS = [
-  { id: 'downtown', name: 'Downtown', x0: -780, x1: 0, z0: -700, z1: -250 },
-  { id: 'hills', name: 'Hollywood Hills', x0: 0, x1: 780, z0: -700, z1: -250 },
-  { id: 'venice', name: 'Venice', x0: -780, x1: 0, z0: -250, z1: 350 },
-  { id: 'marina', name: 'Marina', x0: 0, x1: 780, z0: -250, z1: 350 },
-  { id: 'pier', name: 'Coral Pier', x0: -780, x1: 0, z0: 350, z1: 780 },
-  { id: 'port', name: 'Long Beach Port', x0: 0, x1: 780, z0: 350, z1: 780 },
+  { id: 'downtown', name: 'Downtown', sub: 'Shops & Theatres', x0: -560, z0: -560, x1: -40, z1: -140 },
+  { id: 'hills', name: 'Hollywood Hills', sub: 'Hilltop Views', x0: -40, z0: -560, x1: 780, z1: -140 },
+  { id: 'venice', name: 'Venice', sub: 'Canals & Boardwalk', x0: -620, z0: -140, x1: -40, z1: 260 },
+  { id: 'marina', name: 'Marina', sub: 'Boats & Boardwalk', x0: -40, z0: -140, x1: 780, z1: 260 },
+  { id: 'pier', name: 'Coral Pier', sub: 'Amusement Pier & Boardwalk', x0: -780, z0: 260, x1: -40, z1: 780 },
+  { id: 'port', name: 'Long Beach Port', sub: 'Container Terminal', x0: -40, z0: 260, x1: 780, z1: 780 },
 ];
 export function districtAt(x, z) {
-  const col = x < 0 ? 0 : 1;
-  const row = z < -250 ? 0 : (z < 350 ? 1 : 2);
-  return DISTRICTS[row * 2 + col];
+  for (const d of DISTRICTS) {
+    if (x >= d.x0 && x <= d.x1 && z >= d.z0 && z <= d.z1) return d;
+  }
+  return DISTRICTS[5];
 }
-export function districtById(id) { return DISTRICTS.find((d) => d.id === id); }
+export function districtById(id) {
+  return DISTRICTS.find((d) => d.id === id) || DISTRICTS[0];
+}
 
-// Weapons: tier 1 owned from the start, tiers 2-4 bought at DELTA ARMS.
+// --- Weapons (6, in 4 tiers) ---
 export const WEAPONS = [
-  { id: 'pistol', name: 'PISTOL', tier: 1, price: 0, dmg: 12, mag: 12, reserve: 120, range: 60, owned: true },
-  { id: 'smg', name: 'SMG', tier: 1, price: 0, dmg: 8, mag: 30, reserve: 240, range: 55, owned: true },
-  { id: 'shotgun', name: 'SHOTGUN', tier: 1, price: 0, dmg: 30, mag: 6, reserve: 48, range: 25, owned: true },
-  { id: 'carbine', name: 'DELTA CARBINE', tier: 2, price: 900, dmg: 18, mag: 30, reserve: 180, range: 90, owned: false },
-  { id: 'longshot', name: 'LONGSHOT', tier: 3, price: 1800, dmg: 45, mag: 8, reserve: 64, range: 140, owned: false },
-  { id: 'marauder', name: 'MARAUDER', tier: 4, price: 2500, dmg: 60, mag: 6, reserve: 48, range: 80, owned: false },
+  { id: 'pistol', name: 'PISTOL', tier: 1, price: 0, damage: 12, mag: 12, reserve: 120, range: 120, auto: false },
+  { id: 'smg', name: 'SMG', tier: 1, price: 0, damage: 17, mag: 30, reserve: 240, range: 90, auto: true },
+  { id: 'shotgun', name: 'SHOTGUN', tier: 1, price: 0, damage: 13, mag: 6, reserve: 48, range: 55, pellets: 7, auto: false },
+  { id: 'carbine', name: 'DELTA CARBINE', tier: 2, price: 900, damage: 26, mag: 30, reserve: 130, range: 130, auto: true },
+  { id: 'longshot', name: 'LONGSHOT', tier: 3, price: 1800, damage: 95, mag: 5, reserve: 5, range: 180, auto: false },
+  { id: 'marauder', name: 'MARAUDER', tier: 4, price: 2500, damage: 14, mag: 60, reserve: 100, range: 100, auto: true },
 ];
-export function weaponById(id) { return WEAPONS.find((w) => w.id === id); }
-export function tierName(t) {
-  return { 1: 'STANDARD', 2: 'TACTICAL', 3: 'PRECISION', 4: 'HEAVY' }[t] || 'STANDARD';
+export function weaponById(id) {
+  return WEAPONS.find((w) => w.id === id);
+}
+export function tierName(tier) {
+  return tier === 1 ? 'STREET' : tier === 2 ? 'TACTICAL' : tier === 3 ? 'PRECISION' : 'HEAVY';
 }
 
-// 10 story missions. Payouts sum to $13,750, RP to 1,375, day 11 at the end.
+// --- Missions (10; payouts sum to 13750, RP to 1375) ---
 export const MISSIONS = [
-  { id: 1, name: 'THE GETAWAY', contact: 'Eden Voss', district: 'downtown', hour: 10, minute: 0, payout: 400, startWanted: 0,
-    points: [{ x: -320, z: -300, label: 'Pick up Eden' }, { x: -200, z: -400, label: 'Lose the tail' }] },
-  { id: 2, name: 'VENICE CANALS', contact: 'Harlan Dray', district: 'venice', hour: 12, minute: 0, payout: 650, startWanted: 0,
-    points: [{ x: -400, z: 100, label: 'Meet Harlan' }, { x: -560, z: 200, label: 'Drop the package' }] },
-  { id: 3, name: 'THE LONG CON', contact: 'Lucia Marlow', district: 'marina', hour: 14, minute: 0, payout: 700, startWanted: 0,
-    points: [{ x: 100, z: 100, label: 'Meet Lucia' }, { x: 280, z: 200, label: 'Grab the ledger' }] },
-  { id: 4, name: 'NIGHT SHIFT', contact: 'Dante Kovac', district: 'hills', hour: 19, minute: 0, payout: 800, startWanted: 0,
-    points: [{ x: 200, z: -400, label: 'Meet Dante' }, { x: 400, z: -300, label: 'Move the goods' }] },
-  { id: 5, name: 'LAST BRIDGE', contact: 'Sable Okonkwo', district: 'downtown', hour: 11, minute: 0, payout: 1000, startWanted: 0,
-    points: [{ x: -100, z: -500, label: 'Break the line' }, { x: 0, z: -560, label: 'Cross the freeway' }] },
-  { id: 6, name: 'THE VAULT', contact: 'Vera Lindqvist', district: 'marina', hour: 16, minute: 0, payout: 2000, startWanted: 0,
-    points: [{ x: 400, z: 100, label: 'Meet Vera' }, { x: 560, z: 0, label: 'Crack the vault' }] },
-  { id: 7, name: 'THE NIGHT LEDGER', contact: 'Inez Vargas', district: 'pier', hour: 21, minute: 30, payout: 1200, startWanted: 0,
-    points: [{ x: -700, z: 430, label: 'Meet Inez' }, { x: -660, z: 470, label: 'Take the ledger' }, { x: -720, z: 400, label: 'Slip away' }] },
-  { id: 8, name: 'THE LAST SIGNAL', contact: 'Orin Beck', district: 'port', hour: 18, minute: 30, payout: 2500, startWanted: 2,
-    points: [{ x: 530, z: 500, label: 'Marina drop' }, { x: 520, z: 410, label: 'Pier drop' }, { x: -50, z: -400, label: 'Overlook' }] },
-  { id: 9, name: 'THE SUNKEN KEY', contact: 'Lena Marsh', district: 'marina', hour: 20, minute: 0, payout: 1500, startWanted: 0,
-    points: [{ x: 300, z: 200, label: 'Meet Lena' }, { x: 560, z: 280, label: 'Raise the key' }] },
-  { id: 10, name: 'THE LAST WITNESS', contact: 'Elias Frost', district: 'hills', hour: 9, minute: 0, payout: 3000, startWanted: 3,
-    points: [{ x: 100, z: -500, label: 'Meet Elias' }, { x: 300, z: -560, label: 'Protect the witness' }] },
+  { id: 1, name: 'FIRST GEAR', contact: 'Eden Voss', payout: 400, hour: 10, startWanted: 0, district: 'downtown',
+    desc: 'Pick up Eden downtown and drop her at the hideout.',
+    next: 'Drive Eden to the hideout, clean.',
+    points: [{ x: -300, z: -400, label: 'Pick up Eden' }, { x: -200, z: -300, label: 'Drop Eden at the hideout' }] },
+  { id: 2, name: 'HOT WHEELS', contact: 'Harlan Dray', payout: 650, hour: 12, startWanted: 0, district: 'venice',
+    desc: 'Meet Harlan in Venice, then run the package to the Marina.',
+    next: 'Deliver the package to the Marina.',
+    points: [{ x: -400, z: 100, label: 'Meet Harlan in Venice' }, { x: 100, z: 100, label: 'Deliver the package' }] },
+  { id: 3, name: 'CANAL RUN', contact: 'Lucia Marlow', payout: 700, hour: 14, startWanted: 0, district: 'marina',
+    desc: 'Pick up Lucia at the Marina and lose the tail downtown.',
+    next: 'Lose the tail, then park it.',
+    points: [{ x: 100, z: 100, label: 'Pick up Lucia' }, { x: -200, z: -300, label: 'Lose the tail' }] },
+  { id: 4, name: 'THE FIXER', contact: 'Dante Kovac', payout: 800, hour: 16, startWanted: 0, district: 'hills',
+    desc: 'Meet Dante in the Hills, then collect the debt downtown.',
+    next: 'Collect the debt, no witnesses.',
+    points: [{ x: 200, z: -400, label: 'Meet Dante in the Hills' }, { x: -300, z: -400, label: 'Collect the debt' }] },
+  { id: 5, name: 'LAST BRIDGE', contact: 'Sable Okonkwo', payout: 1000, hour: 17, startWanted: 0, district: 'downtown',
+    desc: 'The whole force is after you. Break the line, then cross.',
+    next: 'Cross the Freeway bridge, clean.',
+    points: [{ x: -320, z: -261, label: 'Break the line' }, { x: 400, z: 400, label: 'Cross to the Port' }] },
+  { id: 6, name: 'THE VAULT', contact: 'Vera Lindqvist', payout: 2000, hour: 19, startWanted: 0, district: 'venice',
+    desc: 'Get the vault codes in Venice, then open the vault in the Hills.',
+    next: 'Open the vault before dawn.',
+    points: [{ x: -400, z: 100, label: 'Get the vault codes' }, { x: 200, z: -400, label: 'Open the vault' }] },
+  { id: 7, name: 'THE NIGHT LEDGER', contact: 'Inez Vargas', payout: 1200, hour: 21, startWanted: 0, district: 'pier',
+    desc: 'Meet Inez on Coral Pier — after dark.',
+    next: 'Find the two ledger pages on the pier.',
+    points: [{ x: -652, z: 431, label: 'Meet Inez at the pier' }, { x: -700, z: 430, label: 'Find the ledger pages' }] },
+  { id: 8, name: 'THE LAST SIGNAL', contact: 'Orin Beck', payout: 2500, hour: 18, startWanted: 2, district: 'marina',
+    desc: 'Sweep the dead drops: marina, then the pier.',
+    next: 'Reach the overlook and broadcast the proof.',
+    points: [
+      { x: 100, z: 100, label: 'Marina dead drop' },
+      { x: -600, z: 400, label: 'Pier dead drop' },
+      { x: 200, z: -400, label: 'Overlook broadcast' },
+    ] },
+  { id: 9, name: 'THE SUNKEN KEY', contact: 'Lena Marsh', payout: 1500, hour: 20, startWanted: 0, district: 'marina',
+    desc: 'Meet Lena at the Marina, then find the key at the Port.',
+    next: 'Bring the key back to Lena.',
+    points: [{ x: 100, z: 100, label: 'Meet Lena at the Marina' }, { x: 400, z: 400, label: 'Find the key at the Port' }] },
+  { id: 10, name: 'THE LAST WITNESS', contact: 'Elias Frost', payout: 3000, hour: 22, startWanted: 3, district: 'hills',
+    desc: 'Find Elias in the Hills and protect the witness downtown.',
+    next: 'Get the witness out of the city.',
+    points: [{ x: 200, z: -400, label: 'Find Elias in the Hills' }, { x: -300, z: -400, label: 'Protect the witness' }] },
 ];
 export const MISSION_TOTAL_PAYOUT = MISSIONS.reduce((s, m) => s + m.payout, 0);
 export const MISSION_TOTAL_RP = MISSIONS.reduce((s, m) => s + Math.round(m.payout / 10), 0);
 
+// --- Ranks ---
 export const RANKS = [
   { code: 'D', name: 'GREENHORN', rp: 0 },
   { code: 'C', name: 'RUNNER', rp: 100 },
@@ -69,60 +98,34 @@ export const RANKS = [
   { code: 'A', name: 'OUTLAW', rp: 600 },
   { code: 'S', name: 'DELTA LEGEND', rp: 1000 },
 ];
+
+// --- Crew ---
 export const CREW = [
   { id: 'juno', name: 'Juno Reyes', role: 'DRIVER', ability: 'CLEAN PLATES', key: 'C', cooldown: 45 },
   { id: 'petra', name: 'Petra Hale', role: 'MECHANIC', ability: 'FIELD REPAIR', key: 'V', cooldown: 60 },
   { id: 'cassia', name: 'Cassia Wren', role: 'LOOKOUT', ability: 'OVERWATCH', key: 'X', cooldown: 25 },
 ];
+
+// --- World numbers ---
 export const PED_COUNT = 104;
 export const TRAFFIC_TOTAL = 22;
 export const NIGHT_DISCS = 28;
 export const WANTED_MAX = 5;
 export const STANDING_GAIN = { mission: 10, race: 5, job: 3 };
 export const RACE = { checkpoints: 5, reward: 300 };
-export const JOBS = {
-  taxi: { reward: 150, label: 'Taxi' },
-  courier: { reward: 200, label: 'Courier' },
-};
+export const JOBS = { taxi: { reward: 120 }, courier: { reward: 150 } };
 export const TAPES_TOTAL = 20;
 export const TAPE_BONUS = 50;
 export const GARAGE_UPGRADES = [
-  { id: 'engine', name: 'Engine', price: 1200, desc: '+25% top speed' },
-  { id: 'armour', name: 'Armour', price: 1000, desc: 'Less collision damage' },
-  { id: 'nitro', name: 'Nitro', price: 800, desc: 'Boost on [Shift]' },
+  { id: 'engine', name: 'ENGINE', price: 1200, desc: 'Higher top speed' },
+  { id: 'armour', name: 'ARMOUR', price: 1000, desc: 'Less collision damage' },
+  { id: 'nitro', name: 'NITRO', price: 800, desc: 'Boost on a key' },
 ];
 export const COVER_MAX = 100;
 
-// Landmarks (world units; x east, z south, origin at city centre).
+// --- Places ---
 export const BOAT = { x: 568, z: 644 };
-export const CRANE = { x: 575, z: 556 };
-export const SHOP = { x: -354, z: -220 };
+export const CRANE = { x: 560, z: 560 };
+export const SHOP = { x: -320, z: -200 };
+export const GARAGE_POS = { x: -200, z: -80 };
 export const PIER_DECK = { x0: -780, x1: -620, z0: 360, z1: 500 };
-export const GARAGE_POS = { x: -180, z: -320 };
-
-// Building footprints, half-open [x0,x1) x [z0,z1), inset in city blocks so roads
-// stay clear. The shop is a separate structure, NOT a BUILDINGS rect.
-export const BUILDINGS = [
-  { x0: -540, x1: -400, z0: -540, z1: -300, h: 34 },
-  { x0: -540, x1: -440, z0: -260, z1: -40, h: 55 },
-  { x0: -260, x1: -120, z0: -540, z1: -460, h: 40 },
-  { x0: -240, x1: -60, z0: -240, z1: -60, h: 22 },
-  { x0: 30, x1: 130, z0: -540, z1: -300, h: 48 },
-  { x0: 150, x1: 250, z0: -540, z1: -300, h: 60 },
-  { x0: 30, x1: 250, z0: -260, z1: -20, h: 26 },
-  { x0: 300, x1: 400, z0: -540, z1: -300, h: 44 },
-  { x0: 420, x1: 540, z0: -540, z1: -300, h: 70 },
-  { x0: 300, x1: 540, z0: -260, z1: -20, h: 30 },
-  { x0: 580, x1: 760, z0: -540, z1: -300, h: 38 },
-  { x0: 580, x1: 760, z0: -260, z1: -20, h: 24 },
-  { x0: -540, x1: -300, z0: 20, z1: 260, h: 20 },
-  { x0: -260, x1: -20, z0: 20, z1: 260, h: 28 },
-  { x0: 20, x1: 260, z0: 20, z1: 260, h: 32 },
-  { x0: 300, x1: 540, z0: 20, z1: 260, h: 26 },
-  { x0: 580, x1: 760, z0: 20, z1: 260, h: 22 },
-  { x0: -540, x1: -300, z0: 300, z1: 540, h: 18 },
-  { x0: -260, x1: -20, z0: 300, z1: 540, h: 24 },
-  { x0: 20, x1: 260, z0: 300, z1: 540, h: 20 },
-  { x0: 300, x1: 390, z0: 300, z1: 540, h: 16 },
-  { x0: 680, x1: 760, z0: 300, z1: 480, h: 28 },
-];

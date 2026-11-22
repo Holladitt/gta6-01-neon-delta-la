@@ -1,49 +1,89 @@
-// Ambient city life: 104 peds, 22 cars, seeded and deterministic.
-import { makeRng, pick } from './rng.js';
-import { PED_COUNT, TRAFFIC_TOTAL } from './config.js';
-import { randomRoadPoint } from './geo.js';
+// Street traffic + pedestrians. Pure.
+import { PED_COUNT, TRAFFIC_TOTAL, PIER_DECK } from './config.js';
+import { makeRng } from './rng.js';
+import { onRoad, randomRoadPoint, nearestRoadPoint, inOcean, inBuilding } from './geo.js';
 
-const SHIRTS = [0xe74c3c, 0x3498db, 0xf1c40f, 0x2ecc71, 0x9b59b6, 0xe67e22, 0x1abc9c, 0xf39c12, 0xecf0f1, 0x34495e];
-const CAR_COLORS = [0xc0392b, 0x2980b9, 0xf1c40f, 0x27ae60, 0x8e44ad, 0xe67e22, 0xbdc3c7, 0x2c3e50];
+const PED_JOBS = ['commuter', 'tourist', 'dockworker', 'vendor', 'jogger', 'student', 'fisherman', 'shopper'];
 
 export function createTraffic(seed) {
-  const rng = makeRng(seed);
-  const peds = [];
-  for (let i = 0; i < PED_COUNT; i++) {
-    let x, z;
-    const r = rng();
-    if (r < 0.15) { x = -780 + rng() * 160; z = 360 + rng() * 140; }
-    else if (r < 0.3) { x = 380 + rng() * 280; z = 400 + rng() * 200; }
-    else { const p = randomRoadPoint(rng); x = p.x + (rng() - 0.5) * 24; z = p.z + (rng() - 0.5) * 24; }
-    peds.push({ x, z, angle: rng() * Math.PI * 2, speed: 1 + rng() * 1.5, shirt: pick(rng, SHIRTS) });
-  }
+  const rng = makeRng(seed || 1);
   const cars = [];
-  for (let i = 0; i < TRAFFIC_TOTAL; i++) {
+  for (let i = 0; i < TRAFFIC_TOTAL; i += 1) {
     const p = randomRoadPoint(rng);
-    cars.push({ x: p.x, z: p.z, angle: rng() * Math.PI * 2, speed: 4 + rng() * 6, color: pick(rng, CAR_COLORS) });
+    cars.push({ x: p.x, z: p.z, angle: rng() * Math.PI * 2, speed: 6 + rng() * 8, kind: i % 5, color: Math.floor(rng() * 6) });
   }
-  return { peds, cars, rng };
+  const peds = [];
+  for (let i = 0; i < PED_COUNT; i += 1) {
+    let x;
+    let z;
+    if (i < 12) {
+      x = PIER_DECK.x0 + rng() * (PIER_DECK.x1 - PIER_DECK.x0);
+      z = PIER_DECK.z0 + rng() * (PIER_DECK.z1 - PIER_DECK.z0);
+    } else {
+      const p = randomRoadPoint(rng);
+      x = p.x + (rng() - 0.5) * 24;
+      z = p.z + (rng() - 0.5) * 24;
+      if (inOcean(x, z) || inBuilding(x, z)) { x = p.x; z = p.z; }
+    }
+    peds.push({ x, z, angle: rng() * Math.PI * 2, speed: 0.8 + rng() * 0.8, archetype: i % 8, job: PED_JOBS[i % PED_JOBS.length] });
+  }
+  return { cars, peds, rng };
 }
-export function trafficCounts(t) { return { cars: t.cars.length, peds: t.peds.length }; }
-export function pedsNear(t, x, z, r) { return t.peds.filter((p) => Math.hypot(p.x - x, p.z - z) <= r); }
-export function carsNear(t, x, z, r) { return t.cars.filter((c) => Math.hypot(c.x - x, c.z - z) <= r); }
-export function spawnTraffic(rng, n, night) {
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    const p = randomRoadPoint(rng);
-    out.push({ x: p.x, z: p.z, angle: rng() * Math.PI * 2, speed: 4 + rng() * 6, color: pick(rng, CAR_COLORS) });
-  }
-  return out;
+export function trafficCounts(t) {
+  return { cars: t.cars.length, peds: t.peds.length };
+}
+function onDeck(p) {
+  return p.x >= PIER_DECK.x0 && p.x <= PIER_DECK.x1 && p.z >= PIER_DECK.z0 && p.z <= PIER_DECK.z1;
 }
 export function updateTraffic(t, dt, px, pz) {
-  for (const p of t.peds) {
-    p.x += Math.cos(p.angle) * p.speed * dt;
-    p.z += Math.sin(p.angle) * p.speed * dt;
-    if (p.x < -790 || p.x > 790 || p.z < -690 || p.z > 760) p.angle += Math.PI;
+  for (const ped of t.peds) {
+    const deck = onDeck(ped);
+    ped.x += Math.cos(ped.angle) * ped.speed * dt;
+    ped.z += Math.sin(ped.angle) * ped.speed * dt;
+    if (deck) {
+      if (ped.x < PIER_DECK.x0 + 5 || ped.x > PIER_DECK.x1 - 5 || ped.z < PIER_DECK.z0 + 5 || ped.z > PIER_DECK.z1 - 5) {
+        ped.angle += Math.PI;
+        ped.x = Math.max(PIER_DECK.x0 + 5, Math.min(PIER_DECK.x1 - 5, ped.x));
+        ped.z = Math.max(PIER_DECK.z0 + 5, Math.min(PIER_DECK.z1 - 5, ped.z));
+      }
+    } else if (inOcean(ped.x, ped.z) || inBuilding(ped.x, ped.z)) {
+      ped.angle += Math.PI;
+      ped.x += Math.cos(ped.angle) * ped.speed * dt;
+      ped.z += Math.sin(ped.angle) * ped.speed * dt;
+    }
+    if (t.rng && t.rng() < dt * 0.05) ped.angle = t.rng() * Math.PI * 2;
   }
-  for (const c of t.cars) {
-    c.x += Math.sin(c.angle) * c.speed * dt;
-    c.z += Math.cos(c.angle) * c.speed * dt;
-    if (c.x < -770 || c.x > 770 || c.z < -690 || c.z > 750) c.angle += Math.PI;
+  for (const car of t.cars) {
+    const ox = car.x;
+    const oz = car.z;
+    car.x += Math.cos(car.angle) * car.speed * dt;
+    car.z += Math.sin(car.angle) * car.speed * dt;
+    if (!onRoad(car.x, car.z)) {
+      car.x = ox;
+      car.z = oz;
+      car.angle += Math.PI / 2;
+      if (!onRoad(car.x + Math.cos(car.angle) * 2, car.z + Math.sin(car.angle) * 2)) {
+        const p = randomRoadPoint(t.rng);
+        car.x = p.x;
+        car.z = p.z;
+        car.angle = t.rng() * Math.PI * 2;
+      }
+    }
+    if (car.x < -780 || car.x > 780 || car.z < -780 || car.z > 780) {
+      const p = randomRoadPoint(t.rng);
+      car.x = p.x;
+      car.z = p.z;
+    }
+    // At a crossing, sometimes turn onto the other road.
+    if (t.rng && t.rng() < dt * 0.15) {
+      const ax = Math.abs(car.x - Math.round(car.x / 240) * 240) < 14;
+      if (ax) car.angle += (t.rng() < 0.5 ? 1 : -1) * Math.PI / 2;
+    }
   }
+}
+export function pedsNear(t, x, z, radius) {
+  return t.peds.filter((p) => Math.hypot(p.x - x, p.z - z) <= radius);
+}
+export function carsNear(t, x, z, radius) {
+  return t.cars.filter((c) => Math.hypot(c.x - x, c.z - z) <= radius);
 }

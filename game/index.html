@@ -1,103 +1,111 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Neon Delta LA: District Wars</title>
 <style>
-  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0a0e14; font-family: Arial, Helvetica, sans-serif; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-  .hud { position: fixed; z-index: 10; color: #fff; pointer-events: none; }
-  .panel { background: rgba(10, 14, 20, 0.78); border: 1px solid rgba(255, 215, 106, 0.55); border-radius: 6px; padding: 8px 12px; }
-  #game-title { top: 10px; left: 50%; transform: translateX(-50%); text-align: center; background: none; border: none; }
-  #game-title .t1 { font-size: 34px; font-weight: 900; font-style: italic; letter-spacing: 2px; color: #ffd76a; text-shadow: 0 2px 0 #7a2a1a, 0 0 18px rgba(255, 120, 40, 0.6); }
-  #game-title .t2 { font-size: 15px; font-weight: 700; letter-spacing: 6px; color: #7ee8d8; }
-  #hud-stats { top: 16px; left: 16px; font-size: 13px; font-weight: 700; letter-spacing: 1px; color: #e8e8e8; }
-  #hud-tr { top: 16px; right: 16px; text-align: right; }
-  #hud-money { font-size: 26px; font-weight: 900; color: #7ee787; }
-  #hud-wanted { font-size: 20px; color: #ffd76a; letter-spacing: 3px; margin-top: 2px; }
-  #hud-weapon { font-size: 13px; font-weight: 700; color: #fff; margin-top: 4px; }
-  #hud-cover, #hud-tapes { font-size: 12px; color: #cfe8f5; margin-top: 2px; }
-  #hud-minimap { left: 16px; bottom: 16px; width: 180px; height: 180px; border: 2px solid rgba(255, 215, 106, 0.7); border-radius: 50%; background: rgba(10, 14, 20, 0.85); }
-  #hud-district { left: 50%; transform: translateX(-50%); bottom: 168px; text-align: center; background: none; border: none; }
-  #hud-district .d1 { font-size: 44px; font-weight: 900; font-style: italic; letter-spacing: 2px; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,0.6), 0 0 22px rgba(255, 120, 40, 0.5); }
-  #hud-district .d2 { font-size: 13px; font-weight: 700; letter-spacing: 2px; color: #ffd76a; }
-  #hud-speed { right: 16px; bottom: 168px; font-size: 30px; font-weight: 900; font-style: italic; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.6); text-align: right; }
-  #hud-mission { right: 16px; bottom: 16px; width: 330px; }
-  #hud-mission b { display: block; font-size: 15px; color: #ffd76a; letter-spacing: 1px; }
-  #hud-mission span { display: block; font-size: 14px; color: #fff; margin-top: 3px; }
-  #hud-mission i { display: block; font-size: 12px; color: #9fd8e8; margin-top: 3px; font-style: normal; }
-  #hud-dialogue { left: 50%; transform: translateX(-50%); bottom: 16px; width: 560px; display: flex; gap: 12px; align-items: flex-start; }
-  #hud-dialogue img { width: 64px; height: 64px; border-radius: 6px; border: 2px solid #ffd76a; flex: none; }
-  #hud-dialogue b { font-size: 15px; color: #ffd76a; }
-  #hud-dialogue p { font-size: 15px; color: #fff; margin: 3px 0 0; line-height: 1.35; }
-  #wheel { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 340px; display: none; text-align: center; }
-  #wheel b { color: #ffd76a; letter-spacing: 2px; }
-  #wheel .tier { font-size: 14px; margin-top: 6px; color: #fff; }
-  #shop-panel { top: 50%; left: 50%; transform: translate(-50%, -50%); width: 420px; display: none; }
-  #shop-panel b { color: #ffd76a; letter-spacing: 2px; }
-  #shop-panel .item { font-size: 14px; margin-top: 6px; color: #fff; }
-  /* shot mode: dialogue + mission bar on top for shot 1, bottom for shots 2-4 */
-  body.shot1 #hud-dialogue { top: 70px; left: 16px; bottom: auto; transform: none; }
-  body.shot1 #hud-mission { top: 150px; right: 16px; bottom: auto; }
-  body.shot1 #hud-district { bottom: 150px; }
-  /* declutter: no abstract property panels in staged shots */
-  body.shot1 #wheel, body.shot2 #wheel, body.shot3 #wheel, body.shot4 #wheel,
-  body.shot1 #shop-panel, body.shot2 #shop-panel, body.shot3 #shop-panel, body.shot4 #shop-panel,
-  body.shot1 #hud-cover, body.shot2 #hud-cover, body.shot3 #hud-cover, body.shot4 #hud-cover,
-  body.shot1 #hud-money, body.shot2 #hud-money, body.shot3 #hud-money, body.shot4 #hud-money,
-  body.shot1 #hud-stats, body.shot2 #hud-stats, body.shot3 #hud-stats, body.shot4 #hud-stats,
-  body.shot1 #hud-wanted, body.shot2 #hud-wanted, body.shot3 #hud-wanted, body.shot4 #hud-wanted,
-  body.shot1 #hud-weapon, body.shot2 #hud-weapon, body.shot3 #hud-weapon, body.shot4 #hud-weapon,
-  body.shot1 #hud-tapes, body.shot2 #hud-tapes, body.shot3 #hud-tapes, body.shot4 #hud-tapes { display: none !important; }
-  #title-screen { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, rgba(20,8,40,0.92), rgba(10,14,20,0.96)); color: #fff; text-align: center; }
-  #title-screen.hidden { display: none; }
-  #title-screen h1 { font-size: 64px; font-style: italic; font-weight: 900; color: #ffd76a; margin: 0; letter-spacing: 2px; text-shadow: 0 4px 0 #7a2a1a; }
-  #title-screen h2 { font-size: 22px; letter-spacing: 10px; color: #7ee8d8; margin: 6px 0 24px; }
-  #title-screen p { font-size: 15px; color: #cfe8f5; max-width: 560px; line-height: 1.5; }
-  #title-screen .btn { pointer-events: auto; cursor: pointer; font-size: 18px; font-weight: 800; letter-spacing: 2px; color: #111; background: #ffd76a; border: none; border-radius: 6px; padding: 12px 34px; margin: 6px; }
-  #title-screen .btn:hover { background: #ffe08a; }
-  #title-slots { display: flex; gap: 10px; margin-top: 18px; }
-  #title-slots .slot { pointer-events: auto; cursor: pointer; font-size: 13px; font-weight: 700; color: #fff; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,215,106,0.6); border-radius: 6px; padding: 10px 14px; }
-  #title-screen .keys { font-size: 13px; color: #9fd8e8; margin-top: 22px; line-height: 1.7; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #14101c; font-family: Arial, Helvetica, sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #f5f0e0; text-shadow: 0 1px 3px rgba(0,0,0,0.8); z-index: 5; }
+  .panel { background: rgba(10, 10, 18, 0.55); border: 1px solid rgba(255, 211, 77, 0.35); border-radius: 6px; padding: 6px 10px; }
+  #hud-topbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 18px; font-weight: bold; letter-spacing: 1px; font-size: 14px; }
+  #hud-topbar span { white-space: nowrap; }
+  #hud-right { position: absolute; top: 10px; right: 12px; text-align: right; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  #hud-money { font-size: 22px; font-weight: bold; color: #7dff9a; }
+  #hud-wanted { font-size: 22px; letter-spacing: 3px; }
+  #hud-rank { font-size: 13px; font-weight: bold; color: #ffd34d; }
+  #hud-cover { font-size: 12px; color: #bcd; }
+  #hud-dispatch { position: absolute; top: 10px; left: 12px; font-size: 12px; min-width: 230px; }
+  #hud-dispatch .disp-row { display: flex; justify-content: space-between; gap: 10px; padding: 1px 0; }
+  #hud-dispatch .disp-row span:first-child { color: #ffd34d; font-weight: bold; }
+  #hud-crew { position: absolute; top: 150px; right: 12px; font-size: 12px; min-width: 250px; text-align: left; }
+  #hud-crew .crew-row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
+  #hud-crew .crew-row span:first-child { color: #7fd4ff; font-weight: bold; }
+  #hud-minimap { position: absolute; left: 14px; bottom: 14px; width: 190px; height: 190px; border-radius: 50%; border: 3px solid rgba(255, 211, 77, 0.7); background: #0e3a4d; }
+  #hud-mission { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); display: none; font-size: 15px; font-weight: bold; letter-spacing: 1px; text-align: center; max-width: 60%; }
+  #hud-mission-text { color: #ffd34d; }
+  #hud-district-box { position: absolute; right: 14px; bottom: 14px; text-align: right; }
+  #hud-district { font-size: 34px; font-weight: bold; font-style: italic; letter-spacing: 2px; color: #fff; line-height: 1; }
+  #hud-district-sub { font-size: 14px; color: #ffd34d; font-style: italic; }
+  #hud-standing { font-size: 12px; color: #bcd; margin-top: 4px; }
+  #hud-speed-box { margin-top: 8px; }
+  #hud-speed { font-size: 30px; font-weight: bold; color: #fff; }
+  #hud-car { font-size: 14px; font-weight: bold; color: #ffd34d; letter-spacing: 1px; }
+  #hud-condition { font-size: 12px; color: #bcd; }
+  #hud-dialogue { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 12px; max-width: 720px; background: rgba(10, 10, 18, 0.72); border: 1px solid rgba(255, 211, 77, 0.5); border-radius: 8px; padding: 10px 14px; }
+  #hud-dlg-portrait { width: 84px; height: 84px; border-radius: 6px; border: 2px solid rgba(255, 211, 77, 0.6); flex-shrink: 0; }
+  #hud-dlg-name { font-size: 15px; font-weight: bold; color: #ffd34d; letter-spacing: 1px; }
+  #hud-dlg-text { font-size: 16px; line-height: 1.35; margin-top: 3px; }
+  #hud-wanted-banner { position: absolute; top: 170px; left: 50%; transform: translateX(-50%); display: none; font-size: 20px; font-weight: bold; letter-spacing: 3px; color: #ff5a4e; background: rgba(20, 0, 0, 0.6); border: 1px solid #ff5a4e; border-radius: 6px; padding: 6px 18px; }
+  #hud-wheel { position: absolute; top: 235px; left: 50%; transform: translateX(-50%); display: none; grid-template-columns: repeat(6, 148px); gap: 8px; }
+  #hud-wheel .wheel-item { background: rgba(10, 10, 18, 0.8); border: 1px solid rgba(255, 211, 77, 0.4); border-radius: 8px; padding: 10px; text-align: center; }
+  #hud-wheel .wheel-item.sel { border-color: #ffd34d; box-shadow: 0 0 14px rgba(255, 211, 77, 0.6); }
+  #hud-wheel .wheel-item b { display: block; font-size: 15px; color: #fff; }
+  #hud-wheel .wheel-item span { display: block; font-size: 12px; color: #bcd; margin-top: 3px; }
+  #hud-shop { position: absolute; top: 90px; right: 12px; display: none; width: 420px; background: rgba(10, 10, 18, 0.88); border: 1px solid rgba(255, 211, 77, 0.55); border-radius: 8px; padding: 12px; pointer-events: auto; }
+  #hud-shop h3 { margin: 0 0 4px; color: #ffd34d; letter-spacing: 2px; }
+  #hud-shop .shop-money { font-size: 14px; color: #7dff9a; margin-bottom: 8px; }
+  #hud-shop .shop-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.12); font-size: 13px; }
+  #hud-shop .shop-row span:first-child { font-weight: bold; }
+  #hud-shop button { background: #ffd34d; border: none; border-radius: 4px; padding: 5px 10px; font-weight: bold; cursor: pointer; }
+  #hud-shop .owned { color: #7dff9a; font-weight: bold; }
+  #hud-shop #shop-close { margin-top: 10px; width: 100%; }
+  #title-screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; background: linear-gradient(180deg, #1a2340 0%, #4a2a55 45%, #a34a3a 75%, #e8703a 100%); color: #f5f0e0; z-index: 10; text-align: center; }
+  #title-screen h1 { font-size: 64px; font-style: italic; letter-spacing: 4px; margin: 0; text-shadow: 0 4px 24px rgba(0,0,0,0.6); }
+  #title-screen h2 { font-size: 30px; letter-spacing: 10px; margin: 6px 0 10px; color: #ffd34d; }
+  #title-screen .title-sub { font-size: 15px; opacity: 0.9; margin-bottom: 22px; }
+  #title-screen button { background: #ffd34d; color: #1a1a1a; border: none; border-radius: 6px; padding: 12px 26px; font-size: 16px; font-weight: bold; letter-spacing: 1px; margin: 6px; cursor: pointer; }
+  #title-screen button:hover { background: #ffe08a; }
+  #title-slots { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
+  #title-slots .slot-btn { background: rgba(10,10,18,0.6); color: #f5f0e0; border: 1px solid rgba(255,211,77,0.5); font-size: 13px; padding: 9px 14px; }
+  #title-screen .title-hint { margin-top: 22px; font-size: 13px; opacity: 0.85; }
 </style>
-<script type="importmap">
-{ "imports": { "three": "./vendor/three.module.min.js" } }
-</script>
 </head>
 <body>
-<canvas id="game"></canvas>
-<div id="game-title" class="hud"><div class="t1">NEON DELTA LA</div><div class="t2">DISTRICT WARS</div></div>
-<div id="hud-stats" class="hud panel"></div>
-<div id="hud-tr" class="hud">
-  <div id="hud-money"></div>
-  <div id="hud-wanted"></div>
-  <div id="hud-weapon" class="panel"></div>
-  <div id="hud-cover"></div>
-  <div id="hud-tapes"></div>
+<canvas id="game" aria-label="Neon Delta LA: District Wars — drive Mara through six districts, run ten story jobs, outrun the NDPD"></canvas>
+<p id="status" role="status" aria-live="polite"></p>
+<div id="hud">
+  <div id="hud-topbar" class="panel"><span id="hud-time">10:00 · DAY</span><span id="hud-day">DAY 1</span><span>RADIO: NEON 88</span></div>
+  <div id="hud-right">
+    <div id="hud-money">$500</div>
+    <div id="hud-wanted">☆☆☆☆☆</div>
+    <div id="hud-rank">RANK D · GREENHORN · 0 RP</div>
+    <div id="hud-cover">COVER 100%</div>
+  </div>
+  <div id="hud-dispatch" class="panel"></div>
+  <div id="hud-crew" class="panel"></div>
+  <canvas id="hud-minimap" width="190" height="190"></canvas>
+  <div id="hud-mission" class="panel"><span id="hud-mission-text"></span></div>
+  <div id="hud-district-box">
+    <div id="hud-district">DOWNTOWN</div>
+    <div id="hud-district-sub">Shops &amp; Theatres</div>
+    <div id="hud-standing">STANDING 0/100</div>
+    <div id="hud-speed-box">
+      <div id="hud-speed">0 KM/H</div>
+      <div id="hud-car">SOLSTICE GT</div>
+      <div id="hud-condition">CONDITION 100%</div>
+    </div>
+  </div>
+  <div id="hud-dialogue">
+    <canvas id="hud-dlg-portrait" width="84" height="84"></canvas>
+    <div><div id="hud-dlg-name"></div><div id="hud-dlg-text"></div></div>
+  </div>
+  <div id="hud-wanted-banner">WANTED — AIR-1 IS ON YOU</div>
+  <div id="hud-wheel"></div>
+  <div id="hud-shop"></div>
 </div>
-<canvas id="hud-minimap" class="hud" width="180" height="180"></canvas>
-<div id="hud-district" class="hud"><div class="d1"></div><div class="d2" id="hud-standing"></div></div>
-<div id="hud-speed" class="hud"></div>
-<div id="hud-mission" class="hud panel"></div>
-<div id="hud-dialogue" class="hud panel"></div>
-<div id="wheel" class="hud panel"><b>WEAPON WHEEL — HOLD Q</b>
-  <div class="tier">1 PISTOL · TIER 1</div><div class="tier">2 SMG · TIER 1</div>
-  <div class="tier">3 SHOTGUN · TIER 1</div><div class="tier">4 DELTA CARBINE · TIER 2 · $900</div>
-  <div class="tier">5 LONGSHOT · TIER 3 · $1,800</div><div class="tier">6 MARAUDER · TIER 4 · $2,500</div>
-</div>
-<div id="shop-panel" class="hud panel"><b>DELTA ARMS</b>
-  <div class="item">PISTOL — OWNED · SMG — OWNED · SHOTGUN — OWNED</div>
-  <div class="item">DELTA CARBINE $900 · LONGSHOT $1,800 · MARAUDER $2,500</div>
-  <div class="item">Standing 50+ in this district: 10% off.</div>
-</div>
-<div id="title-screen" class="hidden">
+<div id="title-screen">
   <h1>NEON DELTA LA</h1>
   <h2>DISTRICT WARS</h2>
-  <p>Mara Solano, ex-getaway driver, is back in Los Angeles. Six districts, ten story jobs, the NDPD on her tail — and a sister's proof of corruption buried somewhere in the city.</p>
-  <div><button class="btn" id="btn-new">NEW GAME</button><button class="btn" id="btn-continue">CONTINUE</button></div>
+  <p class="title-sub">6 districts · 10 story jobs · SWAT roadblocks · 4 weapon tiers · 3 save slots · street races</p>
+  <div>
+    <button id="btn-new">NEW GAME</button>
+    <button id="btn-continue">CONTINUE</button>
+  </div>
   <div id="title-slots"></div>
-  <div class="keys">WASD drive / walk · E enter &amp; exit car · Q weapon wheel · 1-4 weapon tier · F fire<br>C clean plates · V field repair · X overwatch · Shift nitro · P pause</div>
+  <p class="title-hint">WASD drive · E enter / exit car · Q weapon wheel (1-4 tiers) · C / V / X crew · M missions · F boat · P pause</p>
 </div>
 <script type="module" src="./src/main.js"></script>
 </body>

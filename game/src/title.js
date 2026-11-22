@@ -1,44 +1,43 @@
-// Title screen: NEON DELTA LA: DISTRICT WARS, NEW GAME / CONTINUE / LOAD + 3 slots.
-import { slotCount, slotSummary, loadGame } from './save.js';
+// Title screen + save slots. Browser only (DOM).
+import { slotCount, loadGame, slotSummary, clearSlot } from './save.js';
 
-export function createTitle(world, game) {
-  const el = document.getElementById('title-screen');
+export function createTitle(callbacks) {
+  const screen = document.getElementById('title-screen');
   const slotsEl = document.getElementById('title-slots');
-  function show() {
-    el.classList.remove('hidden');
-    world.state = 'TITLE';
-    renderSlots();
-  }
-  function hide() { el.classList.add('hidden'); }
+  const btnNew = document.getElementById('btn-new');
+  const btnContinue = document.getElementById('btn-continue');
   function renderSlots() {
-    let html = '';
-    for (let s = 1; s <= slotCount(); s++) {
-      const sum = slotSummary(s);
-      html += '<button class="slot" data-slot="' + s + '">' + (sum ? ('SLOT ' + s + ' · $' + sum.money + ' · DAY ' + sum.day + ' · RANK ' + sum.rank) : ('SLOT ' + s + ' · EMPTY')) + '</button>';
+    if (!slotsEl) return;
+    slotsEl.innerHTML = '';
+    for (let i = 1; i <= slotCount(); i += 1) {
+      const s = slotSummary(i);
+      const b = document.createElement('button');
+      b.className = 'slot-btn';
+      if (s) {
+        b.textContent = 'SLOT ' + i + ' — DAY ' + (s.day || 1) + ' · $' + (s.money || 0) + ' · ' + (s.rank || 'D');
+        b.onclick = () => { if (callbacks.onLoad) callbacks.onLoad(i, s); };
+      } else {
+        b.textContent = 'SLOT ' + i + ' — EMPTY';
+        b.onclick = () => { if (callbacks.onNew) callbacks.onNew(i); };
+      }
+      slotsEl.appendChild(b);
     }
-    slotsEl.innerHTML = html;
-    slotsEl.querySelectorAll('.slot').forEach((b) => {
-      b.addEventListener('click', () => loadSlot(+b.dataset.slot));
-    });
   }
-  function loadSlot(s) {
-    const data = loadGame(s);
-    if (data) applySave(world, data);
-    start();
+  if (btnNew) btnNew.onclick = () => { if (callbacks.onNew) callbacks.onNew(1); };
+  if (btnContinue) {
+    btnContinue.onclick = () => {
+      for (let i = 1; i <= slotCount(); i += 1) {
+        const s = loadGame(i);
+        if (s) { if (callbacks.onLoad) callbacks.onLoad(i, s); return; }
+      }
+      if (callbacks.onNew) callbacks.onNew(1);
+    };
   }
-  function applySave(w, data) {
-    w.money = data.money; w.day = data.day; w.rp = data.rp; w.rank = data.rank;
-    if (data.standing) w.standing = data.standing;
-    if (data.missionsDone) w.missionsDone = data.missionsDone;
-  }
-  function start() {
-    hide();
-    world.state = 'FREE_ROAM';
-    world.frozen = false;
-  }
-  const ng = document.getElementById('btn-new');
-  if (ng) ng.addEventListener('click', () => start());
-  const ct = document.getElementById('btn-continue');
-  if (ct) ct.addEventListener('click', () => loadSlot(1));
-  return { show, hide, start, renderSlots };
+  renderSlots();
+  return {
+    show() { if (screen) screen.style.display = 'flex'; renderSlots(); },
+    hide() { if (screen) screen.style.display = 'none'; },
+    renderSlots,
+    clearSlot(i) { clearSlot(i); renderSlots(); },
+  };
 }
