@@ -1,17 +1,22 @@
-// Geometry helpers + procedural canvas textures. No external assets: every
-// texture is drawn at runtime. Merged static geometry = few draw calls.
+// Geometry helpers + procedural canvas textures. No external assets:
+// every texture is drawn at runtime. Merged static geometry = few draw calls.
 import * as THREE from '../vendor/three.module.min.js';
 import { WORLD } from './config.js';
 
 // One merged BufferGeometry from items [{geo, matrix, color}].
 // Adds a per-vertex color attribute; materials use vertexColors: true.
 export function mergeItems(items) {
-  const pos = [], nor = [], uv = [], col = [];
+  const pos = [];
+  const nor = [];
+  const uv = [];
+  const col = [];
   const v = new THREE.Vector3();
   const c = new THREE.Color();
   for (const it of items) {
     const g = it.geo.index ? it.geo.toNonIndexed() : it.geo;
-    const p = g.attributes.position, n = g.attributes.normal, u = g.attributes.uv;
+    const p = g.attributes.position;
+    const n = g.attributes.normal;
+    const u = g.attributes.uv;
     const m = it.matrix || new THREE.Matrix4();
     const nm = new THREE.Matrix3().getNormalMatrix(m);
     c.set(it.color === undefined ? 0xffffff : it.color);
@@ -74,7 +79,12 @@ export function windowTexture(tint, style = 'block') {
     if (style === 'brick') {
       g.strokeStyle = 'rgba(0,0,0,0.22)';
       g.lineWidth = 1;
-      for (let y = 0; y < h; y += 12) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); }
+      for (let y = 0; y < h; y += 12) {
+        g.beginPath();
+        g.moveTo(0, y);
+        g.lineTo(w, y);
+        g.stroke();
+      }
     }
     const litFloor = Math.floor(Math.random() * 6); // one mostly-lit floor band
     const accentCol = Math.floor(Math.random() * 6);
@@ -110,10 +120,11 @@ export function windowTexture(tint, style = 'block') {
   });
 }
 
-// The whole ground as one painted canvas: grass, beach, water edge, roads with
-// markings, sidewalks, crosswalks, canal water, port concrete.
+// The whole ground as one painted canvas: grass, beach, water edge, roads
+// with markings, sidewalks, crosswalks, canal water, port concrete.
 export function groundTexture() {
-  const S = 4096, W = WORLD.HALF * 2; // 4096px over the 1600-unit map keeps road markings sharp at close range
+  const S = 4096;
+  const W = WORLD.HALF * 2; // 4096px over the 1600-unit map keeps road markings sharp at close range
   const px = (x) => ((x + WORLD.HALF) / W) * S;
   const pz = (z) => ((z + WORLD.HALF) / W) * S;
   return canvasTex(S, S, (g) => {
@@ -125,12 +136,11 @@ export function groundTexture() {
   });
 }
 
-// Port concrete yard (340..720 on both axes): dark asphalt slab, border band,
-// white yard lanes, coral center block, painted container bays, stack
+// Port concrete yard (340..720 on both axes): dark asphalt slab, border
+// band, white yard lanes, coral center block, painted container bays, stack
 // underlays, oil stains and a hazard chevron band at the entrance — so the
 // yard reads from the avenue instead of looking like flat concrete.
 function paintPortYard(g, px, pz) {
-  // Darker asphalt so the yard reads from the avenue.
   g.fillStyle = '#6f6f68';
   g.fillRect(px(340), pz(340), px(720) - px(340), pz(720) - pz(340));
   // Wide dark border band around the whole yard.
@@ -141,10 +151,16 @@ function paintPortYard(g, px, pz) {
   g.strokeStyle = 'rgba(255,255,255,0.5)';
   g.lineWidth = 6;
   for (let x = 360; x <= 700; x += 20) {
-    g.beginPath(); g.moveTo(px(x), pz(340)); g.lineTo(px(x), pz(720)); g.stroke();
+    g.beginPath();
+    g.moveTo(px(x), pz(340));
+    g.lineTo(px(x), pz(720));
+    g.stroke();
   }
   for (let z = 360; z <= 700; z += 20) {
-    g.beginPath(); g.moveTo(px(340), pz(z)); g.lineTo(px(720), pz(z)); g.stroke();
+    g.beginPath();
+    g.moveTo(px(340), pz(z));
+    g.lineTo(px(720), pz(z));
+    g.stroke();
   }
   g.fillStyle = 'rgba(255,46,77,0.20)';
   g.fillRect(px(460), pz(460), px(620) - px(460), pz(620) - pz(460));
@@ -246,12 +262,18 @@ function paintRoads(g, px, pz) {
   g.lineWidth = 2;
   for (const x of WORLD.AVENUES) {
     for (let z = -800; z <= 800; z += 8) {
-      g.beginPath(); g.moveTo(px(x - rw / 2), pz(z)); g.lineTo(px(x + rw / 2), pz(z)); g.stroke();
+      g.beginPath();
+      g.moveTo(px(x - rw / 2), pz(z));
+      g.lineTo(px(x + rw / 2), pz(z));
+      g.stroke();
     }
   }
   for (const z of WORLD.STREETS) {
     for (let x = -800; x <= 800; x += 8) {
-      g.beginPath(); g.moveTo(px(x), pz(z - rw / 2)); g.lineTo(px(x), pz(z + rw / 2)); g.stroke();
+      g.beginPath();
+      g.moveTo(px(x), pz(z - rw / 2));
+      g.lineTo(px(x), pz(z + rw / 2));
+      g.stroke();
     }
   }
   g.fillStyle = 'rgba(0,0,0,0.28)';
@@ -273,16 +295,22 @@ function paintRoads(g, px, pz) {
   }
   g.fillStyle = 'rgba(20,20,22,0.55)';
   for (const x of WORLD.AVENUES) for (let z = -700; z <= 700; z += 140) {
-    g.beginPath(); g.arc(px(x + 6), pz(z), 5, 0, Math.PI * 2); g.fill();
+    g.beginPath();
+    g.arc(px(x + 6), pz(z), 5, 0, Math.PI * 2);
+    g.fill();
   }
   for (const z of WORLD.STREETS) for (let x = -700; x <= 700; x += 140) {
-    g.beginPath(); g.arc(px(x), pz(z + 6), 5, 0, Math.PI * 2); g.fill();
+    g.beginPath();
+    g.arc(px(x), pz(z + 6), 5, 0, Math.PI * 2);
+    g.fill();
   }
 }
 
 // Text sign texture: lines of text on a colored panel.
 export function signTexture(lines, opt = {}) {
-  const bg = opt.bg || '#12233d', fg = opt.fg || '#ffd98a', sub = opt.sub || '#ffffff';
+  const bg = opt.bg || '#12233d';
+  const fg = opt.fg || '#ffd98a';
+  const sub = opt.sub || '#ffffff';
   return canvasTex(512, 256, (g, w, h) => {
     g.fillStyle = bg;
     g.fillRect(0, 0, w, h);
@@ -323,7 +351,8 @@ export function policeDoorTexture() {
     g.beginPath();
     for (let i = 0; i < 5; i++) {
       const a = -Math.PI / 2 + (i * 4 * Math.PI) / 5;
-      const x = 26 + Math.cos(a) * 14, y = 26 + Math.sin(a) * 14;
+      const x = 26 + Math.cos(a) * 14;
+      const y = 26 + Math.sin(a) * 14;
       g[i === 0 ? 'moveTo' : 'lineTo'](x, y);
     }
     g.closePath();

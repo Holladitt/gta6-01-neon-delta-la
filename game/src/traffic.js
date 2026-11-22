@@ -27,10 +27,10 @@ export class Traffic {
     this.cars = [];
     this.nightOn = false;
     for (let i = 0; i < 10; i++) this.spawnCar(true);
-    this.spawnNightCars(6); // v12: extra cars that only appear at night
+    this.spawnNightCars(6); // extra cars that only appear at night
   }
 
-  // v12 night traffic: 6 more cars on the grid, invisible by day. They keep
+  // Night traffic: 6 more cars on the grid, invisible by day. They keep
   // driving their routes while hidden (cheap — one visible flag flips them
   // on), so the streets read busier the moment night falls.
   spawnNightCars(n) {
@@ -41,6 +41,7 @@ export class Traffic {
     }
     return n;
   }
+
   setNight(on) {
     if (this.nightOn === on) return;
     this.nightOn = on;
@@ -105,10 +106,14 @@ export class Traffic {
   }
 
   nearestLight(x, z) {
-    let best = null, bd = Infinity;
+    let best = null;
+    let bd = Infinity;
     for (const lg of this.lights) {
       const d = (lg.x - x) ** 2 + (lg.z - z) ** 2;
-      if (d < bd) { bd = d; best = lg; }
+      if (d < bd) {
+        bd = d;
+        best = lg;
+      }
     }
     return bd < 60 * 60 ? best : null;
   }
@@ -184,8 +189,8 @@ function randomNpc() {
 
 export class Peds {
   // count = sidewalk NPCs; pierCount = festival crowd confined to the pier deck.
-  // v12 night extras: nightSidewalk extra sidewalk NPCs + nightPier extra
-  // pier crowd, both invisible by day (zero scale) and strolling at night.
+  // nightSidewalk extra sidewalk NPCs + nightPier extra pier crowd, both
+  // invisible by day (zero scale) and strolling at night.
   constructor(scene, count = 48, pierCount = 0, nightSidewalk = 24, nightPier = 12) {
     this.scene = scene;
     this.count = count;
@@ -222,7 +227,11 @@ export class Peds {
       const npc = {
         ...randomNpc(),
         speed: range(rng, 1.2, 2.2),
-        road: 0, side: 1, along: 0, dir: 1, axis: 'z',
+        road: 0,
+        side: 1,
+        along: 0,
+        dir: 1,
+        axis: 'z',
       };
       this.assignRoad(npc, 0, 0);
       this.npcs.push(npc);
@@ -251,19 +260,29 @@ export class Peds {
       const npc = {
         ...randomNpc(),
         speed: range(rng, 1.0, 1.8),
-        road: 300, side: lane / 15.5, along: range(rng, -780, -670),
-        dir: rng() < 0.5 ? 1 : -1, axis: 'x', zone: 'pier', y: 2.5, lane,
+        road: 300,
+        side: lane / 15.5,
+        along: range(rng, -780, -670),
+        dir: rng() < 0.5 ? 1 : -1,
+        axis: 'x',
+        zone: 'pier',
+        y: 2.5,
+        lane,
       };
       this.npcs.push(npc);
     }
-    // v12 night extras: extra sidewalk strollers + extra pier crowd, parked
-    // at zero scale by day. They are real NPCs (same walk, same panic) that
-    // only exist on the street at night.
+    // Night extras: extra sidewalk strollers + extra pier crowd, parked
+    // at zero scale by day. They are real NPCs (same walk, same panic)
+    // that only exist on the street at night.
     for (let i = 0; i < nightSidewalk; i++) {
       const npc = {
         ...randomNpc(),
         speed: range(rng, 1.2, 2.2),
-        road: 0, side: 1, along: 0, dir: 1, axis: 'z',
+        road: 0,
+        side: 1,
+        along: 0,
+        dir: 1,
+        axis: 'z',
         nightOnly: true,
       };
       this.assignRoad(npc, 0, 0);
@@ -274,8 +293,14 @@ export class Peds {
       const npc = {
         ...randomNpc(),
         speed: range(rng, 1.0, 1.8),
-        road: 300, side: lane / 15.5, along: range(rng, -780, -670),
-        dir: rng() < 0.5 ? 1 : -1, axis: 'x', zone: 'pier', y: 2.5, lane,
+        road: 300,
+        side: lane / 15.5,
+        along: range(rng, -780, -670),
+        dir: rng() < 0.5 ? 1 : -1,
+        axis: 'x',
+        zone: 'pier',
+        y: 2.5,
+        lane,
         nightOnly: true,
       };
       this.npcs.push(npc);
@@ -283,15 +308,20 @@ export class Peds {
     this.applyColors();
   }
 
-  // v12: flip the night crowd on/off. Day hides them (zero scale); night
-  // lets them stroll. The respawn logic in update() pulls far night NPCs
-  // back near the player once night starts.
-  setNight(on) { this.nightOn = on; }
+  // Flip the night crowd on/off. Day hides them (zero scale); night lets
+  // them stroll. The respawn logic in update() pulls far night NPCs back
+  // near the player once night starts.
+  setNight(on) {
+    this.nightOn = on;
+  }
 
   // (Re)assign an NPC to a road: pier crowd just reverses on the deck,
   // street NPCs get a fresh random road/side/along.
   assignRoad(npc, px, pz) {
-    if (npc.zone === 'pier') { npc.dir *= -1; return; } // festival crowd stays on the pier
+    if (npc.zone === 'pier') {
+      npc.dir *= -1;
+      return; // festival crowd stays on the pier
+    }
     npc.axis = rng() < 0.5 ? 'z' : 'x';
     npc.road = pick(rng, npc.axis === 'z' ? WORLD.AVENUES : WORLD.STREETS);
     npc.side = rng() < 0.5 ? 1 : -1;
@@ -318,18 +348,29 @@ export class Peds {
   }
 
   update(dt, px, pz, panic = false) {
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
-    const sv = new THREE.Vector3(), pos = new THREE.Vector3();
+    const m4 = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const e = new THREE.Euler();
+    const sv = new THREE.Vector3();
+    const pos = new THREE.Vector3();
     this.npcs.forEach((n, i) => {
-      let x, z, heading;
-      // v12: night-only NPCs stand still + invisible by day.
+      let x;
+      let z;
+      let heading;
+      // Night-only NPCs stand still + invisible by day.
       const hidden = n.nightOnly && !this.nightOn;
       if (n.zone === 'pier') {
         // Festival crowd: stroll the deck between the gate and the wheel, bounce at the ends.
         if (!hidden) {
           n.along += n.dir * n.speed * dt;
-          if (n.along > -668) { n.along = -668; n.dir = -1; }
-          if (n.along < -782) { n.along = -782; n.dir = 1; }
+          if (n.along > -668) {
+            n.along = -668;
+            n.dir = -1;
+          }
+          if (n.along < -782) {
+            n.along = -782;
+            n.dir = 1;
+          }
         }
         x = n.along;
         z = 300 + n.lane;
@@ -337,7 +378,7 @@ export class Peds {
       } else {
         if (!hidden) {
           n.along += n.dir * n.speed * dt;
-          if (n.along > 760 || n.along < -760) { this.assignRoad(n, px, pz); }
+          if (n.along > 760 || n.along < -760) this.assignRoad(n, px, pz);
           // Respawn groups that drifted far from the player.
           const wx0 = n.axis === 'z' ? n.road + n.side * 15.5 : n.along;
           const wz0 = n.axis === 'z' ? n.along : n.road + n.side * 15.5;
@@ -357,7 +398,9 @@ export class Peds {
       }
       n.phase += dt * n.speed * 2.4;
       const sw = Math.sin(n.phase) * 0.75; // bigger limb swing — walk reads at distance
-      const s = n.scale, wd = n.wide || 1, yb = n.y || 0;
+      const s = n.scale;
+      const wd = n.wide || 1;
+      const yb = n.y || 0;
       const vis = hidden ? 0.0001 : s; // hidden night NPCs collapse to a point
       const set = (mesh, px2, py, pz2, rx = 0, ry = heading, rz = 0, sc = s, swd = 1) => {
         e.set(rx, ry, rz);

@@ -1,14 +1,14 @@
-// Vehicles: five distinct classes + police, each with its own shape and details
-// (grille, headlights, rims, windows, two-tone paint) + arcade physics.
+// Vehicles: five distinct classes + police, each with its own shape and
+// details (grille, headlights, rims, windows, two-tone paint) + arcade
+// physics.
 import * as THREE from '../vendor/three.module.min.js';
 import { VEHICLE_DEFS } from './config.js';
 import { policeDoorTexture } from './geo.js';
 import { applyCollisionDamage, DAMAGE_MIN_IMPACT, DAMAGE_COOLDOWN_S } from './damage.js';
 
 const lam = (c) => new THREE.MeshLambertMaterial({ color: c });
-// v13: cabin glass was near-black (0x1d2733) and read as a solid black box
-// on the car roof from the 3/4 rear chase angle, day and night. Slate blue
-// with a faint emissive so it reads as glass, never pitch black.
+// Cabin glass: slate blue with a faint emissive, so it reads as glass and
+// never as a pitch-black box on the car roof from the 3/4 rear chase angle.
 const glassMat = new THREE.MeshLambertMaterial({ color: 0x4a6a8a, emissive: 0x2c4a66, emissiveIntensity: 1.0 });
 const tireMat = lam(0x141414);
 const hubMat = lam(0xcccccc);
@@ -21,6 +21,7 @@ function box(w, h, d, x, y, z, mat) {
   m.position.set(x, y, z);
   return m;
 }
+
 function wheel(x, y, z, r) {
   const g = new THREE.Group();
   g.position.set(x, y, z);
@@ -37,11 +38,12 @@ function buildSedan(color, twoTone) {
   const g = new THREE.Group();
   const body = lam(color);
   g.add(box(4.6, 0.75, 2.0, 0, 0.62, 0, body));
-  // v14: real cabin — narrower glasshouse core, body-colour corner
-  // pillars, roof with overhang, sloped windscreen + rear glass.
+  // Real cabin: narrower glasshouse core, body-colour corner pillars,
+  // roof with overhang, sloped windscreen + rear glass.
   g.add(box(2.0, 0.5, 1.5, -0.2, 1.3, 0, glassMat)); // glasshouse core
-  for (const px of [0.75, -1.15]) for (const pz of [0.7, -0.7])
-    g.add(box(0.12, 0.5, 0.12, px, 1.3, pz, body)); // corner pillars
+  for (const px of [0.75, -1.15]) {
+    for (const pz of [0.7, -0.7]) g.add(box(0.12, 0.5, 0.12, px, 1.3, pz, body)); // corner pillars
+  }
   g.add(box(2.3, 0.1, 1.7, -0.2, 1.6, 0, lam(twoTone || color))); // roof
   const shield = box(0.06, 0.6, 1.5, 0.9, 1.32, 0, glassMat); // windscreen
   shield.rotation.z = 0.42;
@@ -59,6 +61,7 @@ function buildSedan(color, twoTone) {
   wheels.forEach((w) => g.add(w));
   return { group: g, wheels, steer: [wheels[0], wheels[1]], lights: lightMat };
 }
+
 function buildSUV(color) {
   const g = new THREE.Group();
   const body = lam(color);
@@ -76,6 +79,7 @@ function buildSUV(color) {
   wheels.forEach((w) => g.add(w));
   return { group: g, wheels, steer: [wheels[0], wheels[1]], lights: lightMat };
 }
+
 function buildPickup(color, twoTone) {
   const g = new THREE.Group();
   const body = lam(color);
@@ -101,15 +105,17 @@ function buildPickup(color, twoTone) {
   wheels.forEach((w) => g.add(w));
   return { group: g, wheels, steer: [wheels[0], wheels[1]], lights: lightMat };
 }
+
 function buildSport(color, stripe) {
   const g = new THREE.Group();
   const body = lam(color);
   g.add(box(4.4, 0.55, 2.0, 0, 0.55, 0, body)); // low body
-  // v14: real cabin — narrower glasshouse core, body-colour corner
-  // pillars, roof with overhang, sloped windscreen + fastback rear glass.
+  // Real cabin: narrower glasshouse core, body-colour corner pillars,
+  // roof with overhang, sloped windscreen + fastback rear glass.
   g.add(box(1.4, 0.42, 1.3, -0.3, 1.04, 0, glassMat)); // glasshouse core
-  for (const px of [0.35, -0.95]) for (const pz of [0.6, -0.6])
-    g.add(box(0.12, 0.42, 0.12, px, 1.04, pz, body)); // corner pillars
+  for (const px of [0.35, -0.95]) {
+    for (const pz of [0.6, -0.6]) g.add(box(0.12, 0.42, 0.12, px, 1.04, pz, body)); // corner pillars
+  }
   g.add(box(1.9, 0.08, 1.5, -0.3, 1.3, 0, lam(color))); // roof
   const shield = box(0.06, 0.55, 1.3, 0.48, 1.05, 0, glassMat); // windscreen
   shield.rotation.z = 0.42;
@@ -134,6 +140,7 @@ function buildSport(color, stripe) {
   wheels.forEach((w) => g.add(w));
   return { group: g, wheels, steer: [wheels[0], wheels[1]], lights: lightMat };
 }
+
 function buildBike(color) {
   const g = new THREE.Group();
   const body = lam(color);
@@ -145,7 +152,8 @@ function buildBike(color) {
     w.add(tire);
     return w;
   };
-  const wF = mkWheel(0.85), wR = mkWheel(-0.85);
+  const wF = mkWheel(0.85);
+  const wR = mkWheel(-0.85);
   g.add(wF, wR);
   g.add(box(1.5, 0.12, 0.12, 0, 0.62, 0, lam(0x333333))); // frame
   g.add(box(0.5, 0.35, 0.5, 0.15, 0.75, 0, body)); // tank
@@ -157,6 +165,7 @@ function buildBike(color) {
   g.add(hl);
   return { group: g, wheels: [wF, wR], steer: [wF], lights: lightMat };
 }
+
 function buildPolice() {
   const g = new THREE.Group();
   const black = lam(0x141414);
@@ -174,8 +183,7 @@ function buildPolice() {
     g.add(door);
   }
   // light bar (flashing red/blue)
-  const barBase = box(0.5, 0.14, 1.2, -0.2, 1.72, 0, lam(0x1a1a1a));
-  g.add(barBase);
+  g.add(box(0.5, 0.14, 1.2, -0.2, 1.72, 0, lam(0x1a1a1a)));
   const redMat = new THREE.MeshLambertMaterial({ color: 0x550000, emissive: 0xff2222, emissiveIntensity: 0 });
   const blueMat = new THREE.MeshLambertMaterial({ color: 0x000055, emissive: 0x2244ff, emissiveIntensity: 0 });
   const red = box(0.44, 0.22, 0.55, -0.2, 1.85, 0.3, redMat);
@@ -199,17 +207,25 @@ export function createVehicle(kind, x, z, heading, color) {
   built.group.position.set(x, 0, z);
   built.group.rotation.y = heading;
   return {
-    kind, def, x, z, heading, speed: 0, steer: 0,
-    vx: 0, vz: 0, health: 100, dmgCd: 0, ...built,
+    kind,
+    def,
+    x,
+    z,
+    heading,
+    speed: 0,
+    steer: 0,
+    vx: 0,
+    vz: 0,
+    health: 100,
+    dmgCd: 0,
+    ...built,
   };
 }
 
 // Arcade physics: forward speed + lateral slide (handbrake kills grip).
-// opts.damage (player car only): a hard wall hit damages the car — this is
-// the real damage source that makes FIELD REPAIR reachable (QA v12 MAJOR:
-// no code path ever damaged the player car, so repair always answered
-// "already in top shape"). Police/traffic cars pass no opts: their health
-// stays governed by gunfire only, as before.
+// opts.damage (player car only): a hard wall hit damages the car — the
+// real damage source that makes FIELD REPAIR reachable. Police and traffic
+// cars pass no opts: their health stays governed by gunfire only.
 export function updateVehicle(v, input, dt, colliders, opts) {
   const d = v.def;
   const grip = input.handbrake ? 2.2 : d.grip;
@@ -219,9 +235,11 @@ export function updateVehicle(v, input, dt, colliders, opts) {
   if (Math.abs(v.speed) < 0.05 && input.throttle === 0) v.speed = 0;
   v.speed = Math.max(-d.reverse, Math.min(d.top, v.speed));
   v.heading += input.steer * d.turn * (v.speed / d.top) * dt * (input.handbrake ? 1.7 : 1);
-  const fx = Math.sin(v.heading), fz = Math.cos(v.heading);
+  const fx = Math.sin(v.heading);
+  const fz = Math.cos(v.heading);
   const fwd = v.vx * fx + v.vz * fz;
-  const latX = v.vx - fwd * fx, latZ = v.vz - fwd * fz;
+  const latX = v.vx - fwd * fx;
+  const latZ = v.vz - fwd * fz;
   const decay = Math.exp(-grip * dt);
   v.vx = fwd * fx + latX * decay + (v.speed - fwd) * fx * Math.min(1, 8 * dt);
   v.vz = fwd * fz + latZ * decay + (v.speed - fwd) * fz * Math.min(1, 8 * dt);
@@ -235,14 +253,17 @@ export function updateVehicle(v, input, dt, colliders, opts) {
   for (const c of colliders) {
     const cx = Math.max(c.x0, Math.min(v.x, c.x1));
     const cz = Math.max(c.z0, Math.min(v.z, c.z1));
-    const dx = v.x - cx, dz = v.z - cz;
+    const dx = v.x - cx;
+    const dz = v.z - cz;
     const dd = Math.hypot(dx, dz);
     if (dd < r && dd > 0.001) {
       v.x = cx + (dx / dd) * r;
       v.z = cz + (dz / dd) * r;
       const vn = (v.vx * dx + v.vz * dz) / dd;
       if (vn < 0) {
-        v.vx -= vn * dx / dd; v.vz -= vn * dz / dd; v.speed *= 0.6;
+        v.vx -= (vn * dx) / dd;
+        v.vz -= (vn * dz) / dd;
+        v.speed *= 0.6;
         // Hard hit into the wall: real damage (player car only).
         const impact = -vn;
         if (opts && opts.damage && impact >= DAMAGE_MIN_IMPACT && v.dmgCd <= 0) {
@@ -268,8 +289,8 @@ export function setHeadlights(built, on) {
   if (built.lights) built.lights.emissiveIntensity = on ? 1.4 : 0.25;
 }
 
-// Taillights: one shared material for every car, so one call flips the whole
-// city's rear lights at dusk — bright red at night, dim by day.
+// Taillights: one shared material for every car, so one call flips the
+// whole city's rear lights at dusk — bright red at night, dim by day.
 export function setTaillights(on) {
   tailMat.emissiveIntensity = on ? 1.6 : 0.4;
 }

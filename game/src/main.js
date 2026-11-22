@@ -41,6 +41,8 @@ function lockPointer() {
     if (p && typeof p.catch === 'function') p.catch(() => {});
   } catch { /* headless or denied: mouse look just stays off */ }
 }
+// Save store: real localStorage when available, in-memory map otherwise
+// (headless / private mode). Same getItem/setItem interface either way.
 const STORE = (() => {
   try {
     localStorage.setItem('__nd_probe', '1');
@@ -63,12 +65,12 @@ const game = {
   bustT: 0, deadT: 0,
   fps: 0, frames: 0, fpsT: 0, ticks: 0, errors: [],
   day: 1, rp: 0, standing: {}, // rank/respect: RP from real payouts only
-  stats: { missionsDone: 0, totalEarned: 0, carsStolen: 0 }, // career stats: only real tracked counts (v13)
+  stats: { missionsDone: 0, totalEarned: 0, carsStolen: 0 }, // career stats: only real tracked counts
   statsOpen: false, // career-stats modal open over the pause menu
   crime: 'EVADING POLICE', // last crime label shown on the dispatch panel
   witnessT: 0, // witness report countdown (0 = none pending)
   shotT: -99, // time of the last gunshot (drives NPC panic)
-  crewState: newCrewState(), // CLEAN PLATES cooldown
+  crewState: newCrewState(), // crew ability cooldowns
   portraits: null,
   camHold: null, // staging-only chase-cam hold {az, pitch} via setCamHold; null = normal chase cam
 };
@@ -77,7 +79,7 @@ let rig, world, traffic, peds, police, officers, hud, input, audio, combat;
 let scooters = [];
 let mara, maraParts, parked = [];
 let waypointMarker, waypointBeam, tracers = [];
-let beamCone, beamDisc; // v12: player-car headlight beam (cone + ground disc), night only
+let beamCone, beamDisc; // player-car headlight beam (cone + ground disc), night only
 let player = { x: PLAYER.spawn.x, z: PLAYER.spawn.z, heading: PLAYER.spawn.heading, speed: 0, phase: 0, moving: false };
 let camTarget = { x: 0, y: 2, z: 0 };
 
@@ -88,7 +90,7 @@ function boot() {
   world = buildWorld(rig.scene);
   traffic = new Traffic(rig.scene, world.colliders, world.trafficLights);
   traffic.spawnPortCars(6); // denser truck + car traffic around the terminal
-  peds = new Peds(rig.scene, 48, 20, 24, 12); // 48 sidewalk NPCs + 20 pier crowd + v12 night extras (24 street, 12 pier)
+  peds = new Peds(rig.scene, 48, 20, 24, 12); // 48 sidewalk NPCs + 20 pier crowd + night extras (24 street, 12 pier)
   police = new Police(rig.scene, world.graph, world.colliders);
   officers = new Officers(rig.scene, null); // audio wired below once AudioSys exists
   hud = new HUD();
@@ -172,11 +174,11 @@ function boot() {
   // 3D waypoint marker + beam.
   waypointMarker = new THREE.Mesh(
     new THREE.OctahedronGeometry(2.6),
-    new THREE.MeshBasicMaterial({ color: 0xffd23d })
+    new THREE.MeshBasicMaterial({ color: 0xffd23d }),
   );
   waypointBeam = new THREE.Mesh(
     new THREE.CylinderGeometry(1.2, 1.2, 60, 8, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xffd23d, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xffd23d, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }),
   );
   waypointMarker.visible = false;
   waypointBeam.visible = false;
@@ -190,18 +192,18 @@ function boot() {
     tracers.push({ line, t: 0 });
   }
 
-  // v12: player-car headlight beam — a translucent cone ahead of the car +
-  // a bright disc on the road where it lands. Visible only at dusk/night
+  // Player-car headlight beam — a translucent cone ahead of the car + a
+  // bright disc on the road where it lands. Visible only at dusk/night
   // while driving; positioned every frame in updateCameraHud.
   beamCone = new THREE.Mesh(
     new THREE.ConeGeometry(3.2, 15, 12, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.10, side: THREE.DoubleSide, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.10, side: THREE.DoubleSide, depthWrite: false }),
   );
   beamCone.visible = false;
   rig.scene.add(beamCone);
   beamDisc = new THREE.Mesh(
     new THREE.CircleGeometry(5, 20),
-    new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.20, side: THREE.DoubleSide, depthWrite: false })
+    new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.20, side: THREE.DoubleSide, depthWrite: false }),
   );
   beamDisc.rotation.x = -Math.PI / 2;
   beamDisc.visible = false;
@@ -213,11 +215,11 @@ function boot() {
   $('btn-resume').addEventListener('click', () => resumeGame());
   $('btn-restart').addEventListener('click', () => { audio.ensure(); newGame(); });
   $('btn-quit').addEventListener('click', () => { pauseGame(false); toTitle(); });
-  // v13: career-stats modal over the pause menu.
+  // Career-stats modal over the pause menu.
   $('btn-stats').addEventListener('click', () => openStats());
   $('btn-stats-close').addEventListener('click', () => closeStats());
   $('btn-map-close').addEventListener('click', () => { game.state = 'playing'; hud.showMap(false); });
-  // v12 shop: close button + buy delegation (rows are re-rendered on every
+  // Shop: close button + buy delegation (rows are re-rendered on every
   // open/buy, so clicks are caught on the container, not per button).
   $('btn-shop-close').addEventListener('click', () => closeShop());
   $('shop-rows').addEventListener('click', (e) => {
@@ -279,8 +281,8 @@ function boot() {
     portCars: traffic.cars.filter((c) => c.port).length,
     police: police.cars.map((c) => [Math.round(c.x), Math.round(c.z)]),
     heli: police.heli ? [Math.round(police.heli.position.x), Math.round(police.heli.position.y), Math.round(police.heli.position.z)] : null,
-    heliBeam: police.beamState ? police.beamState() : null, // v13-fix: searchlight landing point + length + midpoint
-    hour: +game.hour.toFixed(2), // v13-fix: staging hour readout (shot 1 dusk = 17.0)
+    heliBeam: police.beamState ? police.beamState() : null, // searchlight landing point + length + midpoint
+    hour: +game.hour.toFixed(2), // staging hour readout (shot 1 dusk = 17.0)
     siren: police.cars.length && police.cars[0].lightBar ? police.cars[0].lightBar.red.emissiveIntensity : null,
     port: world.port,
     pierStats: world.pier.stats || null,
@@ -329,8 +331,7 @@ const gameApi = {
     const v = createVehicle(kind, x, z, heading, color);
     v.health = 100;
     v.parked = true; // it joins the parked list, so entering it counts as
-    // a steal exactly like a real parked traffic car (was false before:
-    // debug-spawned cars never incremented carsStolen).
+    // a steal exactly like a real parked traffic car.
     parked.push(v);
     rig.scene.add(v.group);
     return v;
@@ -515,7 +516,7 @@ function resumeGame() {
   lockPointer();
 }
 
-// v13: career-stats modal over the pause menu. Every number comes from real
+// Career-stats modal over the pause menu. Every number comes from real
 // tracked state — missions done / total missions, total earned, cars stolen,
 // days played, rank + RP, weapons owned / total. No invented counters.
 function openStats() {
@@ -583,7 +584,7 @@ function startMission(i) {
   game.mission = m;
   game.sideJob = null;
   const def = MISSIONS[i];
-  // v12: a mission may pin the clock (M7 starts at 21.5 = night, M8 at
+  // A mission may pin the clock (M7 starts at 21.5 = night, M8 at
   // 18.5 = dusk). This is a real time rule — the world actually goes dark.
   if (def.startHour != null) {
     game.hour = def.startHour;
@@ -753,7 +754,7 @@ function tick(now) {
   // dt is clamped to [0, 0.05]: the first rAF timestamp can precede the
   // module-load performance.now() under load, giving a NEGATIVE dt — which
   // once drove the coaster trainT below 0 (JS % keeps the sign) and made
-  // coasterPath[-1] throw "reading '0'" on the first tick (v11 shoot).
+  // coasterPath[-1] throw on the first tick.
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
   game.time += dt;
@@ -764,81 +765,79 @@ function tick(now) {
 
   // One bad frame must never freeze the game: three.js only schedules the
   // next animation frame if tick() returns, so an uncaught throw here used
-  // to brick the whole game into a black screen (v11 shoot, shots 3/4).
-  // Record the error (capped) and keep looping instead.
+  // to brick the whole game into a black screen. Record the error (capped)
+  // and keep looping instead.
   try {
     if (game.state === 'playing') {
-    // Day cycle: 1 game hour per 6 real minutes.
-    game.hour = (game.hour + dt / 360) % 24;
-    rig.setTimeOfDay(game.hour);
-    hud.setClock(game.hour, game.day);
-    const dusk = game.hour >= 17.5 || game.hour < 6;
-    // v12 night: the real clock drives the whole night layer — lamps and
-    // windows glow (world), extra peds + traffic appear (pier/downtown),
-    // every car shows headlights + taillights (player, police, traffic).
-    const night = nightLevel(game.hour);
-    world.setNight(night);
-    traffic.setNight(isNight(game.hour));
-    peds.setNight(isNight(game.hour));
-    for (const v of parked) setHeadlights(v, dusk);
-    for (const tc of traffic.cars) setHeadlights(tc.v, dusk);
-    if (game.inCar) setHeadlights(game.inCar, dusk);
-    for (const c of police.cars) setHeadlights(c, dusk);
-    setTaillights(dusk);
+      // Day cycle: 1 game hour per 6 real minutes.
+      game.hour = (game.hour + dt / 360) % 24;
+      rig.setTimeOfDay(game.hour);
+      hud.setClock(game.hour, game.day);
+      const dusk = game.hour >= 17.5 || game.hour < 6;
+      // Night layer: the real clock drives lamps and windows (world), extra
+      // peds + traffic (pier/downtown), headlights + taillights on every car.
+      const night = nightLevel(game.hour);
+      world.setNight(night);
+      traffic.setNight(isNight(game.hour));
+      peds.setNight(isNight(game.hour));
+      for (const v of parked) setHeadlights(v, dusk);
+      for (const tc of traffic.cars) setHeadlights(tc.v, dusk);
+      if (game.inCar) setHeadlights(game.inCar, dusk);
+      for (const c of police.cars) setHeadlights(c, dusk);
+      setTaillights(dusk);
 
-    // Mouse look.
-    const { dx, dy } = input.consumeMouse();
-    if (dx || dy) game.lastMouseMove = t;
-    rig.yaw -= dx * 0.003;
-    rig.pitch = clamp(rig.pitch + dy * 0.003, 0.05, 1.15);
+      // Mouse look.
+      const { dx, dy } = input.consumeMouse();
+      if (dx || dy) game.lastMouseMove = t;
+      rig.yaw -= dx * 0.003;
+      rig.pitch = clamp(rig.pitch + dy * 0.003, 0.05, 1.15);
 
-    if (!game.inCar) updateOnFoot(dt, t);
-    else updateDriving(dt, t);
+      if (!game.inCar) updateOnFoot(dt, t);
+      else updateDriving(dt, t);
 
-    updateMissions(dt, t);
-    updateWanted(dt, t);
-    updateWitness(dt);
-    tickCooldown(game.crewState, dt);
-    updateBustedWasted(dt, t);
-    updateHotkeys(dt, t);
-    updateWorld(dt, t);
-    updateCameraHud(dt, t);
-  } else if (game.state === 'title') {
-    // Slow orbit over the city behind the title screen (lower, more skyline in frame).
-    const a = t * 0.02;
-    rig.camera.position.set(Math.cos(a) * 420, 100, Math.sin(a) * 420);
-    rig.camera.lookAt(0, 40, 0); // more sky gradient in frame
-    rig.skyMesh.position.set(rig.camera.position.x, 0, rig.camera.position.z);
-    world.update(dt, t);
-    traffic.update(dt, t);
-    peds.update(dt, 0, 0);
-    updateScooters(dt);
-    if (input.wasPressed('Enter')) newGame();
-  } else if (game.state === 'map') {
-    hud.drawCityMap({
-      px: player.x, pz: player.z, heading: rig.yaw,
-      police: police.cars.map((c) => ({ x: c.x, z: c.z })),
-      waypoint: game.waypoint,
-    });
-    if (input.wasPressed('Tab') || input.wasPressed('Escape')) {
-      game.state = 'playing';
-      hud.showMap(false);
+      updateMissions(dt, t);
+      updateWanted(dt, t);
+      updateWitness(dt);
+      tickCooldown(game.crewState, dt);
+      updateBustedWasted(dt, t);
+      updateHotkeys(dt, t);
+      updateWorld(dt, t);
+      updateCameraHud(dt, t);
+    } else if (game.state === 'title') {
+      // Slow orbit over the city behind the title screen (lower, more skyline in frame).
+      const a = t * 0.02;
+      rig.camera.position.set(Math.cos(a) * 420, 100, Math.sin(a) * 420);
+      rig.camera.lookAt(0, 40, 0); // more sky gradient in frame
+      rig.skyMesh.position.set(rig.camera.position.x, 0, rig.camera.position.z);
+      world.update(dt, t);
+      traffic.update(dt, t);
+      peds.update(dt, 0, 0);
+      updateScooters(dt);
+      if (input.wasPressed('Enter')) newGame();
+    } else if (game.state === 'map') {
+      hud.drawCityMap({
+        px: player.x, pz: player.z, heading: rig.yaw,
+        police: police.cars.map((c) => ({ x: c.x, z: c.z })),
+        waypoint: game.waypoint,
+      });
+      if (input.wasPressed('Tab') || input.wasPressed('Escape')) {
+        game.state = 'playing';
+        hud.showMap(false);
+      }
+    } else if (game.state === 'shop') {
+      // Keep framing the scene behind the overlay — without this the camera
+      // stays at its boot position (ground level: a flat brown field) and
+      // the minimap never draws on the ?shot=2 boot path.
+      // The world stays frozen; only the camera + HUD refresh.
+      updateCameraHud(dt, t);
+      if (input.wasPressed('KeyB') || input.wasPressed('Escape')) closeShop();
+      if (input.wasPressed('Digit4')) buyWeaponSlot(3);
+      if (input.wasPressed('Digit5')) buyWeaponSlot(4);
+      if (input.wasPressed('Digit6')) buyWeaponSlot(5);
+    } else if (game.state === 'paused') {
+      // Esc closes the stats modal first, only then resumes.
+      if (input.wasPressed('Escape')) { if (game.statsOpen) closeStats(); else resumeGame(); }
     }
-  } else if (game.state === 'shop') {
-    // v13: keep framing the scene behind the overlay — without this the
-    // camera stays at its boot position (ground level: a flat brown field)
-    // and the minimap never draws on the ?shot=2 boot path, which is why
-    // the v12 shop shot showed a near-black world + an empty minimap.
-    // The world stays frozen; only the camera + HUD refresh.
-    updateCameraHud(dt, t);
-    if (input.wasPressed('KeyB') || input.wasPressed('Escape')) closeShop();
-    if (input.wasPressed('Digit4')) buyWeaponSlot(3);
-    if (input.wasPressed('Digit5')) buyWeaponSlot(4);
-    if (input.wasPressed('Digit6')) buyWeaponSlot(5);
-  } else if (game.state === 'paused') {
-    // v13: Esc closes the stats modal first, only then resumes.
-    if (input.wasPressed('Escape')) { if (game.statsOpen) closeStats(); else resumeGame(); }
-  }
   } catch (err) {
     // Record the message + stack (capped) so the cause is diagnosable from
     // __ndState instead of a frozen black screen.
@@ -1134,9 +1133,8 @@ function updateHotkeys(dt, t) {
   // B — DELTA ARMS weapon shop (menu access from anywhere; the storefront
   // stands at the Midtown shophouse row).
   if (input.wasPressed('KeyB')) openShop();
-  // C — CLEAN PLATES (Juno, the only real crew ability): swap plates,
-  // wanted -1, 45s cooldown. Fails honestly when there is no heat or the
-  // ability is still recharging.
+  // C — CLEAN PLATES (Juno): swap plates, wanted -1, 45s cooldown. Fails
+  // honestly when there is no heat or the ability is still recharging.
   if (input.wasPressed('KeyC')) {
     const res = applySwap(game.crewState, game.wanted.level, CREW[0].ability.cooldown);
     if (res.ok) {
@@ -1287,11 +1285,11 @@ function updateCameraHud(dt, t) {
     police: police.cars.map((c) => ({ x: c.x, z: c.z, call: c.callsign })),
     traffic: traffic.cars.map((c) => ({ x: c.v.x, z: c.v.z })),
     waypoint: game.waypoint,
-    overwatch: game.crewState.watchT > 0, // v12: Cassia's reveal
+    overwatch: game.crewState.watchT > 0, // Cassia's reveal
   });
-  // v12 headlight beam: at dusk/night, a cone ahead of the player's car +
-  // a bright disc on the road where it lands. The cone's apex sits at the
-  // car and opens forward (quaternion maps +Y onto the back direction).
+  // Headlight beam: at dusk/night, a cone ahead of the player's car + a
+  // bright disc on the road where it lands. The cone's apex sits at the car
+  // and opens forward (quaternion maps +Y onto the back direction).
   const dusk = game.hour >= 17.5 || game.hour < 6;
   const beamOn = dusk && !!game.inCar;
   beamCone.visible = beamOn;
@@ -1318,9 +1316,8 @@ function tryInteract() {
   }
 }
 
-// Weapon switch with honest feedback (v13-fix): locked slots refuse
-// silently in combat.js, so a dead key press now names the gun and its
-// real price instead of doing nothing.
+// Weapon switch with honest feedback: locked slots refuse in combat.js, so
+// a dead key press now names the gun and its real price instead of doing nothing.
 function switchWeapon(i) {
   if (!combat.switchTo(i)) hud.toast(`${WEAPONS[i].name} is locked — buy it at DELTA ARMS for $${WEAPONS[i].price.toLocaleString('en-US')}.`);
   hud.setWeaponSlots(combat);

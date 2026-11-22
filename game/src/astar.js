@@ -1,19 +1,29 @@
-// Pure A* over a graph of {id: {x, z, links: [{id, cost}]}}.
-// No dependencies — node-testable.
+// A* pathfinding over the road graph: nodes are {id: {x, z, links: [{id, cost}]}}.
+// Pure — no THREE, no DOM — so police flanking routes are deterministic
+// and testable outside the browser.
 export function astar(nodes, startId, goalId) {
   if (!nodes[startId] || !nodes[goalId]) return null;
   if (startId === goalId) return [startId];
+
   const open = new Map([[startId, 0]]);
   const came = new Map();
-  const g = new Map([[startId, 0]]);
-  const h = (id) => {
-    const a = nodes[id], b = nodes[goalId];
+  const gScore = new Map([[startId, 0]]);
+  const heuristic = (id) => {
+    const a = nodes[id];
+    const b = nodes[goalId];
     return Math.abs(a.x - b.x) + Math.abs(a.z - b.z);
   };
-  const f = new Map([[startId, h(startId)]]);
+  const fScore = new Map([[startId, heuristic(startId)]]);
+
   while (open.size > 0) {
-    let cur = null, best = Infinity;
-    for (const [id, fv] of f) { if (open.has(id) && fv < best) { best = fv; cur = id; } }
+    let cur = null;
+    let best = Infinity;
+    for (const [id, fv] of fScore) {
+      if (open.has(id) && fv < best) {
+        best = fv;
+        cur = id;
+      }
+    }
     if (cur === null) break;
     if (cur === goalId) {
       const path = [cur];
@@ -22,24 +32,28 @@ export function astar(nodes, startId, goalId) {
     }
     open.delete(cur);
     for (const link of nodes[cur].links) {
-      const ng = (g.get(cur) ?? Infinity) + link.cost;
-      if (ng < (g.get(link.id) ?? Infinity)) {
+      const tentative = (gScore.get(cur) ?? Infinity) + link.cost;
+      if (tentative < (gScore.get(link.id) ?? Infinity)) {
         came.set(link.id, cur);
-        g.set(link.id, ng);
-        f.set(link.id, ng + h(link.id));
-        open.set(link.id, ng + h(link.id));
+        gScore.set(link.id, tentative);
+        fScore.set(link.id, tentative + heuristic(link.id));
+        open.set(link.id, tentative + heuristic(link.id));
       }
     }
   }
   return null;
 }
 
-// Nearest graph node id to a point.
+// Id of the graph node nearest to a point (squared distance, no sqrt).
 export function nearestNode(nodes, x, z) {
-  let best = null, bd = Infinity;
+  let best = null;
+  let bestD = Infinity;
   for (const [id, n] of Object.entries(nodes)) {
     const d = (n.x - x) * (n.x - x) + (n.z - z) * (n.z - z);
-    if (d < bd) { bd = d; best = id; }
+    if (d < bestD) {
+      bestD = d;
+      best = id;
+    }
   }
   return best;
 }

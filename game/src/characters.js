@@ -1,5 +1,6 @@
-// Characters: Mara Solano + varied pedestrians. Chunky low-poly humans with
-// articulated limbs and walk cycles, readable from behind at chase-cam distance.
+// Characters: Mara Solano + varied pedestrians. Chunky low-poly humans
+// with articulated limbs and walk cycles, readable from behind at
+// chase-cam distance.
 import * as THREE from '../vendor/three.module.min.js';
 import { pick, range } from './rng.js';
 
@@ -121,10 +122,9 @@ export function buildHuman(opt = {}) {
   }
   g.add(head);
   // accessories
-  // v13: ponytail reworked so it reads as a tapered tail from behind, not a
-  // dark slab with a red cube (QA: "black box with a red tie", "red triangle
-  // in Mara's hair"). Upper segment wider at the base, tip narrower and
-  // tilted further back; the tie is now a thin flat band at the tail base.
+  // Ponytail: a tapered tail from behind — upper segment wider at the base,
+  // tip narrower and tilted further back; the tie is a thin flat band at
+  // the tail base, not a block.
   if (opt.ponytail) {
     const pony = new THREE.Mesh(new THREE.BoxGeometry(0.16 * s, 0.5 * s, 0.14 * s), mat(hair));
     pony.position.set(0, -0.12 * s, -0.28 * s);
@@ -174,19 +174,33 @@ export function buildHuman(opt = {}) {
 
 // Mara Solano: coral jacket (no NPC wears it), white chest stripe, blue
 // backpack, ponytail, yellow shoes, tallest in the crowd. Instantly
-// recognizable from behind. v11: face, fringe, collar, zipper, straps.
+// recognizable from behind.
 export function buildMara() {
   return buildHuman({
-    skin: 0xe0ac69, shirt: 0xff2e4d, pants: 0x2c3e50, hair: 0x4a2c0a,
-    shoes: 0xffc53d, ponytail: true, backpack: 0x2471a3, scale: 1.12, height: 1.8,
-    stripe: 0xf4f4f0, wide: 1.05, fringe: true, collar: 0xd41e3a, zipper: true, straps: true,
+    skin: 0xe0ac69,
+    shirt: 0xff2e4d,
+    pants: 0x2c3e50,
+    hair: 0x4a2c0a,
+    shoes: 0xffc53d,
+    ponytail: true,
+    backpack: 0x2471a3,
+    scale: 1.12,
+    height: 1.8,
+    stripe: 0xf4f4f0,
+    wide: 1.05,
+    fringe: true,
+    collar: 0xd41e3a,
+    zipper: true,
+    straps: true,
   });
 }
 
 export function buildNPC(rng) {
   const acc = rng();
   const opt = {
-    rng, bulk: range(rng, 0.85, 1.15), height: range(rng, 1.68, 1.88),
+    rng,
+    bulk: range(rng, 0.85, 1.15),
+    height: range(rng, 1.68, 1.88),
     sleeves: rng() < 0.5 ? false : true,
   };
   if (acc < 0.22) opt.cap = pick(rng, [0xc0392b, 0x2471a3, 0x229954, 0xdddddd]);
@@ -208,6 +222,7 @@ export function animateWalk(parts, phase, amp = 0.85, speed = 1) {
   parts.armR.rotation.z = -0.18;
   parts.torso.rotation.x = 0.08 * speed; // lean into the stride
 }
+
 export function animateIdle(parts, t) {
   parts.armL.rotation.x = Math.sin(t * 1.4) * 0.05;
   parts.armR.rotation.x = -Math.sin(t * 1.4) * 0.05;

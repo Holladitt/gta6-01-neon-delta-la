@@ -1,14 +1,16 @@
-// Crew abilities (pure state machines). All three crew members have ONE
-// real ability each — nothing decorative on the crew bar.
-//  - CLEAN PLATES (Juno): swap plates, wanted -1, 45s cooldown.
-//  - FIELD REPAIR (Petra): fix the current car to 100% condition, $150 in
-//    parts, 60s cooldown. Needs a car and a damaged car.
-//  - OVERWATCH (Cassia): police callsigns + distances on the minimap for
-//    20s, 45s cooldown.
-// State: { cooldownT (plates), repairT, watchT (remaining reveal),
-//           watchCd (overwatch cooldown) }. All timers tick down in real
-// seconds; all fields default to 0 on old saves.
-export function newCrewState() { return { cooldownT: 0, repairT: 0, watchT: 0, watchCd: 0 }; }
+// Crew abilities (pure state machines). Each of the three crew members
+// has one real ability — nothing decorative on the crew bar:
+//  - CLEAN PLATES (Juno): swap plates, wanted -1, 45 s cooldown.
+//  - FIELD REPAIR (Petra): fix the current car to 100% condition,
+//    $150 in parts, 60 s cooldown. Needs a car, and a damaged car.
+//  - OVERWATCH (Cassia): police callsigns + distances on the minimap
+//    for 20 s, 45 s cooldown.
+// State: { cooldownT (plates), repairT, watchT (reveal remaining),
+//           watchCd (overwatch cooldown) }. All timers tick down in
+// real seconds; every field defaults to 0 on old saves.
+export function newCrewState() {
+  return { cooldownT: 0, repairT: 0, watchT: 0, watchCd: 0 };
+}
 
 export function canSwap(state, wanted) {
   return wanted > 0 && (state.cooldownT || 0) <= 0;
@@ -22,18 +24,24 @@ export function applySwap(state, wanted, cooldown) {
   return { ok: true, wanted: Math.max(0, wanted - 1) };
 }
 
-// Repair the current car. inCar = the vehicle object (or null when on foot).
+// Repair the current car. inCar = the vehicle object, or null on foot.
 // Returns {ok, condition, money, reason}: condition is the car's real
-// health after the repair (100 on success), money is the player's cash
-// after the $150 parts cost is deducted (unchanged on failure).
+// health after the repair (100 on success); money is the player's cash
+// after the $150 parts cost (unchanged on failure).
 export function applyRepair(state, inCar, money, cost, cooldown) {
   if (!inCar) return { ok: false, condition: null, money, reason: 'no-car' };
-  // Cooldown is checked BEFORE full condition (v14): pressing V again
-  // during the 60 s recharge must report the cooldown, not "already in
-  // top shape" — a repaired car is at 100 while the timer still runs.
-  if ((state.repairT || 0) > 0) return { ok: false, condition: Math.round(inCar.health), money, reason: 'cooldown' };
-  if ((inCar.health ?? 100) >= 100) return { ok: false, condition: Math.round(inCar.health), money, reason: 'full' };
-  if (money < cost) return { ok: false, condition: Math.round(inCar.health), money, reason: 'no-funds' };
+  // Cooldown is checked BEFORE full condition: pressing V again during
+  // the 60 s recharge must report the cooldown, not "already in top
+  // shape" — a repaired car sits at 100 while the timer still runs.
+  if ((state.repairT || 0) > 0) {
+    return { ok: false, condition: Math.round(inCar.health), money, reason: 'cooldown' };
+  }
+  if ((inCar.health ?? 100) >= 100) {
+    return { ok: false, condition: Math.round(inCar.health), money, reason: 'full' };
+  }
+  if (money < cost) {
+    return { ok: false, condition: Math.round(inCar.health), money, reason: 'no-funds' };
+  }
   state.repairT = cooldown;
   inCar.health = 100;
   return { ok: true, condition: 100, money: money - cost, reason: null };

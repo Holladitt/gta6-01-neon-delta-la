@@ -25,27 +25,42 @@ export class Officers {
       this.tracers.push({ line, t: 0 });
     }
   }
-  maxFor(wanted) { return wanted >= 2 ? Math.min(wanted, 3) : 0; }
+
+  maxFor(wanted) {
+    return wanted >= 2 ? Math.min(wanted, 3) : 0;
+  }
+
   spawn(x, z) {
     const built = buildHuman({
-      skin: pick(Math.random, OFFICER_SKINS), shirt: OFFICER_SHIRT, pants: OFFICER_PANTS,
-      cap: OFFICER_CAP, height: 1.82,
+      skin: pick(Math.random, OFFICER_SKINS),
+      shirt: OFFICER_SHIRT,
+      pants: OFFICER_PANTS,
+      cap: OFFICER_CAP,
+      height: 1.82,
     });
     built.group.position.set(x, 0, z);
     this.scene.add(built.group);
     const flash = new THREE.Mesh(
       new THREE.BoxGeometry(0.55, 0.55, 0.55),
-      new THREE.MeshBasicMaterial({ color: 0xffd23d })
+      new THREE.MeshBasicMaterial({ color: 0xffd23d }),
     );
     flash.visible = false;
     this.scene.add(flash);
     const o = {
-      group: built.group, parts: built.parts, x, z, heading: 0,
-      health: 50, fireT: 0.6 + Math.random() * 0.6, flash, flashT: 0,
+      group: built.group,
+      parts: built.parts,
+      x,
+      z,
+      heading: 0,
+      health: 50,
+      fireT: 0.6 + Math.random() * 0.6,
+      flash,
+      flashT: 0,
     };
     this.list.push(o);
     return o;
   }
+
   remove(i) {
     const o = this.list[i];
     if (!o) return;
@@ -53,11 +68,16 @@ export class Officers {
     this.scene.remove(o.flash);
     this.list.splice(i, 1);
   }
-  clear() { while (this.list.length) this.remove(0); }
+
+  clear() {
+    while (this.list.length) this.remove(0);
+  }
+
   damage(o, dmg) {
     o.health -= dmg;
     return o.health <= 0;
   }
+
   fireAt(o, px, pz, d, onPlayerHit) {
     this.shotsFired++;
     const gx = o.x + Math.sin(o.heading) * 0.7;
@@ -76,6 +96,7 @@ export class Officers {
     if (hit && onPlayerHit) onPlayerHit(6 + Math.random() * 4);
     return hit;
   }
+
   update(dt, t, px, pz, playerOnFoot, wanted, policeCars, onPlayerHit) {
     this.spawnT -= dt;
     const max = this.maxFor(wanted);
@@ -89,7 +110,10 @@ export class Officers {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const o = this.list[i];
       const d = Math.hypot(o.x - px, o.z - pz);
-      if (wanted < 2 || !playerOnFoot || d > 90) { this.remove(i); continue; }
+      if (wanted < 2 || !playerOnFoot || d > 90) {
+        this.remove(i);
+        continue;
+      }
       o.heading = Math.atan2(px - o.x, pz - o.z);
       o.group.rotation.y = o.heading;
       o.parts.armR.rotation.x = -1.35; // aim the pistol forward
@@ -104,7 +128,10 @@ export class Officers {
       }
     }
     for (const tr of this.tracers) {
-      if (tr.t > 0) { tr.t -= dt; if (tr.t <= 0) tr.line.material.opacity = 0; }
+      if (tr.t > 0) {
+        tr.t -= dt;
+        if (tr.t <= 0) tr.line.material.opacity = 0;
+      }
     }
   }
 }

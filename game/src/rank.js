@@ -1,16 +1,24 @@
 // Rank / respect + district standing (pure). RP comes only from real
-// payouts: RP = floor(payout / 10), accumulated on mission / side-job
-// completion. No RP is ever invented or displayed without a payout behind it.
+// payouts: RP = floor(payout / 10), accumulated when a mission or side
+// job actually pays out. No RP is ever invented or shown without a payout
+// behind it.
 import { RANKS } from './config.js';
 
-export function rpForReward(reward) { return Math.floor(reward / 10); }
+export function rpForReward(reward) {
+  return Math.floor(reward / 10);
+}
 
 export function rankFor(rp) {
   let cur = RANKS[0];
   for (const r of RANKS) if (rp >= r.minRp) cur = r;
   const idx = RANKS.indexOf(cur);
   const next = RANKS[idx + 1] || null;
-  return { ...cur, rp, nextMin: next ? next.minRp : null, nextTitle: next ? next.title : null };
+  return {
+    ...cur,
+    rp,
+    nextMin: next ? next.minRp : null,
+    nextTitle: next ? next.title : null,
+  };
 }
 
 export function standingLabel(v) {
@@ -25,6 +33,7 @@ export function addStanding(standing, districtId, delta) {
   standing[districtId] = Math.max(0, Math.min(100, cur + delta));
   return standing[districtId];
 }
+
 export function getStanding(standing, districtId) {
   return standing[districtId] ?? 50;
 }

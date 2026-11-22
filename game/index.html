@@ -46,7 +46,7 @@
   #crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); font-size: 26px; font-weight: bold; color: rgba(255,255,255,.9); display: none; }
   #vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(255,0,0,.55) 100%); opacity: 0; transition: opacity .15s; }
   #toast { position: absolute; left: 50%; top: 220px; transform: translateX(-50%); font-size: 17px; font-weight: bold; background: rgba(10,20,35,.75); padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .3s; }
-  /* v11 panels: dispatch, rank, crew, wanted banner, weapon slots */
+  /* dispatch, rank, crew, wanted banner, weapon slots */
   #day { color: #ffd23d; }
   #wanted-banner { position: absolute; left: 50%; top: 152px; transform: translateX(-50%); text-align: center; display: none; }
   #wanted-banner-text { font-size: 44px; font-weight: 900; letter-spacing: 4px; color: #ff4444; text-shadow: 0 0 12px rgba(255,60,60,.8), 0 2px 6px #000; }
@@ -59,12 +59,12 @@
   .disp-dist { color: #fff; font-weight: bold; }
   .disp-status { margin-top: 4px; font-weight: 900; color: #ffd23d; letter-spacing: 1px; }
   .disp-more { color: #9aa5b1; font-size: 12px; }
-  #rank-panel { margin-top: 8px; margin-left: 16px; text-align: left; } /* v15: margin-left so its left edge clears the WANTED stars (they touched at the corner in shot 1) */
+  #rank-panel { margin-top: 8px; margin-left: 16px; text-align: left; } /* margin-left so its left edge clears the WANTED stars */
   #rank-title { font-size: 14px; font-weight: 900; color: #7fe3d8; letter-spacing: 1px; }
   .rank-bar { height: 7px; background: rgba(0,0,0,.6); border-radius: 4px; overflow: hidden; margin-top: 4px; border: 1px solid rgba(255,255,255,.3); }
   #rank-bar { height: 100%; background: #2ec4b6; width: 0%; }
   #rank-rp { font-size: 12px; font-weight: bold; color: #ffe9a0; margin-top: 3px; }
-  #crew-bar { position: absolute; right: 16px; top: 215px; width: 252px; } /* v13-fix: was 262px — the bottom row sat on the BALLOONS sign's right edge in shot 3 */
+  #crew-bar { position: absolute; right: 16px; top: 215px; width: 252px; } /* 252px: the bottom row clears the BALLOONS sign in shot 3 */
   .crew-head { font-size: 13px; font-weight: 900; letter-spacing: 2px; color: #7fe3d8; margin-bottom: 4px; }
   .crew-row { display: flex; align-items: center; gap: 8px; background: rgba(10,20,35,.55); border-radius: 8px; padding: 5px 8px; margin-bottom: 5px; }
   .crew-row img { width: 40px; height: 40px; border-radius: 6px; border: 2px solid rgba(255,255,255,.35); }
@@ -76,9 +76,8 @@
   .wslot { font-size: 12px; font-weight: 900; background: rgba(10,20,35,.55); border: 1px solid rgba(255,255,255,.25); border-radius: 6px; padding: 3px 7px; color: #cfd8e3; }
   .wslot.active { color: #ffe9a0; border-color: #ffd23d; background: rgba(60,40,0,.6); }
   .wslot.locked { color: #ffd23d; border-color: rgba(255,210,61,.5); }
-  /* v12: DELTA ARMS shop overlay — v13: dimming cut 0.82 -> 0.45 so the
-     street, the shopfront and Mara at the door stay visible around the
-     panel (v12 read as a menu on a black void); the rows keep their own
+  /* DELTA ARMS shop overlay — dimming 0.45 so the street, the shopfront and
+     Mara at the door stay visible around the panel; the rows keep their own
      dark background, so the shop stays readable. */
   #shop-screen { background: rgba(5,10,20,.45); justify-content: flex-start; align-items: flex-end; padding-top: 48px; padding-right: 48px; }
   #shop-screen h1 { font-size: 40px; font-weight: 900; font-style: italic; letter-spacing: 3px; color: #ffc53d; text-shadow: 0 0 18px rgba(255,197,61,.6), 0 2px 8px #000; width: 540px; text-align: center; }
@@ -95,7 +94,7 @@
   .shop-buy:hover { filter: brightness(1.2); }
   .shop-buy:disabled { background: #444; color: #999; border-color: #555; cursor: not-allowed; }
   #shop-screen p { margin-top: 10px; color: #ffd23d; font-weight: bold; width: 540px; text-align: center; }
-  /* v13: career-stats modal over the pause menu */
+  /* career-stats modal over the pause menu */
   #stats-screen { background: rgba(5,10,20,.6); }
   #stats-screen h1 { font-size: 34px; font-weight: 900; font-style: italic; letter-spacing: 3px; color: #ffd23d; text-shadow: 0 0 18px rgba(255,210,61,.6), 0 2px 8px #000; margin-bottom: 16px; }
   #stats-rows { width: 520px; max-width: 92vw; }

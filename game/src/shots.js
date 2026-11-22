@@ -1,21 +1,19 @@
 // Screenshot staging: ?shot=1..4 presets the game state for a render.
-// v13-fix: 1 = DUSK chase at 17:00 golden hour (heli spotlight + dispatch),
+// 1 = DUSK chase at 17:00 golden hour (heli spotlight + dispatch),
 // 2 = DELTA ARMS weapon shop (real money, real prices),
 // 3 = Coral Pier at night, M7 THE NIGHT LEDGER + rank,
 // 4 = M8 THE LAST SIGNAL stage tracker + Orin Beck portrait dialogue.
 function stageDuskChase(game) {
   game.setState('playing');
-  // v13-fix: DUSK at 17:00, not full night — the owner asked for an
-  // afternoon chase (golden hour: warm sky, everything readable). The hour
-  // is set AFTER startMission: M5 has no startHour so startMission does not
-  // pin the clock, but the M8 pattern proves startMission CAN pin it, so
-  // setHour goes after, like stageM8Tracker does.
+  // DUSK at 17:00, not full night — an afternoon chase (golden hour: warm
+  // sky, everything readable). The hour is set AFTER startMission: M5 has
+  // no startHour so startMission does not pin the clock, but the M8 pattern
+  // proves startMission CAN pin it, so setHour goes after, like
+  // stageM8Tracker does.
   // SOUTHBOUND chase: at the 60-tick staging mark the helicopter's orbit
-  // (a function of game time) puts it southeast of the player — in front of
-  // a south-facing chase camera, near the view centre. A northbound chase
-  // leaves it behind the camera. The whole v11 chase geometry is mirrored
-  // 180 degrees about the player's start (200, 140): cruisers + traffic
-  // flip direction and lane, the camera azimuth mirrors sign.
+  // (a function of game time) puts it southeast of the player — in front
+  // of a south-facing chase camera, near the view centre. A northbound
+  // chase leaves it behind the camera.
   const car = game.spawnCar('sport', 200, 140, 0, 0xff2e4d);
   game.enterCar(car);
   car.speed = 22;
@@ -25,7 +23,7 @@ function stageDuskChase(game) {
   // wanted is pinned to 3 so the helicopter deploys and dispatch lists
   // 3 units + AIR-1.
   game.startMission(4);
-  game.setHour(17.0); // golden hour: sky #ff9a3d/#ffb347, nightLevel 0 — bright + warm
+  game.setHour(17.0); // golden hour: warm sky, nightLevel 0 — bright + warm
   game.setWanted(3);
   // Scripted cruisers hold a fixed offset ahead of the player, so the chase
   // camera always has a cruiser in frame. Travel direction is south (0,+1);
@@ -45,9 +43,8 @@ function stageDuskChase(game) {
   game.spawnTraffic('suv', 'z', 200, 250, -1, 12); // northbound SUV, closes in on the right
   game.setMoney(8450);
   game.setDay(3);
-  // 3/4 rear-side angle, mirrored (proven v11-fix framing): the chase cam
-  // cannot hold an angle on its own in headless, so the staging-only
-  // camHold pins it.
+  // 3/4 rear-side angle: the chase cam cannot hold an angle on its own in
+  // headless, so the staging-only camHold pins it.
   game.setCamHold(0.539, 0.08);
   // Staged dialogue lasts 10 minutes of REAL time: setDialog's timer is
   // real-time, and the headless wait for 60 ticks takes ~70 real seconds,
@@ -59,23 +56,26 @@ function stageDuskChase(game) {
 function stageShop(game) {
   game.setState('playing');
   game.setHour(13.5); // bright day: the shop overlay and prices read crisp
-  // Stand at the DELTA ARMS door (90, 112), facing it from the sidewalk.
-  // v14: yaw 2.94 (not PI) — at PI the "VINYL & CO" sign's east end was
-  // cut at the left frame edge ("CO"); rotating 0.2 rad right shifts the
-  // row right so TIDE BOOKS is fully in frame and no sign text is cut at
-  // the edge (VINYL & CO itself leaves the frame to the left).
-  game.teleport(90, 132, 2.94);
+  // Stand on the forecourt south of the DELTA ARMS door (90, 112), facing
+  // it. The staging spot is 40 m back (z 152, not 132): at 20 m the 94°
+  // camera only covers ~43 m of storefront, so the outer signs were cut at
+  // the frame edge; at 40 m the whole narrow row (TIDE + DELTA + VINYL)
+  // fits, with TIDE fully in frame and DELTA clear of the shop panel.
+  // Yaw 2.94 (not PI): at PI the "VINYL & CO" sign's east end was cut at
+  // the left frame edge ("CO"); rotating 0.2 rad right shifts the row
+  // right so TIDE BOOKS is fully in frame and no sign text is cut at the
+  // edge (VINYL & CO itself sits behind the shop panel to the right).
+  game.teleport(90, 152, 2.94);
   game.setWanted(0);
   // Exactly the sum of all three shop prices (900 + 1800 + 2500) — the
   // overlay proves every gun is affordable from real earned money.
   game.setMoney(5200);
   game.setRp(555); // RANK B · NIGHTHAWK, 555 / 1000 RP — M1–M6 complete
   game.setDay(7);
-  // v13: pitch back to 0.16 — the shop panel now hugs the top of the
-  // screen (CSS, below), so Mara reads fully beneath it without a steep
-  // tilt; the shophouse row + towers keep their natural framing.
-  // v14: yaw 2.94 matches the teleport heading (see above); the shop
-  // panel is right-docked in CSS now, so Mara stands clear of it.
+  // Pitch 0.16: the shop panel hugs the top of the screen, so Mara reads
+  // fully beneath it without a steep tilt; the shophouse row + towers
+  // keep their natural framing. The shop panel is right-docked in CSS now,
+  // so Mara stands clear of it.
   game.setCamera(2.94, 0.16);
   game.openShop();
   // The overlay shows: 3 owned guns with live ammo, 3 locked guns with
@@ -96,20 +96,20 @@ function stageNightPier(game) {
   // M7 THE NIGHT LEDGER (startHour 21.5 keeps the clock at night): the
   // tracker reads MISSION 7, TAHAP 1/3, MEET INEZ AT THE PIER.
   game.startMission(6);
-  // Staged dialogue lasts 10 minutes of REAL time (see stageNightChase).
+  // Staged dialogue lasts 10 minutes of REAL time (see stageDuskChase).
   game.hud.setDialog('The pier never sleeps. Two pages, and nobody sees me take them.', 600000,
     { name: 'INEZ VARGAS', img: game.portrait('INEZ VARGAS') });
 }
 
 function stageM8Tracker(game) {
   game.setState('playing');
-  // v14 re-stage: DUSK in the port (hour 18.0), not deep night. The v13
-  // full-night shot was a dark yard with a small crane load and a wide
-  // empty foreground. At 18.0 the sky is dusk band 2 (orange horizon,
-  // nightLevel 0.33), the enlarged crane load reads bright orange against
-  // it, and the new foreground props (container stack, lamp, barrels,
-  // pallets) fill the yard. Close to M8's own startHour 18.5, so the
-  // staging stays honest to the mission.
+  // DUSK in the port (hour 18.0), not deep night. The full-night shot was
+  // a dark yard with a small crane load and a wide empty foreground. At
+  // 18.0 the sky is dusk band 2 (orange horizon, nightLevel 0.33), the
+  // enlarged crane load reads bright orange against it, and the new
+  // foreground props (container stack, lamp, barrels, pallets) fill the
+  // yard. Close to M8's own startHour 18.5, so the staging stays honest
+  // to the mission.
   // Mission 8 (THE LAST SIGNAL), stage 2/3: the player starts ON the first
   // pickup point (520, 560), so it registers during the settle frames and
   // the tracker reads "1/4" with a real progress bar + NEXT step.
@@ -123,14 +123,14 @@ function stageM8Tracker(game) {
   // load and puts the big near (520,620) load clear of the dialog at the
   // right edge: trailer (628,550) + container row (660,560) frame the
   // left, foreground props (575,605) sit on the crane sightline.
-  // v15: pitch 0.12 (was 0.20) — a CDP pitch/yaw sweep proved 0.20 cuts the
-  // (520,620) crane load off at the frame top, while 0.12 brings the whole
-  // load into frame at the top-right with the (640,660) crane still centred.
+  // Pitch 0.12: a CDP pitch/yaw sweep proved 0.20 cuts the (520,620)
+  // crane load off at the frame top, while 0.12 brings the whole load
+  // into frame at the top-right with the (640,660) crane still centred.
   // Yaw 0.86 was rejected: it drags the (520,620) crane leg into the right
   // edge. Pitch 0.06 was rejected: the load sits too low and the crane leg
   // dominates the right edge. Port ground stays in frame at 0.12.
   game.setCamera(0.96, 0.12);
-  // Staged dialogue lasts 10 minutes of REAL time (see stageNightChase).
+  // Staged dialogue lasts 10 minutes of REAL time (see stageDuskChase).
   game.hud.setDialog('The drive is in my hand. Two dead drops, then the whole city hears it.', 600000,
     { name: 'ORIN BECK', img: game.portrait('ORIN BECK') });
 }

@@ -49,7 +49,9 @@ export class Police {
     this._beamMidZ = 0;
   }
 
-  nextCallsign() { return CALLSIGNS[this.callIdx++ % CALLSIGNS.length]; }
+  nextCallsign() {
+    return CALLSIGNS[this.callIdx++ % CALLSIGNS.length];
+  }
 
   // Grow/shrink the patrol to the count the wanted level demands.
   ensureCount(level, px, pz) {
@@ -65,9 +67,9 @@ export class Police {
     }
     // Never trim a scripted (staged) cruiser: screenshot staging pins it to
     // a fixed offset ahead of the player, and ensureCount used to pop it the
-    // moment wanted dropped to 0 (v11 shot 2 lost its pinned cruiser this
-    // way). Scripted cars only exist under ?shot= staging, so normal play
-    // is unaffected; the grow loop still counts them toward `want`.
+    // moment wanted dropped to 0. Scripted cars only exist under ?shot=
+    // staging, so normal play is unaffected; the grow loop still counts
+    // them toward `want`.
     while (this.cars.length > want) {
       const idx = this.cars.findIndex((c) => !c.script);
       if (idx < 0) break; // only scripted cruisers remain — keep them
@@ -123,39 +125,34 @@ export class Police {
     // the helicopter. ConeGeometry's apex is at +Y and the base is wide at
     // -Y: update() maps +Y onto the heli direction, so the narrow end sits
     // at the heli and the wide base lands on the player — narrow at the
-    // source, wide at the ground, like a real searchlight. (The old code
-    // flipped it with rotation.x = PI and parked it at y=-11, so it read
-    // wide-at-the-heli, pointed down, and stopped ~3 m above the ground.)
-    // Opacity 0.34 (was 0.22): the beam must still read against a bright
-    // golden-hour sky, not only at night — v14 bumped it further toward
-    // the reference beam, which locks the car in visibly brighter light.
-    // Raised in step with the ground disc (0.50) so cone and pool stay
-    // in balance; the cone's edge stays soft because the material has
-    // no hard rim — only the alpha is higher.
-    // v15: vertical alpha fade so the cone's wide base rim dissolves instead
-    // of cutting a hard diagonal edge across the sky — opaque at the apex,
-    // fading out over the last ~35% of the cone toward the base. (alphaMap
-    // reads the green channel, so the gradient is grayscale, not alpha.)
+    // source, wide at the ground, like a real searchlight.
+    // Opacity 0.34: the beam must still read against a bright golden-hour
+    // sky, not only at night. A vertical alpha fade makes the cone's wide
+    // base rim dissolve instead of cutting a hard diagonal edge across the
+    // sky — opaque at the apex, fading out over the last ~35% toward the
+    // base. (alphaMap reads the green channel, so the gradient is grayscale.)
     const beamFade = document.createElement('canvas');
-    beamFade.width = 1; beamFade.height = 64;
+    beamFade.width = 1;
+    beamFade.height = 64;
     const bctx = beamFade.getContext('2d');
     const bgr = bctx.createLinearGradient(0, 0, 0, 64);
     bgr.addColorStop(0, '#ffffff');
     bgr.addColorStop(0.65, '#ffffff');
     bgr.addColorStop(1, '#000000');
-    bctx.fillStyle = bgr; bctx.fillRect(0, 0, 1, 64);
+    bctx.fillStyle = bgr;
+    bctx.fillRect(0, 0, 1, 64);
     const beamFadeTex = new THREE.CanvasTexture(beamFade);
     const cone = new THREE.Mesh(
       new THREE.ConeGeometry(5, 20, 12, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.34, alphaMap: beamFadeTex, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.34, alphaMap: beamFadeTex, side: THREE.DoubleSide, depthWrite: false }),
     );
     this.heliLight = cone;
     this.scene.add(cone);
-    // v15: soft outer halo cone (1.5x radius, faint) riding the same axis —
+    // Soft outer halo cone (1.5x radius, faint) riding the same axis —
     // the beam's edge reads as light falloff, not a hard triangle.
     const halo = new THREE.Mesh(
       new THREE.ConeGeometry(7.5, 20, 12, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.10, alphaMap: beamFadeTex, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.10, alphaMap: beamFadeTex, side: THREE.DoubleSide, depthWrite: false }),
     );
     this.heliHalo = halo;
     this.scene.add(halo);
@@ -163,7 +160,7 @@ export class Police {
     // under the orbiting helicopter (update() moves it to the player).
     const spot = new THREE.Mesh(
       new THREE.CircleGeometry(8, 20),
-      new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.50, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.50, side: THREE.DoubleSide, depthWrite: false }),
     );
     spot.rotation.x = -Math.PI / 2;
     spot.position.set(0, 0.15, 0);
@@ -199,7 +196,8 @@ export class Police {
         // ahead of the player. Only shot staging sets c.script; normal play
         // never does. The light bar keeps flashing.
         const s = c.script;
-        const rx = s.dirZ, rz = -s.dirX; // right vector of the travel direction
+        const rx = s.dirZ;
+        const rz = -s.dirX; // right vector of the travel direction
         c.x = px + s.dirX * s.ahead + rx * s.lane;
         c.z = pz + s.dirZ * s.ahead + rz * s.lane;
         c.group.position.set(c.x, 0, c.z);
@@ -208,13 +206,18 @@ export class Police {
         continue;
       }
       // Steer toward the current path node (or straight at the player when close).
-      let tx = px, tz = pz;
+      let tx = px;
+      let tz = pz;
       if (c.path && c.pathI < c.path.length) {
         const n = this.graph[c.path[c.pathI]];
-        if (n) { tx = n.x; tz = n.z; }
+        if (n) {
+          tx = n.x;
+          tz = n.z;
+        }
         if (Math.hypot(tx - c.x, tz - c.z) < 25) c.pathI++;
       }
-      const dx = tx - c.x, dz = tz - c.z;
+      const dx = tx - c.x;
+      const dz = tz - c.z;
       const wantHeading = Math.atan2(dx, dz);
       let dh = wantHeading - c.heading;
       while (dh > Math.PI) dh -= Math.PI * 2;
@@ -248,11 +251,11 @@ export class Police {
         _beamMid.set((hx + px) / 2, hy / 2, (hz + pz) / 2);
         this.heliLight.position.copy(_beamMid);
         this.heliLight.quaternion.setFromUnitVectors(BEAM_UP, _beamDir);
-        // v15: stretch the cone 2 m past both ends (apex buried 1 m inside
-        // the heli body, base 1 m past the player) so the apex reads as
-        // attached to the helicopter instead of floating just below it.
-        // _beamLen stays the true heli->player distance (the shoot checks
-        // it against the real distance), and the ground disc stays on the car.
+        // Stretch the cone 2 m past both ends (apex buried 1 m inside the
+        // heli body, base 1 m past the player) so the apex reads as attached
+        // to the helicopter instead of floating just below it. _beamLen
+        // stays the true heli->player distance, and the ground disc stays
+        // on the car.
         this.heliLight.scale.set(1, (dist + 2) / 20, 1);
         if (this.heliHalo) {
           this.heliHalo.position.copy(_beamMid);
@@ -270,7 +273,9 @@ export class Police {
     }
   }
 
-  setLevel(l) { this.level = l; }
+  setLevel(l) {
+    this.level = l;
+  }
 
   // Debug readout for the searchlight: where the beam lands, its length,
   // and its midpoint (null when no helicopter is up).

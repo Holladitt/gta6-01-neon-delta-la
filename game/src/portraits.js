@@ -5,7 +5,8 @@
 const css = (n) => '#' + n.toString(16).padStart(6, '0');
 
 function drawBust(g, o) {
-  const W = 96, H = 96;
+  const W = 96;
+  const H = 96;
   // background: role-color gradient
   const bg = g.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, o.bg || '#1a2a4a');
@@ -125,10 +126,16 @@ export function makePortraits(contacts) {
   for (const [id, look] of Object.entries(CREW_LOOKS)) out[id] = portrait(look);
   for (const c of contacts || []) {
     out[c.name] = portrait({
-      skin: c.skin, hair: c.hair, hairStyle: c.hairStyle,
-      cap: c.cap, bandana: c.bandana, shirt: c.shirt, bg: '#1a2a4a',
+      skin: c.skin,
+      hair: c.hair,
+      hairStyle: c.hairStyle,
+      cap: c.cap,
+      bandana: c.bandana,
+      shirt: c.shirt,
+      bg: '#1a2a4a',
     });
   }
   return out;
 }
+
 export const MARA_LOOK = MARA;
