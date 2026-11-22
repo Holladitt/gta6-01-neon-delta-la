@@ -6,7 +6,7 @@ import { groundY } from './world.js';
 function skyColors(hour) {
   if (hour < 16) return { top: '#3f7fd0', mid: '#7fb8e8', hor: '#cfe8f5', fog: 0xcfe0ea, sun: 0xfff2d8, sunI: 1.9, hemiI: 0.9 };
   if (hour < 17.5) return { top: '#4a4a8a', mid: '#ff9a3d', hor: '#ffb347', fog: 0xf0a060, sun: 0xffa040, sunI: 1.9, hemiI: 0.65 };
-  if (hour < 19) return { top: '#2a2a4a', mid: '#d65a4a', hor: '#ff8a5f', fog: 0xd07060, sun: 0xff7e5f, sunI: 1.3, hemiI: 0.5 };
+  if (hour < 19) return { top: '#1e1e40', mid: '#c2453a', hor: '#ff7a3d', fog: 0xd07060, sun: 0xff7e5f, sunI: 1.3, hemiI: 0.5 }; // v15: deeper dusk (was #2a2a4a/#d65a4a/#ff8a5f — flat salmon band in shot 4)
   return { top: '#0a0a1a', mid: '#1a1a3a', hor: '#2a2a4a', fog: 0x1a1a2a, sun: 0x8090ff, sunI: 0.7, hemiI: 0.35 };
 }
 
@@ -59,6 +59,33 @@ export class SceneRig {
     );
     this.scene.add(this.moonDisc);
     this.scene.add(this.moonHalo);
+    // v15: sparse clouds — three puffy groups of flattened discs that follow
+    // the camera like the sun/moon, so they sit in the sky band of every shot
+    // (day/golden/dusk); hidden at night. Breaks up the flat gradient sky,
+    // most visibly in the port shot where the top of frame was empty salmon.
+    this.clouds = [];
+    const cloudDirs = [
+      new THREE.Vector3(1, 0.36, 0.2).normalize(),   // east — in frame in the port shot
+      new THREE.Vector3(0.7, 0.42, 0.7).normalize(), // south-east — near centre in the port shot
+      new THREE.Vector3(0.1, 0.38, 1).normalize(),   // south — right side in the port shot
+    ];
+    const cloudRadii = [70, 55, 45];
+    const cloudPuffs = [[0, 0, 0, 1.6], [-55, -8, 0, 1.2], [55, -10, 0, 1.1]];
+    for (const dir of cloudDirs) {
+      const g = new THREE.Group();
+      const mats = [];
+      for (let i = 0; i < 3; i++) {
+        const m = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, transparent: true, opacity: 0, depthWrite: false });
+        const mesh = new THREE.Mesh(new THREE.CircleGeometry(cloudRadii[i], 20), m);
+        mesh.position.set(cloudPuffs[i][0], cloudPuffs[i][1], cloudPuffs[i][2]);
+        mesh.scale.set(cloudPuffs[i][3], cloudPuffs[i][3] * 0.5, 1);
+        g.add(mesh);
+        mats.push(m);
+      }
+      g.userData.dir = dir;
+      this.scene.add(g);
+      this.clouds.push({ group: g, mats });
+    }
     this.moonDir = null;
     this.lastBand = -1;
     window.addEventListener('resize', () => {
@@ -109,6 +136,10 @@ export class SceneRig {
       // fixed east-high direction; updateCamera re-anchors it to the camera
       this.moonDir = new THREE.Vector3(0.55, 0.62, -0.55).normalize();
     }
+    // v15 clouds: white by day, warm cream at golden hour, pink-orange at
+    // dusk, hidden at night — tinted per band like the sun disc.
+    const cloudStyle = band === 0 ? [0xffffff, 0.45] : band === 1 ? [0xffd9a0, 0.5] : band === 2 ? [0xff9a7a, 0.55] : [0xffffff, 0];
+    for (const c of this.clouds) for (const m of c.mats) { m.color.setHex(cloudStyle[0]); m.opacity = cloudStyle[1]; }
   }
   // Third-person camera: mouse orbit, collision pulls the camera in.
   updateCamera(dt, tx, ty, tz, heading, speed01, inCar, colliders) {
@@ -157,6 +188,13 @@ export class SceneRig {
       this.moonHalo.position.copy(mp);
       this.moonDisc.lookAt(this.camera.position);
       this.moonHalo.lookAt(this.camera.position);
+    }
+    // v15 clouds follow the camera the same way (1900 out, inside the sky dome)
+    for (const c of this.clouds) {
+      const cp = this.camera.position.clone().addScaledVector(c.group.userData.dir, 1800);
+      cp.y = Math.max(cp.y, 120);
+      c.group.position.copy(cp);
+      c.group.lookAt(this.camera.position);
     }
   }
   render() { this.renderer.render(this.scene, this.camera); }

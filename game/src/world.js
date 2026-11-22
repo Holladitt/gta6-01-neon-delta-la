@@ -504,7 +504,12 @@ export function buildWorld(scene) {
   const stallItems = [];
   stallNames.forEach((name, i) => {
     const side = i % 2 === 0 ? 268 : 332;
-    const x = -680 - Math.floor(i / 2) * 22;
+    // v15: the three western north-row stalls sit 8 m further west so the
+    // BALLOONS sign clears the crew panel at 1280 px wide (its right end
+    // was hidden behind the panel). Spacing stays 22 m; the deck's west
+    // end (festoon poles to -786) still holds the SNO-CONES stall.
+    let x = -680 - Math.floor(i / 2) * 22;
+    if (i >= 4 && i % 2 === 0) x -= 8;
     const front = side + (side < 300 ? 4.5 : -4.5); // deck-facing side
     // two-tone body: dark wood base, bright upper
     stallItems.push(boxItem(10, 2.2, 8, x, 3.6, side, 0x8a6a42));
@@ -931,12 +936,41 @@ export function buildWorld(scene) {
   foreItems.push(boxItem(2.2, 0.2, 2.2, 555, 1.05, 635, 0x8a6a42));
   foreItems.push(boxItem(2.4, 1.0, 2.4, 555, 1.55, 635, 0xb08a5a));
   foreItems.push(boxItem(2.2, 0.2, 2.2, 555, 2.1, 635, 0x8a6a42));
+  // v15: a second container stack (red over teal) further along the sightline
+  // so the foreground has a second depth layer instead of one stack + void,
+  // and a second lamp post on the right of the frame.
+  foreItems.push(boxItem(10, 2.6, 2.6, 610, 1.3, 590, 0xff2e4d));
+  foreItems.push(boxItem(10, 2.6, 2.6, 610, 4.0, 590, 0x2ec4b6));
+  addCollider(610 - 5, 590 - 1.3, 610 + 5, 590 + 1.3, 5.4);
+  foreItems.push(cylItem(0.15, 0.2, 7, 600, 3.5, 590, 0x333333, 6)); // lamp pole 2
   scene.add(new THREE.Mesh(mergeItems(foreItems), plain));
   // Lamp head is its own basic-material mesh so it stays bright at dusk.
   const lampHead = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 0.45),
     new THREE.MeshBasicMaterial({ color: 0xffe9a0 }));
   lampHead.position.set(560, 7.0, 615);
   scene.add(lampHead);
+  const lampHead2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 0.45),
+    new THREE.MeshBasicMaterial({ color: 0xffe9a0 }));
+  lampHead2.position.set(600, 7.0, 590);
+  scene.add(lampHead2);
+  // v15 (item 6): warm light pools on the asphalt under each lamp + two
+  // reflective puddles — the lamps read as light sources at dusk and the
+  // dark foreground slab gets warmth and sky reflection. Basic-material
+  // discs, not glowSpots (the 28-disc cap is already full).
+  const poolMat = new THREE.MeshBasicMaterial({ color: 0xffc53d, transparent: true, opacity: 0.30, side: THREE.DoubleSide, depthWrite: false });
+  for (const [px, pz, pr] of [[560, 615, 4], [600, 590, 4]]) {
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(pr, 20), poolMat);
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(px, 0.06, pz);
+    scene.add(pool);
+  }
+  const puddleMat = new THREE.MeshBasicMaterial({ color: 0x9a8a7a, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
+  for (const [px, pz, pr] of [[540, 625, 3.5], [595, 625, 2.8]]) {
+    const pud = new THREE.Mesh(new THREE.CircleGeometry(pr, 20), puddleMat);
+    pud.rotation.x = -Math.PI / 2;
+    pud.position.set(px, 0.06, pz);
+    scene.add(pud);
+  }
 
   // ---- Midtown street props: fire hydrants at intersections + crates by the shops
   const streetItems = [];
@@ -991,20 +1025,35 @@ export function buildWorld(scene) {
   forecourtItems.push(boxItem(1.6, 0.7, 1.6, 79, 0.35, 117, 0x8a6a42)); // planter
   forecourtItems.push({ geo: new THREE.SphereGeometry(0.9, 8, 6), matrix: new THREE.Matrix4().makeTranslation(79, 1.1, 117), color: 0x4a8a3a });
   addCollider(79 - 0.8, 117 - 0.8, 79 + 0.8, 117 + 0.8, 1.6);
-  forecourtItems.push(boxItem(2.0, 2.0, 2.0, 76, 1.0, 121, 0xa8875a)); // crates
-  forecourtItems.push(boxItem(1.6, 1.6, 1.6, 76.3, 2.8, 121, 0x8f6f42));
-  addCollider(76 - 1.1, 121 - 1.1, 76 + 1.4, 121 + 1.1, 3.8);
+  forecourtItems.push(boxItem(2.0, 2.0, 2.0, 84, 1.0, 121, 0xa8875a)); // crates — v15: moved east (was 76) so they sit fully in frame, not half-cropped at the left edge
+  forecourtItems.push(boxItem(1.6, 1.6, 1.6, 84.3, 2.8, 121, 0x8f6f42));
+  addCollider(84 - 1.1, 121 - 1.1, 84 + 1.4, 121 + 1.1, 3.8);
   forecourtItems.push(boxItem(3.4, 0.2, 0.9, 81, 0.55, 125, 0x8a6a42)); // bench
   forecourtItems.push(boxItem(3.4, 1.0, 0.15, 81, 1.05, 124.6, 0x8a6a42));
   forecourtItems.push(boxItem(0.2, 0.5, 0.7, 79.6, 0.25, 125, 0x333333));
   forecourtItems.push(boxItem(0.2, 0.5, 0.7, 82.4, 0.25, 125, 0x333333));
-  // right of the walkway (reads bottom-right, below the panel)
-  forecourtItems.push(boxItem(0.12, 0.9, 0.12, 101.3, 0.45, 126, 0x888888)); // bike rack
-  forecourtItems.push(boxItem(0.12, 0.9, 0.12, 102.7, 0.45, 126, 0x888888));
-  forecourtItems.push(boxItem(1.5, 0.12, 0.12, 102, 0.85, 126, 0x888888));
-  forecourtItems.push({ geo: new THREE.CylinderGeometry(0.35, 0.35, 0.08, 10), matrix: new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(101.45, 0.35, 126.3), color: 0x141414 });
-  forecourtItems.push({ geo: new THREE.CylinderGeometry(0.35, 0.35, 0.08, 10), matrix: new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(102.55, 0.35, 126.3), color: 0x141414 });
+  // right of the walkway (reads bottom-right, below the panel) — v15: the
+  // rack was thin grey tubes + two small black wheels and read as a smudge;
+  // now thicker, bright, taller, with two parked bikes (red + teal frames,
+  // bigger wheels) so it reads as a bike rack at a glance.
+  forecourtItems.push(boxItem(0.18, 1.15, 0.18, 101.3, 0.575, 126, 0xdddddd)); // bike rack
+  forecourtItems.push(boxItem(0.18, 1.15, 0.18, 102.7, 0.575, 126, 0xdddddd));
+  forecourtItems.push(boxItem(1.6, 0.18, 0.18, 102, 1.1, 126, 0xdddddd));
+  forecourtItems.push(boxItem(1.5, 0.1, 0.1, 102, 0.85, 126.35, 0xff2e4d)); // bike 1 frame (red)
+  forecourtItems.push(boxItem(1.5, 0.1, 0.1, 102, 0.85, 125.65, 0x2ec4b6)); // bike 2 frame (teal)
+  forecourtItems.push({ geo: new THREE.CylinderGeometry(0.5, 0.5, 0.08, 12), matrix: new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(101.45, 0.5, 126.35), color: 0x141414 });
+  forecourtItems.push({ geo: new THREE.CylinderGeometry(0.5, 0.5, 0.08, 12), matrix: new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(102.55, 0.5, 126.35), color: 0x141414 });
+  forecourtItems.push({ geo: new THREE.CylinderGeometry(0.5, 0.5, 0.08, 12), matrix: new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(101.45, 0.5, 125.65), color: 0x141414 });
+  forecourtItems.push({ geo: new THREE.CylinderGeometry(0.5, 0.5, 0.08, 12), matrix: new THREE.Matrix4().makeRotationX(Math.PI / 2).setPosition(102.55, 0.5, 125.65), color: 0x141414 });
   addCollider(102 - 0.9, 126 - 0.5, 102 + 0.9, 126 + 0.5, 1);
+  // v15: two more forecourt props so the lower half is less flat grass —
+  // a newspaper box left-centre (in the wedge, clear of the walkway) and a
+  // street bin right of the bike rack.
+  forecourtItems.push(boxItem(0.5, 1.1, 0.5, 88, 0.55, 128, 0x333333)); // newspaper box post
+  forecourtItems.push(boxItem(0.9, 0.7, 0.7, 88, 1.45, 128, 0x2e7d32)); // newspaper box (green)
+  addCollider(88 - 0.5, 128 - 0.4, 88 + 0.5, 128 + 0.4, 1.8);
+  forecourtItems.push({ geo: new THREE.CylinderGeometry(0.45, 0.4, 1.0, 10), matrix: new THREE.Matrix4().makeTranslation(106, 0.5, 121), color: 0x2e7d32 }); // street bin
+  addCollider(106 - 0.5, 121 - 0.5, 106 + 0.5, 121 + 0.5, 1.1);
   scene.add(new THREE.Mesh(mergeItems(forecourtItems), plain));
   // ---- v10: street clutter — mailboxes, newspaper boxes, bike racks
   // (with parked bikes), planters, street bins, dumpsters, street-name

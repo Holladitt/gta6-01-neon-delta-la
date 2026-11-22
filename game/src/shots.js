@@ -123,8 +123,13 @@ function stageM8Tracker(game) {
   // load and puts the big near (520,620) load clear of the dialog at the
   // right edge: trailer (628,550) + container row (660,560) frame the
   // left, foreground props (575,605) sit on the crane sightline.
-  // Pitch 0.20 keeps port ground in frame, sky minimal.
-  game.setCamera(0.96, 0.20);
+  // v15: pitch 0.12 (was 0.20) — a CDP pitch/yaw sweep proved 0.20 cuts the
+  // (520,620) crane load off at the frame top, while 0.12 brings the whole
+  // load into frame at the top-right with the (640,660) crane still centred.
+  // Yaw 0.86 was rejected: it drags the (520,620) crane leg into the right
+  // edge. Pitch 0.06 was rejected: the load sits too low and the crane leg
+  // dominates the right edge. Port ground stays in frame at 0.12.
+  game.setCamera(0.96, 0.12);
   // Staged dialogue lasts 10 minutes of REAL time (see stageNightChase).
   game.hud.setDialog('The drive is in my hand. Two dead drops, then the whole city hears it.', 600000,
     { name: 'ORIN BECK', img: game.portrait('ORIN BECK') });

@@ -132,12 +132,33 @@ export class Police {
     // Raised in step with the ground disc (0.50) so cone and pool stay
     // in balance; the cone's edge stays soft because the material has
     // no hard rim — only the alpha is higher.
+    // v15: vertical alpha fade so the cone's wide base rim dissolves instead
+    // of cutting a hard diagonal edge across the sky — opaque at the apex,
+    // fading out over the last ~35% of the cone toward the base. (alphaMap
+    // reads the green channel, so the gradient is grayscale, not alpha.)
+    const beamFade = document.createElement('canvas');
+    beamFade.width = 1; beamFade.height = 64;
+    const bctx = beamFade.getContext('2d');
+    const bgr = bctx.createLinearGradient(0, 0, 0, 64);
+    bgr.addColorStop(0, '#ffffff');
+    bgr.addColorStop(0.65, '#ffffff');
+    bgr.addColorStop(1, '#000000');
+    bctx.fillStyle = bgr; bctx.fillRect(0, 0, 1, 64);
+    const beamFadeTex = new THREE.CanvasTexture(beamFade);
     const cone = new THREE.Mesh(
       new THREE.ConeGeometry(5, 20, 12, 1, true),
-      new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.34, alphaMap: beamFadeTex, side: THREE.DoubleSide, depthWrite: false })
     );
     this.heliLight = cone;
     this.scene.add(cone);
+    // v15: soft outer halo cone (1.5x radius, faint) riding the same axis —
+    // the beam's edge reads as light falloff, not a hard triangle.
+    const halo = new THREE.Mesh(
+      new THREE.ConeGeometry(7.5, 20, 12, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.10, alphaMap: beamFadeTex, side: THREE.DoubleSide, depthWrite: false })
+    );
+    this.heliHalo = halo;
+    this.scene.add(halo);
     // Bright disc on the street where the beam lands — on the player, not
     // under the orbiting helicopter (update() moves it to the player).
     const spot = new THREE.Mesh(
@@ -227,7 +248,17 @@ export class Police {
         _beamMid.set((hx + px) / 2, hy / 2, (hz + pz) / 2);
         this.heliLight.position.copy(_beamMid);
         this.heliLight.quaternion.setFromUnitVectors(BEAM_UP, _beamDir);
-        this.heliLight.scale.set(1, dist / 20, 1);
+        // v15: stretch the cone 2 m past both ends (apex buried 1 m inside
+        // the heli body, base 1 m past the player) so the apex reads as
+        // attached to the helicopter instead of floating just below it.
+        // _beamLen stays the true heli->player distance (the shoot checks
+        // it against the real distance), and the ground disc stays on the car.
+        this.heliLight.scale.set(1, (dist + 2) / 20, 1);
+        if (this.heliHalo) {
+          this.heliHalo.position.copy(_beamMid);
+          this.heliHalo.quaternion.setFromUnitVectors(BEAM_UP, _beamDir);
+          this.heliHalo.scale.set(1, (dist + 2) / 20, 1);
+        }
         this._beamLen = dist;
         this._beamDiscX = px;
         this._beamDiscZ = pz;
