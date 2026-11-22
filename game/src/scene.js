@@ -56,14 +56,14 @@ function groundTexture() {
     const y1 = w2c(700, 635);
     ctx.fillStyle = '#a89a80';
     ctx.fillRect(y0.x, y0.y, y1.x - y0.x, y1.y - y0.y);
-    ctx.fillStyle = 'rgba(0,0,0,0.10)';
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
     for (const [px, pz, pw, pd] of [[350, 380, 90, 60], [520, 340, 110, 70], [420, 520, 80, 55], [600, 420, 70, 90], [380, 600, 120, 30]]) {
       const q0 = w2c(px, pz);
       const q1 = w2c(px + pw, pz + pd);
       ctx.fillRect(q0.x, q0.y, q1.x - q0.x, q1.y - q0.y);
     }
-    ctx.strokeStyle = 'rgba(0,0,0,0.30)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.lineWidth = 3;
     for (let x = 300; x <= 700; x += 50) {
       const p = w2c(x, 300);
       ctx.beginPath();
@@ -101,13 +101,14 @@ function groundTexture() {
     const d1 = w2c(PIER_DECK.x1, PIER_DECK.z1);
     ctx.fillStyle = '#8a6d3b';
     ctx.fillRect(d0.x, d0.y, d1.x - d0.x, d1.y - d0.y);
-    ctx.fillStyle = 'rgba(255,220,150,0.18)';
+    ctx.fillStyle = 'rgba(255,220,150,0.32)';
     for (let z = PIER_DECK.z0; z <= PIER_DECK.z1; z += 16) {
       const p = w2c(PIER_DECK.x0, z);
       ctx.fillRect(p.x, p.y, d1.x - d0.x, w2c(0, z + 8).y - p.y);
     }
-    ctx.strokeStyle = 'rgba(40,25,10,0.55)';
-    ctx.lineWidth = 3;
+    // Plank seams: strong long seams, weak staggered end joints.
+    ctx.strokeStyle = 'rgba(40,25,10,0.8)';
+    ctx.lineWidth = 4;
     for (let z = PIER_DECK.z0; z <= PIER_DECK.z1; z += 8) {
       const p = w2c(PIER_DECK.x0, z);
       ctx.beginPath();
@@ -115,6 +116,8 @@ function groundTexture() {
       ctx.lineTo(w2c(PIER_DECK.x1, z).x, p.y);
       ctx.stroke();
     }
+    ctx.strokeStyle = 'rgba(40,25,10,0.35)';
+    ctx.lineWidth = 2;
     for (let x = PIER_DECK.x0; x <= PIER_DECK.x1; x += 12) {
       const p = w2c(x, PIER_DECK.z0);
       ctx.beginPath();
@@ -315,11 +318,11 @@ export function makeCrane() {
   const steel = new THREE.MeshLambertMaterial({ color: 0xe67e22 });
   const dark = new THREE.MeshLambertMaterial({ color: 0x2c3e50 });
   const tower = box(4, 60, 4, 0, 0, 30, 0, steel);
-  const jib = box(40, 2.5, 2.5, 0, 18, 58, 0, steel);
+  const jib = box(40, 3.5, 3, 0, 18, 58, 0, steel);
   const counter = box(8, 3, 3, 0, -16, 58, 0, dark);
   const cab = box(4, 3, 4, 0, 0, 55, 2, dark);
   const cable = box(0.15, 20, 0.15, 0, 18, 48, 0, dark);
-  const hook = box(2, 1.5, 2, 0, 18, 38, 0, dark);
+  const hook = box(3, 2.5, 3, 0, 18, 38, 0, new THREE.MeshLambertMaterial({ color: 0x3498db }));
   g.add(tower, jib, counter, cab, cable, hook);
   return g;
 }
@@ -390,6 +393,36 @@ function skyColors(hour) {
   return { sky: 0xff6b5e, sun: 0xffd76a, sunI: 0.6, amb: 0.4, fog: 0xd95f4e };
 }
 
+// Sky gradient: zenith-to-horizon colours per hour bucket, baked once
+// into a small canvas texture and cached (the sphere's v axis runs
+// pole-to-pole, so the canvas top is the zenith).
+function skyGradColors(hour) {
+  if (hour >= 6 && hour < 17.5) return ['#3d7ac2', '#bfe3f0'];
+  if (hour >= 17.5 && hour < 19) return ['#5a2340', '#ff9a3c'];
+  if (hour >= 19 || hour < 5) return ['#05070f', '#2a3550'];
+  return ['#7a3a5a', '#ff6b5e'];
+}
+let skyTexCache = null;
+function updateSkyMat(skyMat, hour) {
+  const bucket = hour >= 6 && hour < 17.5 ? 'day' : hour >= 17.5 && hour < 19 ? 'dusk' : hour >= 19 || hour < 5 ? 'night' : 'dawn';
+  if (!skyTexCache || skyTexCache.bucket !== bucket) {
+    const [top, bottom] = skyGradColors(hour);
+    const cv = document.createElement('canvas');
+    cv.width = 16;
+    cv.height = 256;
+    const cx = cv.getContext('2d');
+    const grad = cx.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, top);
+    grad.addColorStop(1, bottom);
+    cx.fillStyle = grad;
+    cx.fillRect(0, 0, 16, 256);
+    skyTexCache = { bucket, tex: new THREE.CanvasTexture(cv) };
+  }
+  skyMat.map = skyTexCache.tex;
+  skyMat.color.setHex(0xffffff);
+  skyMat.needsUpdate = true;
+}
+
 export function createScene(container, world) {
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'low-power' });
   renderer.setPixelRatio(1);
@@ -447,10 +480,10 @@ export function createScene(container, world) {
   // DELTA ARMS shop: building, billboard, yellow door, bench, crates, tree.
   const shopG = new THREE.Group();
   const shopBase = box(60, 26, 30, 0, 0, 13, 0, new THREE.MeshLambertMaterial({ color: 0x2c3e50, map: winTex }));
-  const billboard = new THREE.Mesh(new THREE.PlaneGeometry(56, 17), new THREE.MeshBasicMaterial({ map: signTexture('NEON DELTA LA', 'DISTRICT WARS', '#c0392b', '#ffffff') }));
-  billboard.position.set(0, 34, 15.2);
+  const billboard = new THREE.Mesh(new THREE.PlaneGeometry(46, 14), new THREE.MeshBasicMaterial({ map: signTexture('NEON DELTA LA', 'DISTRICT WARS', '#c0392b', '#ffffff') }));
+  billboard.position.set(0, 28, 15.2);
   const frontSign = new THREE.Mesh(new THREE.PlaneGeometry(18, 5), new THREE.MeshBasicMaterial({ map: signTexture('DELTA ARMS', 'GUNS · AMMO · 4 TIERS', '#1a5276', '#ffffff') }));
-  frontSign.position.set(-15, 10, 15.5);
+  frontSign.position.set(-20, 10, 15.5);
   const door = box(6, 12, 1, 0, -6, 6, 15.2, new THREE.MeshLambertMaterial({ color: 0xf1c40f }));
   const bench = box(8, 1, 2, 0, 12, 1, 22, new THREE.MeshLambertMaterial({ color: 0x8a6d3b }));
   const benchLeg1 = box(0.6, 1, 1.8, 0, 9, 0.5, 22, new THREE.MeshLambertMaterial({ color: 0x333333 }));
@@ -464,6 +497,12 @@ export function createScene(container, world) {
   const tree = makeTree();
   tree.position.set(SHOP.x + 28, 0, SHOP.z + 18);
   scene.add(tree);
+  // Street trees lining the downtown avenue (shot 1 foreground).
+  for (const [tx, tz] of [[-336, -275], [-304, -295], [-336, -320], [-304, -350]]) {
+    const st = makeTree();
+    st.position.set(tx, 0, tz);
+    scene.add(st);
+  }
   // Garage sign.
   const garageSign = new THREE.Mesh(new THREE.PlaneGeometry(20, 6), new THREE.MeshBasicMaterial({ map: signTexture('GARAGE', 'TUNING · NITRO', '#1a5276', '#ffffff') }));
   garageSign.position.set(GARAGE_POS.x, 10, GARAGE_POS.z - 14);
@@ -482,7 +521,7 @@ export function createScene(container, world) {
   const wheel = makeFerrisWheel();
   wheel.position.set(-760, 0, 470);
   scene.add(wheel);
-  for (const [px, pz] of [[-640, 380], [-640, 480], [-770, 380], [-770, 480]]) {
+  for (const [px, pz] of [[-640, 380], [-700, 395], [-770, 380], [-770, 480]]) {
     const palm = makePalm();
     palm.position.set(px, 0, pz);
     scene.add(palm);
@@ -503,14 +542,14 @@ export function createScene(container, world) {
     scene.add(pl);
     pierLights.push(pl);
   }
-  const fireworkM = new THREE.PointsMaterial({ color: 0xffd76a, size: 3, transparent: true, opacity: 0.9 });
+  const fireworkM = new THREE.PointsMaterial({ color: 0xffd76a, size: 5, transparent: true, opacity: 0.9 });
   const fwGeo = new THREE.BufferGeometry();
   const fwPos = new Float32Array(60 * 3);
   for (let i = 0; i < 60; i += 1) {
     const a = Math.random() * Math.PI * 2;
-    const r = Math.random() * 18;
+    const r = Math.random() * 12;
     fwPos[i * 3] = -760 + Math.cos(a) * r;
-    fwPos[i * 3 + 1] = 120 + Math.random() * 30;
+    fwPos[i * 3 + 1] = 45 + Math.random() * 15;
     fwPos[i * 3 + 2] = 470 + Math.sin(a) * r;
   }
   fwGeo.setAttribute('position', new THREE.BufferAttribute(fwPos, 3));
@@ -518,7 +557,7 @@ export function createScene(container, world) {
   scene.add(fireworks);
   // Port: containers, crane, boat, bridge.
   const containerColors = [0x27ae60, 0xe74c3c, 0x3498db, 0xf39c12, 0x9b59b6, 0x1abc9c];
-  const containerSpots = [[600, 520, 0x27ae60], [560, 540, 0xe74c3c], [640, 560, 0x3498db], [480, 520, 0xf39c12], [520, 580, 0x9b59b6], [660, 600, 0x1abc9c], [440, 580, 0x27ae60], [380, 600, 0xe74c3c]];
+  const containerSpots = [[600, 520, 0x27ae60], [560, 540, 0xe74c3c], [640, 560, 0x3498db], [480, 520, 0xf39c12], [520, 580, 0x9b59b6], [660, 600, 0x1abc9c], [440, 580, 0x27ae60], [380, 600, 0xe74c3c], [600, 600, 0xe74c3c], [560, 595, 0x27ae60], [520, 610, 0xf39c12]];
   for (const [cx, cz, cc] of containerSpots) {
     const cont = box(14, 6, 6, 0, cx, 3, cz, new THREE.MeshLambertMaterial({ color: cc }));
     scene.add(cont);
@@ -595,7 +634,7 @@ export function createScene(container, world) {
       world.wanted.level = s.wanted;
       world.missions.current = s.mission;
       const cols = skyColors(s.hour);
-      skyMat.color.setHex(cols.sky);
+      updateSkyMat(skyMat, s.hour);
       scene.fog.color.setHex(cols.fog);
       ambient.intensity = cols.amb;
       sun.intensity = cols.sunI;
@@ -616,13 +655,14 @@ export function createScene(container, world) {
         heroCar.visible = true;
         heroCar.position.set(s.car.x, 0, s.car.z);
         heroCar.rotation.y = s.car.angle || 0;
+        heroCar.scale.setScalar(s.car.scale || 1);
       } else {
         heroCar.visible = false;
       }
       // Helicopter + beam on the car.
       if (s.heli) {
         heli.visible = true;
-        heli.position.set(s.heli.x, 60, s.heli.z);
+        heli.position.set(s.heli.x, s.heli.y || 60, s.heli.z);
       } else {
         heli.visible = false;
       }
@@ -709,7 +749,7 @@ export function createScene(container, world) {
     },
     update(dt, now) {
       const cols = skyColors(world.hour);
-      skyMat.color.setHex(cols.sky);
+      updateSkyMat(skyMat, world.hour);
       scene.fog.color.setHex(cols.fog);
       ambient.intensity = cols.amb;
       sun.intensity = cols.sunI;

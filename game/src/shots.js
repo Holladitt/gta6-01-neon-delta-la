@@ -11,11 +11,11 @@ import { SHOP, BOAT, CRANE, PIER_DECK } from './config.js';
 import { inBuilding, inOcean, onRoad } from './geo.js';
 import { dist2 } from './rng.js';
 
-export const SHOT2_CAMERA = { x: SHOP.x, y: 4, z: SHOP.z + 50 };
+export const SHOT2_CAMERA = { x: SHOP.x - 12, y: 4, z: SHOP.z + 52 };
 export const SHOT4_CAMERA = { x: 645, y: 3, z: 626 };
 export const SHOT2_MARA = { x: SHOP.x - 10, z: SHOP.z + 40 };
 export const SHOT4_MARA = { x: 632, z: 618 };
-export const SHOT4_BOAT = { x: 530, z: 648 };
+export const SHOT4_BOAT = { x: 560, z: 645 };
 export const SHOP_FOOTPRINT = { x0: -350, x1: -290, z0: -230, z1: -170 };
 
 // Port yard grid: 13 columns x 9 rows over the open yard, filtered to
@@ -61,6 +61,7 @@ export function shot2ForecourtSpots() {
 export const SHOT1_PEDS = [
   { x: -308, z: -250 }, { x: -332, z: -300 }, { x: -308, z: -340 },
   { x: -332, z: -260 }, { x: -308, z: -270 }, { x: -332, z: -380 },
+  { x: -308, z: -290 }, { x: -332, z: -315 },
 ];
 export const SHOT2_PEDS = [
   { x: -342, z: -160 }, { x: -310, z: -165 }, { x: -342, z: -185 },
@@ -86,12 +87,12 @@ export const SHOTS = [
     n: 1, name: 'chase', hour: 18, mission: 1, wanted: 5, money: 1250, day: 3,
     car: { x: -320, z: -260, angle: Math.PI },
     camera: { x: -320, y: 3.5, z: -248 },
-    look: { x: -320, y: 1, z: -320 },
-    heli: { x: -320, z: -270 },
-    roadblock: { x: -320, z: -350 },
-    swat: { x: -300, z: -330 },
-    police: [{ x: -340, z: -330 }, { x: -300, z: -300 }],
-    traffic: [{ x: -320, z: -400 }, { x: -280, z: -320 }, { x: -320, z: -180 }, { x: -280, z: -220 }],
+    look: { x: -320, y: 12, z: -320 },
+    heli: { x: -320, y: 40, z: -310 },
+    roadblock: { x: -320, z: -295 },
+    swat: { x: -300, z: -308 },
+    police: [{ x: -342, z: -298 }, { x: -300, z: -282 }],
+    traffic: [{ x: -300, z: -330 }, { x: -340, z: -345 }, { x: -320, z: -370 }, { x: -340, z: -270 }],
     peds: SHOT1_PEDS,
     dialogue: { name: 'MARA SOLANO', line: 'Five stars and a roadblock ahead — punch through, don\'t stop.' },
     missionBar: { title: 'M1 THE GETAWAY', stage: 'TAHAP 1/2', objective: 'Pick up Eden', next: 'Lose the tail' },
@@ -101,7 +102,7 @@ export const SHOTS = [
     n: 2, name: 'shop', hour: 10, mission: 2, wanted: 0, money: 850, day: 2,
     mara: { x: SHOT2_MARA.x, z: SHOT2_MARA.z, scale: 1.8, angle: Math.PI },
     camera: { x: SHOT2_CAMERA.x, y: SHOT2_CAMERA.y, z: SHOT2_CAMERA.z },
-    look: { x: -330, y: 1.2, z: -160 },
+    look: { x: -328, y: 10, z: -180 },
     parkedCar: { x: SHOP.x - 45, z: SHOP.z - 35, angle: 0.4 },
     peds: SHOT2_PEDS,
     foregroundPeds: SHOT2_FOREGROUND_PEDS,
@@ -122,10 +123,10 @@ export const SHOTS = [
   {
     n: 4, name: 'port', hour: 18, mission: 8, wanted: 2, money: 3400, day: 8,
     mara: { x: SHOT4_MARA.x, z: SHOT4_MARA.z, scale: 2, angle: -1.28 },
-    car: { x: 595, z: 605, angle: 0 },
-    boat: { x: SHOT4_BOAT.x, z: SHOT4_BOAT.z, scale: 3, angle: 0.4 },
+    car: { x: 600, z: 612, angle: 0, scale: 1.5 },
+    boat: { x: SHOT4_BOAT.x, z: SHOT4_BOAT.z, scale: 4, angle: 0.4 },
     camera: { x: SHOT4_CAMERA.x, y: SHOT4_CAMERA.y, z: SHOT4_CAMERA.z },
-    look: { x: 560, y: 2, z: 630 },
+    look: { x: 560, y: 2, z: 638 },
     peds: SHOT4_PEDS,
     dialogue: { name: 'ORIN BECK', line: 'Two drops left and the proof goes out tonight. Keep the car running.' },
     missionBar: { title: 'M8 THE LAST SIGNAL', stage: 'TAHAP 1/3', objective: 'Marina drop', next: 'Pier drop' },
