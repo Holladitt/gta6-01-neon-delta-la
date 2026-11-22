@@ -209,6 +209,9 @@ bindTitleButtons();
 
 if (shotN >= 1 && shotN <= 4) {
   api.applyShot(shotN);
+  // v26: shot 1 stages the hero car big in the lower frame, so its HUD
+  // (dialogue + mission bar) moves to the top for this shot only.
+  document.body.classList.toggle('shot1', shotN === 1);
   world.state = 'FREE_ROAM';
   const anchor = api.shot.mara || api.shot.car;
   if (anchor) world.district = districtAt(anchor.x, anchor.z).id;

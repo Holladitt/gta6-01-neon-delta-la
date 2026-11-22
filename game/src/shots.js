@@ -15,7 +15,7 @@ export const SHOT2_CAMERA = { x: SHOP.x - 12, y: 4, z: SHOP.z + 52 };
 export const SHOT4_CAMERA = { x: 645, y: 3, z: 626 };
 export const SHOT2_MARA = { x: SHOP.x - 10, z: SHOP.z + 40 };
 export const SHOT4_MARA = { x: 632, z: 618 };
-export const SHOT4_BOAT = { x: 560, z: 645 };
+export const SHOT4_BOAT = { x: 565, z: 648 };
 export const SHOP_FOOTPRINT = { x0: -350, x1: -290, z0: -230, z1: -170 };
 
 // Port yard grid: 13 columns x 9 rows over the open yard, filtered to
@@ -85,10 +85,16 @@ export const SHOT4_PEDS = [
 export const SHOTS = [
   {
     n: 1, name: 'chase', hour: 18, mission: 1, wanted: 5, money: 1250, day: 3,
-    car: { x: -320, z: -260, angle: Math.PI },
+    // v26 round 2: the first attempt (z -257, scale 1.7) put the car's
+    // rear 5 units from the camera, so the car filled the frame but was
+    // cropped at the bottom (wheels below the frame edge). Pulled back
+    // to z -261 at scale 1.8: the rear is 8 units out, so the whole car
+    // (roof, cabin, red body, wheels) fits above the district label
+    // while the roof stays clear of the roadblock sightline.
+    car: { x: -320, z: -261, angle: Math.PI, scale: 1.8 },
     camera: { x: -320, y: 3.5, z: -248 },
-    look: { x: -320, y: 6, z: -320 },
-    heli: { x: -320, y: 32, z: -310 },
+    look: { x: -320, y: 3, z: -320 },
+    heli: { x: -320, y: 28, z: -310 },
     roadblock: { x: -320, z: -295 },
     swat: { x: -300, z: -308 },
     police: [{ x: -342, z: -298 }, { x: -300, z: -282 }],
@@ -124,7 +130,12 @@ export const SHOTS = [
     n: 4, name: 'port', hour: 18, mission: 8, wanted: 2, money: 3400, day: 8,
     mara: { x: SHOT4_MARA.x, z: SHOT4_MARA.z, scale: 2, angle: -1.28 },
     car: { x: 615, z: 615, angle: 0, scale: 1.8 },
-    boat: { x: SHOT4_BOAT.x, z: SHOT4_BOAT.z, scale: 4, angle: 0.4 },
+    // v26 round 2: the first attempt (scale 5.5 at (578,648)) was too
+    // big — the sail went off the top of the frame and the hull crowded
+    // the bridge. Scale 4.5 at (565,648) keeps the boat prominent with
+    // the mast + sail fully in frame. Still in open water (z 648 > 635),
+    // clear of the hero car, Mara and the apron crates.
+    boat: { x: SHOT4_BOAT.x, z: SHOT4_BOAT.z, scale: 4.5, angle: 0.4 },
     camera: { x: SHOT4_CAMERA.x, y: SHOT4_CAMERA.y, z: SHOT4_CAMERA.z },
     look: { x: 560, y: 2, z: 638 },
     peds: SHOT4_PEDS,

@@ -20,6 +20,14 @@
   #mb-objective { font-size: 18px; font-weight: 700; color: #fff; }
   #mb-next { font-size: 14px; font-weight: 600; color: #9fc3e8; }
   #dialogue { position: fixed; bottom: 210px; left: 50%; transform: translateX(-50%); width: 640px; max-width: 90vw; background: rgba(10,15,26,.85); border: 2px solid #ffd76a; border-radius: 10px; padding: 14px 16px 14px 96px; z-index: 12; min-height: 100px; }
+  /* v26 shot 1 only: the hero car is the hero of the frame and fills the
+     lower half, so the bottom-centre HUD would cover it. For shot 1 the
+     dialogue moves to the top-left and the mission bar to the top-right
+     (over empty sky), leaving the whole lower frame to the car. main.js
+     adds body.shot1 only while shot 1 is staged; other shots keep the
+     default bottom-centre HUD. */
+  body.shot1 #dialogue { top: 90px; bottom: auto; left: 20px; transform: none; }
+  body.shot1 #mission-bar { top: 90px; bottom: auto; left: auto; right: 20px; transform: none; text-align: right; }
   .dlg-portrait { position: absolute; left: 12px; top: 12px; width: 72px; height: 72px; border-radius: 6px; }
   .dlg-name { font-size: 15px; font-weight: 900; letter-spacing: 2px; color: #ffd76a; margin-bottom: 4px; }
   .dlg-line { font-size: 17px; line-height: 1.4; color: #fff; }

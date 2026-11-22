@@ -299,17 +299,58 @@ export function makeBoat(scale) {
   const cabinM = new THREE.MeshLambertMaterial({ color: 0x1abc9c });
   const woodM = new THREE.MeshLambertMaterial({ color: 0x8a6d3b });
   const hull = box(3.2, 1.2, 7.5, 0, 0, 0.8, 0, hullM);
+  // Pointed bow AND pointed stern (v26): a box hull reads as a dock
+  // structure; a hull pointed at both ends reads as a boat at a glance.
   const bow = new THREE.Mesh(new THREE.ConeGeometry(1.6, 2.4, 4), hullM);
   bow.rotation.x = -Math.PI / 2;
   bow.rotation.y = Math.PI / 4;
   bow.position.set(0, 0.8, 4.8);
+  const stern = new THREE.Mesh(new THREE.ConeGeometry(1.6, 2.4, 4), hullM);
+  stern.rotation.x = Math.PI / 2;
+  stern.rotation.y = Math.PI / 4;
+  stern.position.set(0, 0.8, -4.8);
   const cabin = box(2.4, 1.4, 3.0, 0, 0, 2.0, -0.5, cabinM);
-  const mast = box(0.18, 5.0, 0.18, 0, 0, 4.0, 0.5, woodM);
-  const sail = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 3.2), new THREE.MeshLambertMaterial({ color: 0xecf0f1, side: THREE.DoubleSide }));
-  sail.position.set(0, 3.6, 1.2);
+  // Tall mast (v26): 7.0 tall so the triangular sail reads from afar.
+  const mast = box(0.18, 7.0, 0.18, 0, 0, 5.0, 0.5, woodM);
+  // Triangular mainsail (v26): a rectangle reads as a grey box; a
+  // triangle with its vertical edge on the mast and its foot running
+  // back toward the stern reads as a sail. Shape x maps to -z after
+  // rotation.y = PI/2, so shape +x is the stern side.
+  const sailShape = new THREE.Shape();
+  sailShape.moveTo(0, 0);
+  sailShape.lineTo(0, 5.5);
+  sailShape.lineTo(3.6, 0);
+  sailShape.lineTo(0, 0);
+  // v26 round 2: unlit white (MeshBasicMaterial). A Lambert sail renders
+  // grey at dusk because its face turns away from the low sun; an unlit
+  // sail stays bright white and reads as a sail against the peach sky.
+  const sail = new THREE.Mesh(
+    new THREE.ShapeGeometry(sailShape),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
+  );
+  sail.position.set(0, 2.2, 0.5);
   sail.rotation.y = Math.PI / 2;
-  g.add(hull, bow, cabin, mast, sail);
+  g.add(hull, bow, stern, cabin, mast, sail);
   g.scale.setScalar(scale || 1);
+  return g;
+}
+
+// Wake foam trailing behind the boat (v26). A separate group (not a
+// child of the boat) so its height stays at water level whatever the
+// boat scale is; applyShot positions it with the boat. Two flat white
+// arms angled outward form the V a boat leaves on the water.
+export function makeWake() {
+  const g = new THREE.Group();
+  const foamM = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.position.set(side * 1.3, 0, -8);
+    arm.rotation.y = -side * 0.22;
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 12), foamM);
+    plane.rotation.x = -Math.PI / 2;
+    arm.add(plane);
+    g.add(arm);
+  }
   return g;
 }
 
@@ -594,6 +635,10 @@ export function createScene(container, world) {
   boat.position.set(BOAT.x, 0.4, BOAT.z);
   boat.rotation.y = 0.4;
   scene.add(boat);
+  const wake = makeWake();
+  wake.position.set(BOAT.x, 0.06, BOAT.z);
+  wake.rotation.y = 0.4;
+  scene.add(wake);
   const bridge = box(420, 8, 22, 0, 500, 24, 700, new THREE.MeshLambertMaterial({ color: 0x555a60 }));
   scene.add(bridge);
   for (const bx of [350, 450, 550, 650]) {
@@ -729,17 +774,23 @@ export function createScene(container, world) {
         pc.position.set(s.parkedCar.x, 0, s.parkedCar.z);
         pc.rotation.y = s.parkedCar.angle || 0;
       }
-      // Boat.
+      // Boat + its wake (the wake follows the boat, same angle).
       if (s.boat) {
         boat.visible = true;
         boat.position.set(s.boat.x, 0.4, s.boat.z);
         boat.rotation.y = s.boat.angle || 0;
         boat.scale.setScalar(s.boat.scale || 2.2);
+        wake.visible = true;
+        wake.position.set(s.boat.x, 0.06, s.boat.z);
+        wake.rotation.y = s.boat.angle || 0;
       } else {
         boat.visible = true;
         boat.position.set(BOAT.x, 0.4, BOAT.z);
         boat.rotation.y = 0.4;
         boat.scale.setScalar(2.2);
+        wake.visible = true;
+        wake.position.set(BOAT.x, 0.06, BOAT.z);
+        wake.rotation.y = 0.4;
       }
       // Pedestrians: staged ones first, the rest on the validated grid.
       const staged = (s.peds || []).concat(s.foregroundPeds || []);
