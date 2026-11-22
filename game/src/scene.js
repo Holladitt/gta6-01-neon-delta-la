@@ -24,9 +24,13 @@ function canvasTexture(w, h, draw) {
 
 function groundTexture() {
   return canvasTexture(2048, 2048, (g, W, H) => {
-    const sx = W / 1400; const sz = H / 1400;
-    const X = (x) => (x + 700) * sx;
-    const Z = (z) => (z + 700) * sz;
+    // The ground plane is 1560 wide centred on the origin, so the
+    // texture maps world -780..780 to the full canvas; roads, the
+    // pier deck and the grass then land on their real coordinates
+    // instead of ~100 units west of them.
+    const sx = W / 1560; const sz = H / 1560;
+    const X = (x) => (x + 780) * sx;
+    const Z = (z) => (z + 780) * sz;
     g.fillStyle = '#8a7f6a'; g.fillRect(0, 0, W, H);
     // District ground tints.
     const tints = { downtown: '#9a8f78', hills: '#7d8a6a', venice: '#a89a7e', marina: '#8fa3a0', pier: '#b09a7a', port: '#8d8578' };
@@ -42,6 +46,13 @@ function groundTexture() {
     g.fillStyle = '#d9c48f';
     g.fillRect(X(-620), 0, 14, H);
     g.fillRect(0, Z(620), W, 14);
+    // Port yard concrete + marina apron go down FIRST, so the road
+    // grid and lane dashes draw over them (asphalt with yellow
+    // lines in the port yard, not flat grey dirt).
+    g.fillStyle = '#7a7268';
+    g.fillRect(X(-80), Z(280), 780 * sx, 340 * sz);
+    g.fillStyle = '#9fb3ad';
+    g.fillRect(X(-80), Z(-120), 400 * sx, 400 * sz);
     // Roads: dark asphalt with lane dashes, every 120 units.
     g.fillStyle = '#3a3a3a';
     for (let x = -560; x <= 560; x += 120) g.fillRect(X(x) - 11 * sx, 0, 22 * sx, H);
@@ -66,12 +77,9 @@ function groundTexture() {
     for (let z = PIER_DECK.z0; z <= PIER_DECK.z1; z += 12) {
       g.beginPath(); g.moveTo(X(PIER_DECK.x0), Z(z)); g.lineTo(X(PIER_DECK.x1), Z(z)); g.stroke();
     }
-    // Port yard concrete + container slots.
-    g.fillStyle = '#7a7268';
-    g.fillRect(X(-80), Z(280), 780 * sx, 340 * sz);
-    // Marina apron.
-    g.fillStyle = '#9fb3ad';
-    g.fillRect(X(-80), Z(-120), 400 * sx, 400 * sz);
+    // Green grass patch under the shop forecourt.
+    g.fillStyle = '#5d8a4a';
+    g.fillRect(X(-360), Z(-220), 90 * sx, 90 * sz);
   });
 }
 
@@ -130,18 +138,20 @@ export function createScene() {
     new THREE.MeshLambertMaterial({ map: groundTexture() })
   );
   ground.rotation.x = -Math.PI / 2;
-  ground.position.set(-60, 0, 0);
+  ground.position.set(0, 0, 0);
   scene.add(ground);
 
   // Water planes (west + south), slightly below ground level.
+  // They extend past the ground plane so the ocean reaches the
+  // horizon instead of ending at the edge of the map.
   const waterMat = new THREE.MeshLambertMaterial({ color: 0x1e6f8e });
-  const waterW = new THREE.Mesh(new THREE.PlaneGeometry(220, 1560), waterMat);
+  const waterW = new THREE.Mesh(new THREE.PlaneGeometry(400, 1560), waterMat);
   waterW.rotation.x = -Math.PI / 2;
-  waterW.position.set(-730, -0.4, 0);
+  waterW.position.set(-980, -0.4, 0);
   scene.add(waterW);
-  const waterS = new THREE.Mesh(new THREE.PlaneGeometry(1560, 220), waterMat);
+  const waterS = new THREE.Mesh(new THREE.PlaneGeometry(1560, 400), waterMat);
   waterS.rotation.x = -Math.PI / 2;
-  waterS.position.set(0, -0.4, 730);
+  waterS.position.set(0, -0.4, 980);
   scene.add(waterS);
 
   // Buildings with window grids, on blocks between roads.
@@ -178,7 +188,7 @@ export function createScene() {
   const props = {};
   // DELTA ARMS shop front.
   const shop = new THREE.Group();
-  const shopBase = box(46, 16, 24, 0x2c3e50);
+  const shopBase = box(46, 16, 24, 0x4a6b7a);
   shopBase.position.y = 8;
   shop.add(shopBase);
   const shopSign = box(40, 5, 2, 0x1abc9c);
@@ -235,7 +245,10 @@ export function createScene() {
   // (No bike rack — the old one read as oversized black rings.)
   const forecourt = new THREE.Group();
   const crateMat = new THREE.MeshLambertMaterial({ color: 0xa8763e });
-  for (const [cx, cz, cs] of [[-15, 20, 4], [-11, 24, 3.4], [-16, 15, 3]]) {
+  // Crates tucked to the west side of the forecourt and smaller,
+  // so they frame the shop door instead of blocking it in the
+  // shop shot.
+  for (const [cx, cz, cs] of [[-20, 18, 3], [-22, 23, 2.6], [-19, 13, 2.4]]) {
     const crate = new THREE.Mesh(new THREE.BoxGeometry(cs, cs, cs), crateMat);
     crate.position.set(cx, cs / 2, cz);
     forecourt.add(crate);
@@ -261,6 +274,54 @@ export function createScene() {
   forecourt.position.set(SHOP.x, 0, SHOP.z);
   scene.add(forecourt);
   props.forecourt = forecourt;
+  // Rooftop billboard above the shop: big readable sign over the front.
+  const billboard = new THREE.Group();
+  const bbBoard = box(34, 10, 1.5, 0x0d2b3e);
+  bbBoard.position.y = 5;
+  billboard.add(bbBoard);
+  const bbTex = canvasTexture(512, 128, (cg) => {
+    cg.fillStyle = '#0d2b3e';
+    cg.fillRect(0, 0, 512, 128);
+    cg.fillStyle = '#f7d154';
+    cg.font = '900 52px Arial, sans-serif';
+    cg.textAlign = 'center';
+    cg.textBaseline = 'middle';
+    cg.fillText('NEON DELTA LA', 256, 52);
+    cg.fillStyle = '#1abc9c';
+    cg.font = '900 28px Arial, sans-serif';
+    cg.fillText('DISTRICT WARS', 256, 100);
+  });
+  const bbFace = new THREE.Mesh(
+    new THREE.PlaneGeometry(32, 8),
+    new THREE.MeshLambertMaterial({ map: bbTex })
+  );
+  bbFace.position.set(0, 5, 0.9);
+  billboard.add(bbFace);
+  const bbPostA = box(1.5, 8, 1.5, 0x333333);
+  bbPostA.position.set(-12, -4, 0);
+  billboard.add(bbPostA);
+  const bbPostB = box(1.5, 8, 1.5, 0x333333);
+  bbPostB.position.set(12, -4, 0);
+  billboard.add(bbPostB);
+  billboard.position.set(SHOP.x, 24, SHOP.z - 2);
+  scene.add(billboard);
+  props.billboard = billboard;
+  // Trees along the x=-320 road (sidewalk edges, clear of the road).
+  props.trees = [];
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2a });
+  const leafMat = new THREE.MeshLambertMaterial({ color: 0x2e8b57 });
+  for (const [tx, tz] of [[-340, -240], [-300, -240], [-340, -300], [-300, -300], [-340, -360], [-300, -360], [-300, -160]]) {
+    const tree = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1, 6, 8), trunkMat);
+    trunk.position.y = 3;
+    tree.add(trunk);
+    const canopy = new THREE.Mesh(new THREE.SphereGeometry(4.5, 10, 8), leafMat);
+    canopy.position.y = 9;
+    tree.add(canopy);
+    tree.position.set(tx, 0, tz);
+    scene.add(tree);
+    props.trees.push(tree);
+  }
 
   // Pier stalls: BALLOONS, ARCADE, SNO-CONES, with string lights.
   const stallDefs = [
@@ -327,6 +388,103 @@ export function createScene() {
   scene.add(pierLampLight2);
   props.pierLampLight = pierLampLight;
   props.pierLampLight2 = pierLampLight2;
+  // Ferris wheel at the west end of the pier + fireworks above it.
+  const wheel = new THREE.Group();
+  const rim = new THREE.Mesh(
+    new THREE.TorusGeometry(16, 1.2, 8, 28),
+    new THREE.MeshLambertMaterial({ color: 0xecf0f1 })
+  );
+  wheel.add(rim);
+  for (let i = 0; i < 6; i += 1) {
+    const spoke = box(30, 0.8, 0.8, 0xf7d154);
+    spoke.rotation.z = (i * Math.PI) / 6;
+    wheel.add(spoke);
+  }
+  const hub = new THREE.Mesh(
+    new THREE.CylinderGeometry(2, 2, 3, 10),
+    new THREE.MeshLambertMaterial({ color: 0xe74c3c })
+  );
+  hub.rotation.x = Math.PI / 2;
+  wheel.add(hub);
+  const gondolaColors = [0xe74c3c, 0x3498db, 0xf7d154, 0x2ecc71, 0x9b59b6, 0xe67e22];
+  for (let i = 0; i < 6; i += 1) {
+    const a = (i * Math.PI * 2) / 6;
+    const gondola = box(3, 2.4, 2.4, gondolaColors[i % gondolaColors.length]);
+    gondola.position.set(Math.cos(a) * 16, Math.sin(a) * 16, 0);
+    wheel.add(gondola);
+  }
+  const wheelLegA = box(2, 20, 2, 0x7f8c8d);
+  wheelLegA.position.set(-7, -18, 0);
+  wheelLegA.rotation.z = 0.35;
+  wheel.add(wheelLegA);
+  const wheelLegB = box(2, 20, 2, 0x7f8c8d);
+  wheelLegB.position.set(7, -18, 0);
+  wheelLegB.rotation.z = -0.35;
+  wheel.add(wheelLegB);
+  wheel.position.set(-765, 20, 430);
+  wheel.rotation.y = Math.PI / 2;
+  scene.add(wheel);
+  props.ferrisWheel = wheel;
+  // Fireworks: bright coloured bursts frozen above the wheel.
+  props.fireworks = [];
+  const fwColors = [0xff6b9d, 0x7df9ff, 0xf7d154, 0xff9f43, 0xc084fc];
+  for (let i = 0; i < 18; i += 1) {
+    const fw = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 1.4, 1.4),
+      new THREE.MeshLambertMaterial({ color: fwColors[i % fwColors.length], emissive: 0x666666 })
+    );
+    const a = (i / 18) * Math.PI * 2;
+    fw.position.set(-762 + Math.cos(a) * (8 + (i % 3) * 4), 44 + Math.sin(a) * 8, 428 + Math.sin(a * 2) * 6);
+    scene.add(fw);
+    props.fireworks.push(fw);
+  }
+  // Palm tree on the pier.
+  const palm = new THREE.Group();
+  const palmTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1, 9, 8), trunkMat);
+  palmTrunk.position.y = 4.5;
+  palm.add(palmTrunk);
+  for (let i = 0; i < 5; i += 1) {
+    const frond = box(7, 0.5, 1.4, 0x27ae60);
+    const a = (i * Math.PI * 2) / 5;
+    frond.position.set(Math.cos(a) * 3.2, 9.5, Math.sin(a) * 3.2);
+    frond.rotation.y = -a;
+    frond.rotation.z = 0.5;
+    palm.add(frond);
+  }
+  palm.position.set(-730, 0, 400);
+  scene.add(palm);
+  props.palm = palm;
+  // COTTON CANDY stand on the pier.
+  const candy = new THREE.Group();
+  const candyBase = box(7, 5, 6, 0xff6b9d);
+  candyBase.position.y = 2.5;
+  candy.add(candyBase);
+  const candyRoof = box(8, 1.5, 7, 0xecf0f1);
+  candyRoof.position.y = 6;
+  candy.add(candyRoof);
+  const candyTex = canvasTexture(256, 64, (cg) => {
+    cg.fillStyle = '#7d3c98';
+    cg.fillRect(0, 0, 256, 64);
+    cg.fillStyle = '#ffffff';
+    cg.font = '900 26px Arial, sans-serif';
+    cg.textAlign = 'center';
+    cg.textBaseline = 'middle';
+    cg.fillText('COTTON CANDY', 128, 34);
+  });
+  const candySign = new THREE.Mesh(
+    new THREE.PlaneGeometry(6.5, 1.6),
+    new THREE.MeshLambertMaterial({ map: candyTex })
+  );
+  candySign.rotation.y = Math.PI / 2;
+  candySign.position.set(3.6, 4, 0);
+  candy.add(candySign);
+  candy.position.set(-725, 0, 465);
+  scene.add(candy);
+  props.candy = candy;
+  const pierLampLight4 = new THREE.PointLight(0xffd76a, 1.8, 110);
+  pierLampLight4.position.set(-740, 16, 430);
+  scene.add(pierLampLight4);
+  props.pierLampLight4 = pierLampLight4;
 
   // Port crane (orange hero) + load + containers + lamps + puddles.
   const crane = new THREE.Group();
@@ -341,7 +499,7 @@ export function createScene() {
   props.crane = crane;
   props.containers = [];
   const contColors = [0xc0392b, 0x2980b9, 0x27ae60, 0xf39c12, 0x8e44ad];
-  const contSpots = [[300, 380], [330, 380], [360, 380], [300, 420], [520, 420], [560, 460], [240, 520], [280, 540], [620, 380], [180, 460], [420, 610], [540, 610], [600, 560]];
+  const contSpots = [[300, 380], [330, 380], [360, 380], [300, 420], [520, 420], [560, 460], [240, 520], [280, 540], [620, 380], [180, 460], [400, 600], [580, 580], [600, 560]];
   contSpots.forEach(([x, z], i) => {
     const c = box(18, 8, 8, contColors[i % contColors.length]);
     c.position.set(x, 4, z);
@@ -373,6 +531,23 @@ export function createScene() {
     scene.add(p);
     props.puddles.push(p);
   }
+  // Freeway bridge across the port background: an elevated deck with
+  // pillars, high enough to clear the yard.
+  const bridge = new THREE.Group();
+  const deck = box(520, 4, 22, 0x5d6d7e);
+  deck.position.y = 26;
+  bridge.add(deck);
+  const rail = box(520, 2, 1.5, 0xf7d154);
+  rail.position.set(0, 29, 10);
+  bridge.add(rail);
+  for (let x = -240; x <= 240; x += 60) {
+    const pillar = box(5, 26, 5, 0x5d6d7e);
+    pillar.position.set(x, 13, 0);
+    bridge.add(pillar);
+  }
+  bridge.position.set(300, 0, 340);
+  scene.add(bridge);
+  props.bridge = bridge;
   const pierLampLight3 = new THREE.PointLight(0xffd76a, 1.8, 110);
   pierLampLight3.position.set(-730, 14, 470);
   scene.add(pierLampLight3);
@@ -392,14 +567,16 @@ export function createScene() {
   }
 
   // Boat at the Marina south dock.
+  // Boat: warm cream hull and a wooden mast so it reads as a boat
+  // at dusk instead of a grey box with a black slab.
   const boat = new THREE.Group();
-  const hull = box(10, 3, 22, 0xecf0f1);
+  const hull = box(10, 3, 22, 0xf5e6c8);
   hull.position.y = 1.2;
   boat.add(hull);
   const cabin = box(6, 3, 8, 0x1abc9c);
   cabin.position.set(0, 4, -2);
   boat.add(cabin);
-  const mast = box(0.8, 9, 0.8, 0x333333);
+  const mast = box(0.8, 9, 0.8, 0x8b6f47);
   mast.position.set(0, 8, 4);
   boat.add(mast);
   boat.position.set(BOAT.x, 0.4, BOAT.z);
@@ -430,7 +607,21 @@ export function createScene() {
     }
     return g;
   }
-  const playerCar = makeCar(0x1abc9c, false);
+  // The hero car: red with a turquoise two-tone roof and a rear
+  // spoiler, so it reads as a detailed car from the chase camera
+  // instead of a plain box. Local +x is the rear.
+  const playerCar = makeCar(0xe74c3c, false);
+  const roof = box(2.0, 0.15, 1.6, 0x1abc9c);
+  roof.position.set(-0.2, 2.85, 0);
+  playerCar.add(roof);
+  const wing = box(0.4, 0.12, 2.5, 0x1a1a2e);
+  wing.position.set(1.95, 2.05, 0);
+  playerCar.add(wing);
+  for (const dz of [-0.7, 0.7]) {
+    const strut = box(0.15, 0.4, 0.15, 0x1a1a2e);
+    strut.position.set(1.9, 1.8, dz);
+    playerCar.add(strut);
+  }
   scene.add(playerCar);
   // Mara on foot.
   const mara = new THREE.Group();
@@ -549,23 +740,31 @@ export function createScene() {
 export function syncScene(s, world, traffic, police, hour) {
   const phase = phaseFor(hour);
   s.scene.background = s.skyTex[phase] || s.skyTex.day;
+  // Fog follows the phase: warm haze at dusk, dark at night (the old
+  // fixed pale-blue fog washed the night deck and the dusk yard grey).
+  s.scene.fog.color.setHex(phase === 'day' ? 0x9fc8d8 : phase === 'dusk' ? 0xd88a5a : 0x0d1b2e);
   const dayF = phase === 'day' ? 1 : phase === 'dusk' ? 0.55 : 0.25;
-  s.ambient.intensity = phase === 'night' ? 0.68 : 0.35 + dayF * 0.55;
+  s.ambient.intensity = phase === 'night' ? 0.75 : 0.35 + dayF * 0.55;
   s.sun.intensity = phase === 'night' ? 0.3 : dayF * 1.1;
   s.cloudMat.opacity = phase === 'night' ? 0.25 : 0.9;
   for (const d of s.props.discs) d.material.opacity = phase === 'night' ? 0.5 : 0;
   s.props.pierLampLight.intensity = phase === 'night' ? 2.2 : 0.2;
   s.props.pierLampLight2.intensity = phase === 'night' ? 1.6 : 0.15;
   if (s.props.pierLampLight3) s.props.pierLampLight3.intensity = phase === 'night' ? 1.8 : 0.15;
+  if (s.props.pierLampLight4) s.props.pierLampLight4.intensity = phase === 'night' ? 1.8 : 0.15;
 
-  // Player car / Mara.
+  // Player car / Mara. In shot 4 both read at once (Mara on foot in
+  // the foreground, the hero car side-on behind her), and both are
+  // staged larger so they fill the frame.
   const car = world.car;
   s.playerCar.position.set(car.x, 0, car.z);
   s.playerCar.rotation.y = -car.angle + Math.PI / 2;
-  s.playerCar.visible = !world.player.onFoot && !world.boat.boarded;
+  s.playerCar.visible = (!world.player.onFoot || world.shotMode === 4) && !world.boat.boarded;
+  s.playerCar.scale.setScalar(world.shotMode === 4 ? 1.8 : 1);
   s.mara.position.set(world.player.x, 0, world.player.z);
   s.mara.rotation.y = -world.player.angle + Math.PI / 2;
-  s.mara.visible = world.player.onFoot;
+  s.mara.visible = world.player.onFoot || world.shotMode === 4;
+  s.mara.scale.setScalar(world.shotMode === 4 ? 2 : 1);
 
   // Traffic.
   for (let i = 0; i < s.trafficMeshes.length; i += 1) {
@@ -638,9 +837,11 @@ export function syncScene(s, world, traffic, police, hour) {
     s.heli.visible = false;
     s.beam.visible = false;
   }
-  // Boat.
+  // Boat. In shot 4 it is staged larger so it reads clearly as a
+  // boat (hull + cabin + mast) instead of a small box on a dock.
   s.props.boat.position.set(world.boat.x, 0.4, world.boat.z);
   s.props.boat.rotation.y = -world.boat.angle + Math.PI / 2;
+  s.props.boat.scale.setScalar(world.shotMode === 4 ? 1.2 : 1);
   // Mission marker.
   const curMission = world.missions ? missionById(world.missions.current) : null;
   const obj = curMission ? curMission.points : null;

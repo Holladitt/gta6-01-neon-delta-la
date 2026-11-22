@@ -13,6 +13,23 @@ import { tapesFound } from './races.js';
 import { ownedUpgrades } from './garage.js';
 import { phaseFor } from './lights.js';
 import { missionById, currentObjective } from './missions.js';
+import { drawPortrait, maraPortrait, contactPortrait } from './portraits.js';
+
+// Portrait colours for the three crew members (drawn in the crew panel).
+const CREW_FACES = {
+  juno: { name: 'Juno Reyes', skin: 0xe0ac69, hair: 0x1a1a1a, shirt: 0x3498db },
+  petra: { name: 'Petra Hale', skin: 0xc68642, hair: 0x2c3e50, shirt: 0x2ecc71 },
+  cassia: { name: 'Cassia Wren', skin: 0xffdbac, hair: 0x1a1a1a, shirt: 0x9b59b6 },
+};
+
+export function showDialogue(h, speaker, line) {
+  if (!h.dialogue) return;
+  h.dialogueName.textContent = speaker.toUpperCase();
+  h.dialogueLine.textContent = line;
+  h.dialogue.style.display = 'flex';
+  if (speaker === 'Mara Solano') maraPortrait(h.dialoguePortrait, 64);
+  else contactPortrait(h.dialoguePortrait, speaker, 64);
+}
 
 export function createHud(world) {
   const root = document.createElement('div');
@@ -36,13 +53,15 @@ export function createHud(world) {
     <div id="hud-speed" style="position:absolute;right:20px;bottom:16px;font-size:44px;font-weight:900;text-shadow:2px 2px 0 #000">0</div>
     <div id="hud-speed-unit" style="position:absolute;right:22px;bottom:64px;font-size:13px;text-shadow:1px 1px 0 #000">MPH</div>
     <div id="hud-mission" style="position:absolute;left:50%;bottom:18px;transform:translateX(-50%);background:rgba(0,0,0,0.6);padding:8px 18px;font-size:16px;font-weight:700;white-space:nowrap">FREE ROAM</div>
+    <div id="hud-mission-next" style="position:absolute;left:50%;bottom:58px;transform:translateX(-50%);font-size:13px;font-weight:700;color:#f7d154;text-shadow:1px 1px 0 #000;white-space:nowrap"></div>
+    <div id="hud-dialogue" style="position:absolute;left:50%;top:12px;transform:translateX(-50%);display:none;max-width:560px;background:rgba(0,0,0,0.72);border:1px solid rgba(255,255,255,0.35);padding:8px 12px;align-items:center;gap:10px"><canvas id="hud-dialogue-portrait" width="64" height="64" style="flex:0 0 64px"></canvas><div><div id="hud-dialogue-name" style="font-size:12px;font-weight:900;color:#1abc9c;letter-spacing:1px"></div><div id="hud-dialogue-line" style="font-size:15px;font-weight:700"></div></div></div>
     <div id="hud-weapon" style="position:absolute;right:20px;bottom:110px;font-size:15px;font-weight:700;text-align:right;text-shadow:1px 1px 0 #000"></div>
     <div id="hud-dispatch" style="position:absolute;right:16px;top:150px;background:rgba(0,0,0,0.55);padding:8px 10px;font-size:12px;line-height:1.5"></div>
     <div id="hud-crew" style="position:absolute;left:16px;top:170px;background:rgba(0,0,0,0.55);padding:8px 10px;font-size:12px;line-height:1.6"></div>
     <div id="hud-toast" style="position:absolute;left:50%;top:22%;transform:translateX(-50%);font-size:22px;font-weight:900;text-shadow:2px 2px 0 #000"></div>
-    <div id="hud-wheel" style="position:absolute;left:64%;top:42%;transform:translate(-50%,-50%);width:300px;height:300px;border-radius:50%;background:rgba(0,0,0,0.72);border:3px solid #f7d154;display:none"></div>
-    <div id="hud-shop" style="position:absolute;left:50%;top:12%;transform:translateX(-50%);background:rgba(10,20,30,0.92);border:2px solid #1abc9c;padding:14px 18px;font-size:14px;line-height:1.7;display:none;min-width:420px"></div>
-    <div id="hud-garage" style="position:absolute;left:50%;top:12%;transform:translateX(-50%);background:rgba(10,20,30,0.92);border:2px solid #e67e22;padding:14px 18px;font-size:14px;line-height:1.7;display:none;min-width:420px"></div>
+    <div id="hud-wheel" style="position:absolute;left:80%;top:36%;transform:translate(-50%,-50%);width:220px;height:220px;border-radius:50%;background:rgba(0,0,0,0.72);border:3px solid #f7d154;display:none"></div>
+    <div id="hud-shop" style="position:absolute;right:16px;top:10%;background:rgba(10,20,30,0.92);border:2px solid #1abc9c;padding:14px 18px;font-size:14px;line-height:1.7;display:none;min-width:380px"></div>
+    <div id="hud-garage" style="position:absolute;right:16px;top:10%;background:rgba(10,20,30,0.92);border:2px solid #e67e22;padding:14px 18px;font-size:14px;line-height:1.7;display:none;min-width:380px"></div>
   `;
   document.body.appendChild(root);
   return {
@@ -58,6 +77,11 @@ export function createHud(world) {
     minimap: root.querySelector('#hud-minimap'),
     speed: root.querySelector('#hud-speed'),
     mission: root.querySelector('#hud-mission'),
+    missionNext: root.querySelector('#hud-mission-next'),
+    dialogue: root.querySelector('#hud-dialogue'),
+    dialoguePortrait: root.querySelector('#hud-dialogue-portrait'),
+    dialogueName: root.querySelector('#hud-dialogue-name'),
+    dialogueLine: root.querySelector('#hud-dialogue-line'),
     weapon: root.querySelector('#hud-weapon'),
     dispatch: root.querySelector('#hud-dispatch'),
     crew: root.querySelector('#hud-crew'),
@@ -96,9 +120,17 @@ export function updateHud(h, world, police, traffic) {
   h.weapon.textContent = w.name + '  •  TIER ' + w.tier + '  •  COND ' + Math.round(world.car.condition) + '%';
   const curMission = missionById(world.missions.current);
   const curObj = currentObjective(world.missions);
-  h.mission.textContent = curMission
-    ? ('M' + curMission.id + ' ' + curMission.title + ' — ' + (curObj ? curObj.label : 'DONE'))
-    : 'FREE ROAM — NEON DELTA';
+  if (curMission) {
+    const stage = (world.missions.objective || 0) + 1;
+    const total = curMission.points ? curMission.points.length : 1;
+    h.mission.textContent = 'M' + curMission.id + ' ' + curMission.title + ' · TAHAP ' + stage + '/' + total + ' — ' + (curObj ? curObj.label : 'DONE');
+    const next = curMission.points && world.missions.objective + 1 < curMission.points.length
+      ? curMission.points[world.missions.objective + 1].label : 'Finish the job';
+    h.missionNext.textContent = 'NEXT: ' + next;
+  } else {
+    h.mission.textContent = 'FREE ROAM — NEON DELTA';
+    h.missionNext.textContent = '';
+  }
   // Minimap: circular, player centre, police red, mission gold.
   const ctx = h.minimap.getContext('2d');
   const S = 180; const C = S / 2;
@@ -141,19 +173,26 @@ export function updateHud(h, world, police, traffic) {
   ctx.font = 'bold 11px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(d.name.toUpperCase(), C, S - 20);
-  // Dispatch panel.
+  // Dispatch panel (hidden while the shop or garage panel is open, so
+  // the panels never stack over each other on the right side).
+  const panelOpen = h.shop.style.display === 'block' || h.garage.style.display === 'block';
+  h.dispatch.style.display = panelOpen ? 'none' : 'block';
   const rows = buildDispatch(police.cars, police.heli, world.player.x, world.player.z, world.wanted, police.swat).slice(0, 5);
   h.dispatch.innerHTML = '<b>NDPD DISPATCH</b><br>' + (rows.length ? rows.map((x) => x.callsign + ' • ' + x.role + ' • ' + x.distance + 'm').join('<br>') : 'NO UNITS');
-  // Crew panel.
-  h.crew.innerHTML = '<b>CREW</b><br>' + world.crewList.map((c) => c.ability + ' [' + c.key + '] ' + c.text + (c.ready ? '' : ' (' + Math.ceil(c.left) + 's)')).join('<br>');
+  // Crew panel with portraits.
+  h.crew.innerHTML = '<b>CREW</b><br>' + world.crewList.map((c) => '<span style="display:inline-flex;align-items:center;gap:6px"><canvas class="crew-face" data-crew="' + c.id + '" width="28" height="28"></canvas>' + c.ability + ' [' + c.key + '] ' + c.text + (c.ready ? '' : ' (' + Math.ceil(c.left) + 's)') + '</span>').join('<br>');
+  h.crew.querySelectorAll('.crew-face').forEach((cv) => {
+    const face = CREW_FACES[cv.getAttribute('data-crew')];
+    if (face) drawPortrait(cv, face, 28);
+  });
   // Toast.
   h.toast.textContent = world.toast || '';
-  // Weapon wheel.
+  // Weapon wheel (small, off-centre, so it never covers the hero car).
   if (world.combat.wheelOpen) {
     h.wheel.style.display = 'block';
     const items = wheelItems(world.shop.owned);
-    h.wheel.innerHTML = '<div style="text-align:center;padding-top:14px;font-weight:900">WEAPON WHEEL</div>' +
-      items.map((it) => '<div style="text-align:center;padding:5px;font-size:14px;color:' + (it.owned ? '#fff' : '#888') + '">' + (it.owned ? '●' : '○') + ' TIER ' + it.tier + ' — ' + it.name + '</div>').join('');
+    h.wheel.innerHTML = '<div style="text-align:center;padding-top:10px;font-weight:900;font-size:13px">WEAPON WHEEL</div>' +
+      items.map((it) => '<div style="text-align:center;padding:3px;font-size:12px;color:' + (it.owned ? '#fff' : '#888') + '">' + (it.owned ? '●' : '○') + ' TIER ' + it.tier + ' — ' + it.name + '</div>').join('');
   } else {
     h.wheel.style.display = 'none';
   }

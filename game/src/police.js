@@ -35,7 +35,8 @@ export function updatePolice(p, world, dt, now) {
   }
   while (p.cars.length > want) p.cars.pop();
 
-  // Roadblocks: two units ahead of the car on the road.
+  // Roadblocks: two units ahead of the car on the road. In shot mode
+  // the diorama is frozen, so the staged roadblocks stay put.
   const rb = roadblockCount(w);
   while (p.roadblocks.length < rb) {
     const ahead = 90 + p.roadblocks.length * 30;
@@ -46,11 +47,13 @@ export function updatePolice(p, world, dt, now) {
     });
   }
   while (p.roadblocks.length > rb) p.roadblocks.pop();
-  for (const r of p.roadblocks) {
-    const tx = world.car.x + Math.sin(world.car.angle) * 90;
-    const tz = world.car.z + Math.cos(world.car.angle) * 90;
-    r.x += (tx - r.x) * Math.min(1, dt * 0.5);
-    r.z += (tz - r.z) * Math.min(1, dt * 0.5);
+  if (!world.frozen) {
+    for (const r of p.roadblocks) {
+      const tx = world.car.x + Math.sin(world.car.angle) * 90;
+      const tz = world.car.z + Math.cos(world.car.angle) * 90;
+      r.x += (tx - r.x) * Math.min(1, dt * 0.5);
+      r.z += (tz - r.z) * Math.min(1, dt * 0.5);
+    }
   }
 
   // SWAT van at wanted 5.
@@ -94,7 +97,7 @@ export function updatePolice(p, world, dt, now) {
   }
   if (p.pathTimer > 2) p.pathTimer = 0;
 
-  if (p.swat) {
+  if (p.swat && !world.frozen) {
     const s = p.swat;
     const dx = world.car.x - s.x; const dz = world.car.z - s.z;
     const d = Math.sqrt(dx * dx + dz * dz);
@@ -109,15 +112,19 @@ export function updatePolice(p, world, dt, now) {
     if (d > 400) { s.x = world.car.x + 140; s.z = world.car.z + 140; }
   }
 
-  // Helicopter: orbit above the car from wanted 3.
+  // Helicopter: orbit above the car from wanted 3. In shot mode the
+  // diorama is frozen, so the staged heli stays where the shot put
+  // it (ahead-left, visible in the sky) instead of orbiting away.
   if (heliActive(w)) {
     if (!p.heli) p.heli = { x: world.car.x, z: world.car.z, y: 55, angle: 0, rotor: 0 };
-    const h = p.heli;
-    h.angle += dt * 0.5;
-    h.x = world.car.x + Math.sin(h.angle) * 40;
-    h.z = world.car.z + Math.cos(h.angle) * 40;
-    h.y = 55;
-    h.rotor += dt * 20;
+    if (!world.frozen) {
+      const h = p.heli;
+      h.angle += dt * 0.5;
+      h.x = world.car.x + Math.sin(h.angle) * 40;
+      h.z = world.car.z + Math.cos(h.angle) * 40;
+      h.y = 55;
+      h.rotor += dt * 20;
+    }
   } else {
     p.heli = null;
   }

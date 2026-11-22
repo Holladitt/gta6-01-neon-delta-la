@@ -10,7 +10,7 @@ import { createWorld, updateWorld, enterCar, exitCar, stealCar, startMission, mi
 import { createTraffic, updateTraffic, pedsNear } from './traffic.js';
 import { createPolice, updatePolice, beamOnCar } from './police.js';
 import { createScene, syncScene } from './scene.js';
-import { createHud, updateHud, showShop, hideShop, showGarage, hideGarage } from './hud.js';
+import { createHud, updateHud, showShop, hideShop, showGarage, hideGarage, showDialogue } from './hud.js';
 import { createTitle } from './title.js';
 import { createInput } from './input.js';
 import { createAudio } from './audio.js';
@@ -22,7 +22,7 @@ import { buyUpgrade, GARAGE_UPGRADES, boardBoat, leaveBoat, triggerNitro } from 
 import { startRace, startJob } from './races.js';
 import { fire, selectTier, openWheel, closeWheel } from './combat.js';
 import { saveGame, serializeWorld } from './save.js';
-import { shotFromUrl, applyShot } from './shots.js';
+import { shotFromUrl, applyShot, SHOT_DIALOGUE } from './shots.js';
 import { districtAt } from './config.js';
 import { dist2 } from './rng.js';
 
@@ -50,12 +50,14 @@ function buildCrewList(now) {
 }
 
 function shopHtml() {
+  // MAG is a display stat only (ammo capacity shown in the panel).
+  const MAG = { pistol: 12, smg: 30, shotgun: 6, carbine: 30, longshot: 5, marauder: 60 };
   const rows = catalog().map((w) => {
     const price = priceFor(world.shop, w.id, world.standing, world.districtId);
     const owned = world.shop.owned[w.id];
-    return '<div><b>TIER ' + w.tier + '</b> — ' + w.name + ' — DMG ' + w.damage +
-      (owned ? ' — <span style="color:#1abc9c">OWNED</span>'
-        : ' — $' + price + ' <button data-buy="' + w.id + '" style="cursor:pointer">BUY</button>') + '</div>';
+    return '<div style="display:flex;justify-content:space-between;gap:10px"><span><b>TIER ' + w.tier + '</b> — ' + w.name + ' — DMG ' + w.damage + ' · MAG ' + (MAG[w.id] || 12) + ' · RANGE ' + w.range + 'm' +
+      (owned ? ' — <span style="color:#1abc9c">OWNED</span>' : '') + '</span>' +
+      (owned ? '' : '<button data-buy="' + w.id + '" style="cursor:pointer;background:#e74c3c;color:#fff;border:none;padding:4px 12px;font-weight:900">BUY $' + price + '</button>') + '</div>';
   }).join('');
   return '<b style="font-size:18px">DELTA ARMS</b> — 4 weapon tiers<br>' + rows +
     '<div style="margin-top:6px;color:#f7d154">District discount: ' + (world.standing[world.districtId] >= 50 ? '10% active' : 'reach standing 50') + '</div>' +
@@ -268,6 +270,7 @@ export function startGame() {
       showShop(hud, shopHtml());
       bindPanelButtons();
     }
+    if (SHOT_DIALOGUE[shot]) showDialogue(hud, SHOT_DIALOGUE[shot].speaker, SHOT_DIALOGUE[shot].line);
     world.state = 'FREE_ROAM';
   } else {
     title = createTitle(world, startPlaying);
