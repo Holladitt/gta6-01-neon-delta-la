@@ -75,6 +75,19 @@
   body.shot1 #standing-bar, body.shot2 #standing-bar, body.shot3 #standing-bar, body.shot4 #standing-bar,
   body.shot1 #dispatch-panel, body.shot2 #dispatch-panel, body.shot3 #dispatch-panel, body.shot4 #dispatch-panel,
   body.shot1 #hud-weapon, body.shot2 #hud-weapon, body.shot3 #hud-weapon, body.shot4 #hud-weapon { display: none !important; }
+  /* v30: restore the v15/v28 HUD layout in staged shots (minimap bottom-left,
+     speed bottom-right, district label bottom-centre). */
+  body.shot1 #minimap, body.shot2 #minimap, body.shot3 #minimap, body.shot4 #minimap { left: 18px; right: auto; }
+  body.shot1 #district-label, body.shot2 #district-label, body.shot3 #district-label, body.shot4 #district-label { left: 50%; transform: translateX(-50%); right: auto; }
+  body.shot1 #speed, body.shot2 #speed, body.shot3 #speed, body.shot4 #speed { right: 18px; }
+  body.shot1 #radio-label, body.shot2 #radio-label, body.shot3 #radio-label, body.shot4 #radio-label { right: 18px; }
+  /* Dialogue + portrait at the BOTTOM for shots 2/3/4 (top only for shot 1);
+     mission bar bottom-right for shots 2/3/4. District label sits just above
+     the dialogue in shots 2/3/4 so the two bottom-centre elements do not
+     collide; shot 1 keeps it at the bottom. */
+  body.shot2 #dialogue, body.shot3 #dialogue, body.shot4 #dialogue { top: auto; bottom: 18px; left: 50%; transform: translateX(-50%); }
+  body.shot2 #mission-bar, body.shot3 #mission-bar, body.shot4 #mission-bar { top: auto; bottom: 90px; right: 18px; }
+  body.shot2 #district-label, body.shot3 #district-label, body.shot4 #district-label { bottom: 130px; }
 </style>
 <script type="importmap">
 {

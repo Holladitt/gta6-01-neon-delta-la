@@ -9,7 +9,7 @@ export const SHOTS = {
     car: { x: -320, z: -261 },
     camera: { x: -314, y: 2.6, z: -249 },
     look: { x: -320, y: 2.2, z: -272 },
-    heli: { x: -320, y: 24, z: -300 },
+    heli: { x: -320, y: 19, z: -300 },
     roadblock: { x: -320, z: -295 },
     swat: { x: -300, z: -298 },
     peds: [
@@ -24,7 +24,7 @@ export const SHOTS = {
   2: {
     mission: 2, hour: 10, wanted: 0, standing: 10, cover: 100, tapes: 1, money: 900,
     mara: { x: SHOP.x - 10, z: SHOP.z + 40 },
-    parkedCar: { x: SHOP.x - 45, z: SHOP.z - 35 },
+    parkedCar: { x: SHOP.x - 40, z: SHOP.z + 10 },
     camera: { x: SHOP.x - 10, y: 3.5, z: SHOP.z + 47 },
     look: { x: SHOP.x - 10, y: 2.6, z: SHOP.z + 40 },
     peds: [
@@ -68,7 +68,7 @@ export const SHOTS = {
     boat: { x: BOAT.x, z: BOAT.z },
     crane: { x: CRANE.x, z: CRANE.z },
     camera: { x: 645, y: 3, z: 626 },
-    look: { x: 590, y: 4, z: 615 },
+    look: { x: 586, y: 5, z: 607 },
     peds: [
       { x: 400, z: 520 }, { x: 440, z: 560 }, { x: 500, z: 540 }, { x: 460, z: 600 },
       { x: 540, z: 580 }, { x: 380, z: 560 }, { x: 470, z: 600 }, { x: 585, z: 605 },

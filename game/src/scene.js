@@ -302,6 +302,23 @@ function makeCar(color, roofColor, opts) {
   }
   return g;
 }
+// Park bench: wooden seat + backrest on iron legs. Long side along local X.
+function makeBench() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshLambertMaterial({ color: 0xd9a85c });
+  const iron = new THREE.MeshLambertMaterial({ color: 0x333333 });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.14, 0.9), wood);
+  seat.position.y = 0.55;
+  const back = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.8, 0.12), wood);
+  back.position.set(0, 1.0, -0.42);
+  back.rotation.x = -0.15;
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.55, 0.8), iron);
+  legL.position.set(-1.4, 0.28, 0);
+  const legR = legL.clone();
+  legR.position.x = 1.4;
+  g.add(seat, back, legL, legR);
+  return g;
+}
 function makePoliceCar() {
   const g = makeCar(0x1a1a2e, 0xe8e8e8, { lights: true });
   const doorMat = new THREE.MeshLambertMaterial({ color: 0xf2f2f2 });
@@ -364,13 +381,15 @@ function makeHeli() {
 function makeBoat() {
   const g = new THREE.Group();
   const shape = new THREE.Shape();
-  shape.moveTo(3.2, 0);
-  shape.bezierCurveTo(2.6, 0.85, 1.2, 1.15, 0, 1.15);
-  shape.bezierCurveTo(-1.2, 1.15, -2.6, 0.7, -3.2, 0);
-  shape.bezierCurveTo(-2.6, -0.7, -1.2, -1.15, 0, -1.15);
-  shape.bezierCurveTo(1.2, -1.15, 2.6, -0.85, 3.2, 0);
+  // Sharper leaf: longer, narrower, pointed bow/stern so the hull reads as
+  // a sailboat, not a capsule (v30).
+  shape.moveTo(3.6, 0);
+  shape.bezierCurveTo(3.2, 0.5, 1.4, 1.05, 0, 1.05);
+  shape.bezierCurveTo(-1.4, 1.05, -3.2, 0.5, -3.6, 0);
+  shape.bezierCurveTo(-3.2, -0.5, -1.4, -1.05, 0, -1.05);
+  shape.bezierCurveTo(1.4, -1.05, 3.2, -0.5, 3.6, 0);
   const hullGeo = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.9, bevelEnabled: true, bevelThickness: 0.45, bevelSize: 0.35, bevelSegments: 3, steps: 1,
+    depth: 0.9, bevelEnabled: true, bevelThickness: 0.3, bevelSize: 0.18, bevelSegments: 3, steps: 1,
   });
   hullGeo.rotateX(-Math.PI / 2);
   const hull = new THREE.Mesh(hullGeo, new THREE.MeshLambertMaterial({ color: 0xd88f2e }));
@@ -478,17 +497,15 @@ export function createScene(world, hud) {
   scene.add(shopB);
   const signTex = makeSignTexture('DELTA ARMS', '#1a1a2e', '#ffd27a');
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(30, 7.5), new THREE.MeshBasicMaterial({ map: signTex }));
-  sign.position.set(-354, 9, -204.5);
+  sign.position.set(-354, 8, -204.5);
   scene.add(sign);
-  // Billboard above the shop block (depth landmark for shot 2). Kept east of
-  // the shop's tall building block (x -376..-332) so it is not swallowed by it.
+  // Billboard face-mounted on the shop block's south face, centred above the
+  // DELTA ARMS sign (v30: the centred spot is the building face itself, so
+  // the sign reads centred above the shop instead of off to the east).
   const bbTex = makeBillboardTexture();
   const bb = new THREE.Mesh(new THREE.PlaneGeometry(34, 8.5), new THREE.MeshBasicMaterial({ map: bbTex }));
-  bb.position.set(-312, 22, -230);
+  bb.position.set(-354, 17, -204.5);
   scene.add(bb);
-  const bbPole = new THREE.Mesh(new THREE.BoxGeometry(1.5, 22, 1.5), new THREE.MeshLambertMaterial({ color: 0x333333 }));
-  bbPole.position.set(-312, 11, -232);
-  scene.add(bbPole);
 
   // Garage sign prop.
   const garTex = makeSignTexture('GARAGE', '#222222', '#f2c14e');
@@ -541,8 +558,10 @@ export function createScene(world, hud) {
   }
   scene.add(lampGroup, poolGroup);
 
-  // Clouds — one shared material, faded via the material only.
-  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffd9c2, transparent: true, opacity: 0.85 });
+  // Clouds — one shared material, faded via the material only. Basic (unlit)
+  // so they stay pale and read against the deep red dusk sky (v30: Lambert
+  // clouds lit orange blended into the red sky and were invisible).
+  const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffe0cc, transparent: true, opacity: 0.9 });
   const cloudGroup = new THREE.Group();
   const rngC = makeRng(99);
   for (let i = 0; i < 9; i += 1) {
@@ -553,8 +572,27 @@ export function createScene(world, hud) {
       s.scale.y = 0.45;
       cl.add(s);
     }
-    cl.position.set(-700 + rngC() * 1400, 70 + rngC() * 50, -700 + rngC() * 1200);
+    cl.position.set(-700 + rngC() * 1400, 50 + rngC() * 40, -700 + rngC() * 1200);
     cloudGroup.add(cl);
+  }
+  // Hero clouds placed to sit inside the staged dusk frames (v30): the
+  // seeded groups happen to fall outside shot 1/4's frustums, leaving a
+  // flat red sky. These sit north of Downtown (shot 1) and west over the
+  // port (shot 4) at 9-15 deg elevation, so they read in-frame.
+  const heroClouds = [
+    [-320, 60, -500, 18], [-450, 70, -600, 16], [-180, 55, -550, 15],
+    [300, 60, 550, 18], [200, 75, 650, 16], [400, 65, 450, 15],
+  ];
+  for (const [hx, hy, hz, hr] of heroClouds) {
+    const hg = new THREE.Group();
+    for (let k = 0; k < 3; k += 1) {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(hr * (0.7 + k * 0.15), 8, 6), cloudMat);
+      s.position.set((k - 1) * hr * 0.9, (k % 2) * 2, (k - 1) * 3);
+      s.scale.y = 0.45;
+      hg.add(s);
+    }
+    hg.position.set(hx, hy, hz);
+    cloudGroup.add(hg);
   }
   scene.add(cloudGroup);
 
@@ -686,14 +724,15 @@ export function createScene(world, hud) {
   craneGroup.position.set(CRANE.x, 0, CRANE.z);
   scene.add(craneGroup);
 
-  // Freeway bridge across the port background.
+  // Freeway bridge across the port background (v30: raised, thickened and
+  // lightened so it reads above the rooflines instead of hiding behind them).
   const bridge = new THREE.Group();
-  const bDeck = new THREE.Mesh(new THREE.BoxGeometry(560, 3, 16), new THREE.MeshLambertMaterial({ color: 0x3a3a44 }));
-  bDeck.position.y = 14;
+  const bDeck = new THREE.Mesh(new THREE.BoxGeometry(560, 4, 16), new THREE.MeshLambertMaterial({ color: 0x55555f }));
+  bDeck.position.y = 20;
   bridge.add(bDeck);
   for (let x = -240; x <= 760; x += 125) {
-    const pillar = new THREE.Mesh(new THREE.BoxGeometry(4, 14, 4), new THREE.MeshLambertMaterial({ color: 0x2a2a30 }));
-    pillar.position.set(x, 7, 0);
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(4, 20, 4), new THREE.MeshLambertMaterial({ color: 0x2a2a30 }));
+    pillar.position.set(x, 10, 0);
     bridge.add(pillar);
   }
   bridge.position.set(300, 0, 470);
@@ -715,6 +754,11 @@ export function createScene(world, hud) {
   // Hero car, Mara, police, heli, boat, roadblock.
   const heroCar = makeCar(0xe74c3c, 0x1abc9c, { lights: true });
   scene.add(heroCar);
+  // Parked car for shot 2 (yellow, with wheels — the traffic cars are built
+  // wheel-less, so re-using one read as a grey box; this one reads as a car).
+  const parkedCarMesh = makeCar(0xf2c14e, 0x1a2436);
+  parkedCarMesh.visible = false;
+  scene.add(parkedCarMesh);
   const mara = makeMara(1.8);
   scene.add(mara);
   const heli = makeHeli();
@@ -732,7 +776,7 @@ export function createScene(world, hud) {
   boat.position.set(BOAT.x, 0, BOAT.z);
   // Side-on to the shot-4 camera: full hull profile, sail facing the camera.
   boat.rotation.y = 1.84;
-  boat.scale.setScalar(4.5);
+  boat.scale.setScalar(4.0);
   scene.add(boat);
   const roadblock = new THREE.Group();
   const stripeTex = makeStripedTexture();
@@ -790,18 +834,18 @@ export function createScene(world, hud) {
     } else if (phase === 'dusk') {
       scene.fog.color.set(0xc25a2e);
       scene.background = new THREE.Color(0xc25a2e);
-      hemi.intensity = 1.05;
+      hemi.intensity = 1.15;
       sun.intensity = 1.0;
       sun.color.set(0xff8c2e);
-      amb.intensity = 0.5;
+      amb.intensity = 0.6;
       cloudMat.opacity = 0.9;
     } else {
       scene.fog.color.set(0x1c0b33);
       scene.background = new THREE.Color(0x1c0b33);
-      hemi.intensity = 0.5;
+      hemi.intensity = 0.6;
       sun.intensity = 0.25;
       sun.color.set(0x8a9aff);
-      amb.intensity = 0.22;
+      amb.intensity = 0.3;
       cloudMat.opacity = 0.55;
     }
   }
@@ -814,6 +858,15 @@ export function createScene(world, hud) {
       m.rotation.y = range(rngP, 0, Math.PI * 2);
       m.scale.setScalar(1.05);
     }
+  }
+
+  // Warm point light for a staged shot. Physical light units: intensity is
+  // candela, so a light 6-10 units above the ground needs a large value.
+  function addShotLight(x, y, z, intensity, distance) {
+    const l = new THREE.PointLight(0xffc27a, intensity, distance, 2);
+    l.position.set(x, y, z);
+    scene.add(l);
+    return l;
   }
 
   function applyShot(n) {
@@ -838,11 +891,15 @@ export function createScene(world, hud) {
     // Hide the extra peds/cars first; staged ones are placed below.
     for (const m of pedMeshes) m.visible = false;
     for (const m of trafficMeshes) m.visible = false;
+    parkedCarMesh.visible = false;
 
     if (n === 1) {
       heroCar.visible = true;
       heroCar.position.set(s.car.x, 0, s.car.z);
-      heroCar.rotation.y = 0.5;
+      // 3/4 rear angle for the current camera (camera SE of the car, looking
+      // NNW): 1.25 rad puts the rear ~45 deg and the left side ~45 deg to the
+      // camera, so the left side + both wheels + cabin + roof all read.
+      heroCar.rotation.y = 1.25;
       heroCar.scale.setScalar(2.0);
       mara.visible = false;
       roadblock.visible = true;
@@ -858,6 +915,9 @@ export function createScene(world, hud) {
       heli.scale.setScalar(1.6);
       beam.visible = true;
       beamPool.visible = true;
+      // Warm light over the foreground road so the bottom of the frame reads
+      // instead of going black (v30).
+      addShotLight(-320, 10, -240, 150, 70);
       boat.visible = false;
       // Police cars flanking the roadblock + traffic on the avenue.
       const pcs = [[-332, -288, 0.15], [-308, -302, -0.1], [-332, -330, 0.2], [-308, -260, 0]];
@@ -890,11 +950,22 @@ export function createScene(world, hud) {
       boat.visible = false;
       const pc = null;
       void pc;
-      // Parked car near the shop (re-use a traffic mesh).
-      trafficMeshes[0].visible = true;
-      trafficMeshes[0].position.set(s.parkedCar.x, 0, s.parkedCar.z);
-      trafficMeshes[0].rotation.y = 0.6;
-      trafficMeshes[0].scale.setScalar(1.1);
+      // Parked car near the shop (dedicated mesh with wheels).
+      parkedCarMesh.visible = true;
+      parkedCarMesh.position.set(s.parkedCar.x, 0, s.parkedCar.z);
+      parkedCarMesh.rotation.y = 0.6;
+      parkedCarMesh.scale.setScalar(1.1);
+      // Foreground props flanking Mara (v30 restore): bench west of her,
+      // crates east of her by the road. All clear of the staged peds.
+      const bench2 = makeBench();
+      bench2.position.set(-360, 0, -175);
+      scene.add(bench2);
+      const crateMat2 = new THREE.MeshLambertMaterial({ color: 0x8a6d4b });
+      for (const [cx, cz] of [[-335, -178], [-330, -190]]) {
+        const crate = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), crateMat2);
+        crate.position.set(cx, 0.8, cz);
+        scene.add(crate);
+      }
       placePeds(s.peds, 0);
       placePeds(s.foregroundPeds, 5);
       // A few more peds down the avenue for depth.
@@ -946,6 +1017,23 @@ export function createScene(world, hud) {
       const nBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 1.8, 10), barrelMat);
       nBarrel.position.set(-656, 0.9, 428);
       scene.add(nBarrel);
+      // Benches + warm light pools in the foreground (v30 restore). Benches
+      // face the camera (long side along Z); pools are flat glow discs on the
+      // deck so the bottom of the frame reads instead of going black.
+      for (const [bx, bz] of [[-668, 410], [-672, 452]]) {
+        const bench = makeBench();
+        bench.position.set(bx, 0, bz);
+        bench.rotation.y = Math.PI / 2;
+        scene.add(bench);
+      }
+      const poolMat = new THREE.MeshBasicMaterial({ color: 0xffc27a, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false });
+      for (const [px, pz] of [[-648, 420], [-648, 436], [-644, 428]]) {
+        const pool = new THREE.Mesh(new THREE.CircleGeometry(4.5, 20), poolMat);
+        pool.rotation.x = -Math.PI / 2;
+        pool.position.set(px, 0.08, pz);
+        scene.add(pool);
+      }
+      addShotLight(-650, 8, 428, 80, 45);
       camera.position.set(s.camera.x, s.camera.y, s.camera.z);
       camera.lookAt(s.look.x, s.look.y, s.look.z);
     } else if (n === 4) {
@@ -971,6 +1059,10 @@ export function createScene(world, hud) {
         crate.position.set(p.x, 0.9, p.z);
         scene.add(crate);
       }
+      // Warm light over the foreground apron/road so the bottom of the frame
+      // reads instead of going black (v30). Placed just south of the camera
+      // so it covers the ground at the bottom of the frame.
+      addShotLight(642, 6, 628, 120, 50);
       placePeds(s.peds, 0);
       camera.position.set(s.camera.x, s.camera.y, s.camera.z);
       camera.lookAt(s.look.x, s.look.y, s.look.z);
