@@ -53,24 +53,30 @@ function stageShot(n) {
     world.car.x = -560; world.car.z = -140; world.car.angle = 0;
     world.player.x = -560; world.player.z = -140; world.player.angle = 0;
     world.player.onFoot = false;
-    // Roadblocks + SWAT + spikes ahead of the car.
-    world.police.roadblocks = [{ x: -560, z: -118, angle: 0 }, { x: -560, z: -95, angle: 0 }];
-    world.police.swat = { x: -548, z: -125, angle: 0, speed: 0 };
-    world.police.heli = { x: -560, z: -140, y: 35, angle: 0 };
-    world.wanted.spikes = [{ x: -560, z: -128, t: 0 }, { x: -560, z: -105, t: 0 }];
-    // Chase traffic + sidewalk crowd along the avenue.
+    // Roadblocks + SWAT + spikes close ahead of the car, so they read
+    // at 1280 wide. The heli flies low (y 14) so it stays in frame
+    // under the high-angle chase camera.
+    world.police.roadblocks = [{ x: -560, z: -128, angle: 0 }, { x: -560, z: -112, angle: 0 }];
+    world.police.swat = { x: -550, z: -120, angle: 0, speed: 0 };
+    world.police.heli = { x: -560, z: -140, y: 14, angle: 0 };
+    world.wanted.spikes = [{ x: -560, z: -132, t: 0 }, { x: -560, z: -118, t: 0 }];
+    // Chase traffic ahead of the car (receding south) + sidewalk
+    // crowd along the avenue, all in frame.
     for (let i = 0; i < 6; i += 1) {
       const c = world.traffic.cars[i];
       c.x = -560 + (i % 2 === 0 ? -4 : 4);
-      c.z = -200 + i * 22;
+      c.z = -100 + i * 15;
       c.angle = Math.PI;
     }
-    const pedSpots = [[-548, -160], [-572, -180], [-548, -120], [-572, -100], [-548, -200], [-572, -220], [-548, -80], [-572, -60]];
+    const pedSpots = [[-548, -150], [-572, -150], [-548, -130], [-572, -110], [-548, -90], [-572, -70], [-548, -170], [-572, -190]];
     pedSpots.forEach((p, i) => {
       const ped = world.traffic.peds[i];
       ped.x = p[0]; ped.z = p[1]; ped.angle = 0.4;
     });
-    camOverride = { pos: [-578, 8, -182], target: [-560, 25, -110] };
+    // High-angle chase camera: low enough that the sky is ~30% of
+    // the frame, close enough that the car fills the lower third,
+    // the beam and the low heli still in frame above it.
+    camOverride = { pos: [-574, 10, -168], target: [-560, 0, -118] };
     hud.showDialogue('Sable Okonkwo', 'Dusk run. The heli is on us — stay in the golden lanes.');
     hud.showWheel(wheelItems({ pistol: true, smg: true, shotgun: true }), 'pistol');
     openWheel(world.combat);
@@ -80,21 +86,28 @@ function stageShot(n) {
     world.day = 2;
     world.state = 'FREE_ROAM';
     world.player.onFoot = true;
-    world.playerScale = 1.8;
+    world.playerScale = 2.0;
     world.player.x = SHOP.x - 10;
-    world.player.z = SHOP.z + 40;
-    world.player.angle = Math.PI;
+    world.player.z = SHOP.z + 44;
+    // Face the shop (north) so Mara's back + blue backpack face the
+    // camera — the v15 read.
+    world.player.angle = 0;
     world.car.x = -378; world.car.z = -200; world.car.angle = Math.PI / 2;
-    // Parked car in the forecourt + a job-doing crowd.
+    // Two parked cars in the forecourt, side-on to the camera, plus a
+    // job-doing crowd that fills the near foreground (no empty tan
+    // ground between the camera and the shop). Mara stands close to
+    // the camera so she fills the foreground like the v15 shot.
     const parked = world.traffic.cars[0];
-    parked.x = -378; parked.z = -200; parked.angle = Math.PI / 2;
-    const fore = [[-342, -160], [-310, -165], [-342, -185], [-305, -190], [-340, -200], [-348, -152], [-312, -152], [-346, -168], [-316, -170], [-330, -150], [-320, -180], [-350, -190]];
+    parked.x = -312; parked.z = -178; parked.angle = 0;
+    const parked2 = world.traffic.cars[1];
+    parked2.x = -348; parked2.z = -182; parked2.angle = Math.PI;
+    const fore = [[-342, -166], [-310, -168], [-342, -185], [-305, -190], [-340, -200], [-348, -162], [-312, -164], [-346, -172], [-316, -176], [-336, -170], [-320, -180], [-350, -190], [-322, -174], [-344, -178], [-326, -182], [-318, -170]];
     fore.forEach((p, i) => {
       const ped = world.traffic.peds[i];
       ped.x = p[0]; ped.z = p[1]; ped.angle = 0.5 + (i % 3) * 0.4;
       ped.job = ['vendor', 'tourist', 'shopper', 'commuter'][i % 4];
     });
-    camOverride = { pos: [-330, 4.5, -146], target: [-330, 3, -200] };
+    camOverride = { pos: [-330, 3.8, -147], target: [-330, 3.5, -200] };
     hud.showDialogue('Mara Solano', 'DELTA ARMS. Four tiers, one rule: never pay full price twice.');
     hud.showShop(world.shop, world.money, world.standing, world.district, (id) => {
       const r = buyWeapon(world.shop, world.money, id, world.standing, world.district);
@@ -135,6 +148,11 @@ function stageShot(n) {
     world.player.x = 632; world.player.z = 618; world.player.angle = -Math.PI / 2;
     world.car.x = 620; world.car.z = 596; world.car.angle = Math.PI / 2;
     world.boat.x = BOAT.x; world.boat.z = BOAT.z;
+    // Hero car: the player car is hidden while Mara is on foot, so a
+    // red traffic car plays the hero — large in the right foreground,
+    // 3/4 toward the camera, clear of the minimap.
+    const hero = world.traffic.cars[0];
+    hero.x = 640; hero.z = 620; hero.angle = -Math.PI / 4;
     const yardPeds = [[400, 520], [440, 560], [500, 540], [460, 600], [540, 580], [380, 560], [470, 600], [585, 605], [520, 520], [610, 610]];
     yardPeds.forEach((p, i) => {
       const ped = world.traffic.peds[i];

@@ -113,6 +113,15 @@ function buildGroundTexture() {
   }
   plaza(-620, 280, -540, 360);
   plaza(360, 260, 440, 340);
+  // Warm terracotta plaza tiles on the DELTA ARMS forecourt so the
+  // shop foreground reads warm, not flat tan.
+  for (let x = -380; x < -260; x += 16) {
+    for (let z = -230; z < -140; z += 16) {
+      const even = (Math.round((x + 380) / 16) + Math.round((z + 230) / 16)) % 2 === 0;
+      g.fillStyle = even ? '#a8763e' : '#8a5a30';
+      g.fillRect(px(x), py(z), sx(16), sx(16));
+    }
+  }
   // Re-paint the ocean over anything that spilled into the water.
   g.fillStyle = '#0d3a4a';
   g.fillRect(px(-780), py(-780), sx(160), sx(1560));
@@ -248,7 +257,7 @@ export function createScene(canvas) {
   }
 
   // --- Coral Pier: wooden deck, stalls, string lights, ferris wheel ---
-  const deckMat = new THREE.MeshLambertMaterial({ color: 0x8a6a42 });
+  const deckMat = new THREE.MeshLambertMaterial({ color: 0x9a7a50 });
   const deck = new THREE.Mesh(new THREE.BoxGeometry(160, 1.2, 140), deckMat);
   deck.position.set(-700, 0.6, 430);
   scene.add(deck);
@@ -259,13 +268,15 @@ export function createScene(canvas) {
     plank.position.set(-700, 1.25, 368 + i * 16);
     scene.add(plank);
   }
-  // Stalls with readable signs.
+  // Stalls with readable signs. All four sit close to the pier's
+  // centre line (z 408-450) so every sign reads whole from the
+  // shot-3 camera — nothing cut at a frame edge.
   const stallDefs = [
-    { x: -668, z: 392, name: 'BALLOONS', color: 0xe74c3c },
+    { x: -668, z: 408, name: 'BALLOONS', color: 0xe74c3c },
     { x: -668, z: 424, name: 'ARCADE', color: 0x2e86c1 },
-    { x: -668, z: 456, name: 'SNO-CONES', color: 0x17a589 },
-    { x: -735, z: 392, name: 'COTTON CANDY', color: 0xe91e63 },
-    { x: -735, z: 456, name: 'RING TOSS', color: 0xf39c12 },
+    { x: -668, z: 448, name: 'SNO-CONES', color: 0x17a589 },
+    { x: -728, z: 412, name: 'COTTON CANDY', color: 0xe91e63 },
+    { x: -730, z: 450, name: 'RING TOSS', color: 0xf39c12 },
   ];
   const stallGroup = new THREE.Group();
   for (const s of stallDefs) {
@@ -290,11 +301,17 @@ export function createScene(canvas) {
     stallGroup.add(lamp);
   }
   scene.add(stallGroup);
-  // String lights over the deck (catenary of glowing bulbs).
+  // String lights over the deck (catenary of glowing bulbs). Three
+  // rows — the middle row crosses the shot-3 camera's view line so
+  // the lights read clearly overhead — with a dark wire above them.
   const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffd34d });
-  const bulbGeo = new THREE.SphereGeometry(0.45, 6, 5);
-  for (let row = 0; row < 2; row += 1) {
-    const z0 = 392 + row * 64;
+  const bulbGeo = new THREE.SphereGeometry(0.7, 6, 5);
+  const wireMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+  for (let row = 0; row < 3; row += 1) {
+    const z0 = 408 + row * 20;
+    const wire = new THREE.Mesh(new THREE.BoxGeometry(162, 0.25, 0.25), wireMat);
+    wire.position.set(-695, 12.6, z0);
+    scene.add(wire);
     for (let i = 0; i <= 16; i += 1) {
       const x = -775 + i * 10;
       const sag = Math.sin((i / 16) * Math.PI) * -2.5;
@@ -304,9 +321,11 @@ export function createScene(canvas) {
     }
   }
   // Warm light pools on the deck (the pier reads bright at night).
-  const deckPoolGeo = new THREE.CircleGeometry(6, 20);
-  const deckPoolMat = new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.3, depthWrite: false });
-  for (const [dx, dz] of [[-660, 415], [-660, 440], [-655, 420], [-655, 438], [-648, 425], [-648, 435], [-700, 415], [-700, 445], [-680, 430]]) {
+  // Spread across the whole deck so there is no dark deck between
+  // the pools.
+  const deckPoolGeo = new THREE.CircleGeometry(7, 20);
+  const deckPoolMat = new THREE.MeshBasicMaterial({ color: 0xff9a3c, transparent: true, opacity: 0.38, depthWrite: false });
+  for (const [dx, dz] of [[-660, 415], [-660, 440], [-655, 420], [-655, 438], [-648, 425], [-648, 435], [-700, 415], [-700, 445], [-680, 430], [-720, 415], [-720, 445], [-740, 430], [-640, 415], [-640, 445], [-680, 405], [-680, 455], [-700, 395], [-700, 465], [-660, 400], [-660, 460]]) {
     const pool = new THREE.Mesh(deckPoolGeo, deckPoolMat);
     pool.rotation.x = -Math.PI / 2;
     pool.position.set(dx, 1.35, dz);
@@ -393,25 +412,25 @@ export function createScene(canvas) {
   const craneDark = new THREE.MeshLambertMaterial({ color: 0x7e5109 });
   for (const sx of [-14, 14]) {
     for (const sz of [-10, 10]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(3, 46, 3), craneMat);
-      leg.position.set(sx, 23, sz);
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(3, 38, 3), craneMat);
+      leg.position.set(sx, 19, sz);
       craneGroup.add(leg);
     }
   }
   const craneTop = new THREE.Mesh(new THREE.BoxGeometry(34, 4, 26), craneMat);
-  craneTop.position.set(0, 48, 0);
+  craneTop.position.set(0, 40, 0);
   craneGroup.add(craneTop);
   const jib = new THREE.Mesh(new THREE.BoxGeometry(70, 3, 3), craneDark);
-  jib.position.set(30, 52, 0);
+  jib.position.set(30, 44, 0);
   craneGroup.add(jib);
-  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 18, 6), craneDark);
-  cable.position.set(58, 43, 0);
+  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 16, 6), craneDark);
+  cable.position.set(58, 36, 0);
   craneGroup.add(cable);
   const load = new THREE.Mesh(new THREE.BoxGeometry(12, 8, 8), new THREE.MeshLambertMaterial({ color: 0x2e86c1 }));
-  load.position.set(58, 30, 0);
+  load.position.set(58, 24, 0);
   craneGroup.add(load);
   const craneLight = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd34d }));
-  craneLight.position.set(58, 52, 0);
+  craneLight.position.set(58, 44, 0);
   craneGroup.add(craneLight);
   scene.add(craneGroup);
   // Containers (stacks, varied colours).
@@ -462,7 +481,10 @@ export function createScene(canvas) {
   apronPool.rotation.x = -Math.PI / 2;
   apronPool.position.set(614, 0.15, 620);
   scene.add(apronPool);
-  // Drivable boat (amber hull, teal cabin, wooden mast).
+  // Drivable boat (amber hull, teal cabin, wooden mast). The hull is
+  // tapered at both ends; the sails are big white triangles in the
+  // fore-aft plane (face east/west) so the boat reads unmistakably
+  // as a sailboat from the port camera.
   const boatGroup = new THREE.Group();
   const hull = new THREE.Mesh(new THREE.BoxGeometry(7, 2.5, 16), new THREE.MeshLambertMaterial({ color: 0xd35400 }));
   hull.position.y = 1;
@@ -472,15 +494,28 @@ export function createScene(canvas) {
   bow.rotation.y = Math.PI / 4;
   bow.position.set(0, 1, 10);
   boatGroup.add(bow);
+  const stern = new THREE.Mesh(new THREE.ConeGeometry(3.5, 5, 4), new THREE.MeshLambertMaterial({ color: 0xd35400 }));
+  stern.rotation.x = -Math.PI / 2;
+  stern.rotation.y = Math.PI / 4;
+  stern.position.set(0, 1, -9.5);
+  boatGroup.add(stern);
   const cabin = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 6), new THREE.MeshLambertMaterial({ color: 0x17a589 }));
   cabin.position.set(0, 3.5, -1);
   boatGroup.add(cabin);
   const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 12, 6), new THREE.MeshLambertMaterial({ color: 0x8a6a42 }));
   mast.position.set(0, 8, 1);
   boatGroup.add(mast);
-  const sail = new THREE.Mesh(new THREE.PlaneGeometry(5, 9), new THREE.MeshLambertMaterial({ color: 0xf5f0e0, side: THREE.DoubleSide }));
-  sail.position.set(0, 8, 1.5);
-  boatGroup.add(sail);
+  const sailMat = new THREE.MeshBasicMaterial({ color: 0xf5f0e0, side: THREE.DoubleSide });
+  function triSail(v0, v1, v2) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([v0[0], v0[1], v0[2], v1[0], v1[1], v1[2], v2[0], v2[1], v2[2]], 3));
+    g.computeVertexNormals();
+    return new THREE.Mesh(g, sailMat);
+  }
+  // Mainsail: mast luff, boom foot to the stern.
+  boatGroup.add(triSail([0, 2, 1], [0, 14, 1], [0, 2, -7]));
+  // Jib: masthead down to the bow.
+  boatGroup.add(triSail([0, 13, 1], [0, 2, 1], [0, 2, 8]));
   boatGroup.position.set(BOAT.x, 0.4, BOAT.z);
   scene.add(boatGroup);
 
@@ -490,9 +525,49 @@ export function createScene(canvas) {
   const shopBase = new THREE.Mesh(new THREE.BoxGeometry(30, 12, 16), new THREE.MeshLambertMaterial({ color: 0x2c3e50 }));
   shopBase.position.y = 6;
   shopGroup.add(shopBase);
-  const shopFront = new THREE.Mesh(new THREE.BoxGeometry(30, 8, 1), new THREE.MeshLambertMaterial({ color: 0x1a252f }));
+  // Shop front: warm stone wall (not a black slab) with two lit
+  // display windows, a framed door, pilasters, a cornice band and a
+  // red awning — real depth, not a flat box.
+  const shopFront = new THREE.Mesh(new THREE.BoxGeometry(30, 8, 1), new THREE.MeshLambertMaterial({ color: 0x6b5a44 }));
   shopFront.position.set(0, 4, 8.5);
   shopGroup.add(shopFront);
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0x2a2118 });
+  const glassMat = new THREE.MeshBasicMaterial({ color: 0xffd34d });
+  for (const wx of [-9, 9]) {
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(7.6, 5.1, 0.3), frameMat);
+    frame.position.set(wx, 3.5, 9);
+    shopGroup.add(frame);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(7, 4.5), glassMat);
+    glass.position.set(wx, 3.5, 9.2);
+    shopGroup.add(glass);
+    const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.5, 0.15), frameMat);
+    mullion.position.set(wx, 3.5, 9.3);
+    shopGroup.add(mullion);
+    const shelf = new THREE.Mesh(new THREE.BoxGeometry(7, 0.25, 0.4), frameMat);
+    shelf.position.set(wx, 2.2, 9.3);
+    shopGroup.add(shelf);
+  }
+  const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(4.8, 7.6, 0.3), frameMat);
+  doorFrame.position.set(0, 3.8, 9);
+  shopGroup.add(doorFrame);
+  const step = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.4, 2), new THREE.MeshLambertMaterial({ color: 0x8a7f66 }));
+  step.position.set(0, 0.2, 9.6);
+  shopGroup.add(step);
+  const awning = new THREE.Mesh(new THREE.BoxGeometry(32, 0.5, 3.4), new THREE.MeshLambertMaterial({ color: 0xc0392b }));
+  awning.position.set(0, 7.6, 10);
+  awning.rotation.x = -0.28;
+  shopGroup.add(awning);
+  const awningEdge = new THREE.Mesh(new THREE.BoxGeometry(32, 0.4, 0.3), new THREE.MeshLambertMaterial({ color: 0xf5f0e0 }));
+  awningEdge.position.set(0, 7.1, 11.6);
+  shopGroup.add(awningEdge);
+  const cornice = new THREE.Mesh(new THREE.BoxGeometry(30, 0.8, 1.4), new THREE.MeshLambertMaterial({ color: 0xf5f0e0 }));
+  cornice.position.set(0, 8.4, 8.9);
+  shopGroup.add(cornice);
+  for (const px of [-14.5, 14.5]) {
+    const pilaster = new THREE.Mesh(new THREE.BoxGeometry(1.2, 8, 1.2), new THREE.MeshLambertMaterial({ color: 0xf5f0e0 }));
+    pilaster.position.set(px, 4, 8.9);
+    shopGroup.add(pilaster);
+  }
   const shopSign = new THREE.Mesh(
     new THREE.PlaneGeometry(26, 4.5),
     new THREE.MeshBasicMaterial({ map: buildSignTexture('DELTA ARMS', 'GUNS • AMMO • GEAR', '#1a1a22', '#ffd34d', 1024, 176) }),
@@ -594,6 +669,21 @@ export function createScene(canvas) {
   const bin = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 2.2, 8), binMat);
   bin.position.set(-340, 1.1, -150);
   propGroup.add(bin);
+  // Vendor stall + flower cart in the mid-foreground, flanking Mara,
+  // so the ground between the camera and the shop is never empty tan.
+  const stallBase = new THREE.Mesh(new THREE.BoxGeometry(4, 2.4, 3), new THREE.MeshLambertMaterial({ color: 0xc0392b }));
+  stallBase.position.set(-344, 1.2, -168);
+  propGroup.add(stallBase);
+  const stallAwn = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.3, 3.6), new THREE.MeshLambertMaterial({ color: 0xf5f0e0 }));
+  stallAwn.position.set(-344, 2.8, -168);
+  stallAwn.rotation.x = -0.15;
+  propGroup.add(stallAwn);
+  const cartBase = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.6, 1.6), new THREE.MeshLambertMaterial({ color: 0x8a6a42 }));
+  cartBase.position.set(-314, 0.8, -170);
+  propGroup.add(cartBase);
+  const cartTop = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.5, 1.8), new THREE.MeshLambertMaterial({ color: 0xe91e63 }));
+  cartTop.position.set(-314, 1.8, -170);
+  propGroup.add(cartTop);
   scene.add(propGroup);
   // Garage sign (GARAGE_POS).
   const garageSign = new THREE.Mesh(
@@ -809,7 +899,7 @@ export function updateScene(ctx, dyn, w, dt, t, camOverride) {
   ctx.sun.intensity = 0.4 + df * 1.1;
   const phase = phaseFor(w.hour);
   if (phase === 'day') {
-    ctx.sky.material.color.setHex(0x8ab8ff);
+    ctx.sky.material.color.setHex(0xffc490);
     ctx.sunDisc.visible = true;
     ctx.sunDisc.material.color.setHex(0xfff2b0);
     ctx.sunDisc.position.set(-900, 500, 200);
