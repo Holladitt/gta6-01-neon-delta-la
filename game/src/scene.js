@@ -852,7 +852,7 @@ export function syncScene(s, world, traffic, police, hour) {
   // boat (hull + cabin + mast) instead of a small box on a dock.
   s.props.boat.position.set(world.boat.x, 0.4, world.boat.z);
   s.props.boat.rotation.y = -world.boat.angle + Math.PI / 2;
-  s.props.boat.scale.setScalar(world.shotMode === 4 ? 1.5 : 1);
+  s.props.boat.scale.setScalar(world.shotMode === 4 ? 2.2 : 1);
   // Mission marker.
   const curMission = world.missions ? missionById(world.missions.current) : null;
   const obj = curMission ? curMission.points : null;

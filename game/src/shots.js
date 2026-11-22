@@ -98,20 +98,27 @@ export function applyShot(n, world, traffic, police) {
     return { camera: { x: -320, y: 6, z: -238 }, look: { x: -320, y: 5, z: -290 } };
   }
   if (n === 2) {
-    // Mara LARGE, whole, right-of-centre, back view, standing
-    // EAST of the door's centreline so the yellow door is a
-    // separate element to her left, not a huge flat wall directly
+    // Mara LARGE, whole, centre-frame, back view, standing WEST
+    // of the door's centreline (SHOP.x - 10) so the yellow door is
+    // a separate element to her right, not a huge flat wall directly
     // behind her — she reads against the dark shop wall instead.
-    // The camera sits 10 units behind her but pulled back to
-    // z = SHOP.z + 50 and raised to y = 4: from there the sightline
-    // to the rooftop billboard clears the top of the DELTA ARMS
-    // sign, so the "DISTRICT WARS" subtitle reads instead of
-    // hiding behind the sign. The DELTA ARMS sign and the
-    // NEON DELTA LA billboard both stay readable above her.
+    // This also moves her OFF the x = -300 tree line: the road
+    // tree at (-300, -160) sat directly behind her in v20 and its
+    // trunk overlapped her, with its canopy above her head. From
+    // the west side the tree is a background element at the right
+    // of the frame, clear of her, and the tall building at
+    // (-260, -140) sits at the far right edge instead of filling
+    // the right third. The camera sits 10 units behind her,
+    // pulled back to z = SHOP.z + 50 and raised to y = 4: from
+    // there the sightline to the rooftop billboard clears the top
+    // of the DELTA ARMS sign, so the "DISTRICT WARS" subtitle
+    // reads instead of hiding behind the sign. The DELTA ARMS
+    // sign and the NEON DELTA LA billboard both stay readable
+    // above her.
     world.hour = 10;
     world.wanted.level = 0;
     world.player.onFoot = true;
-    world.player.x = SHOP.x + 20; world.player.z = SHOP.z + 40; world.player.angle = Math.PI;
+    world.player.x = SHOP.x - 10; world.player.z = SHOP.z + 40; world.player.angle = Math.PI;
     world.money = 3200; world.rp = 340; world.rankCode = 'B';
     world.shopOpen = true;
     // Parked car on the road west of the shop, in frame, clear of
@@ -123,7 +130,7 @@ export function applyShot(n, world, traffic, police) {
       const p = traffic.peds[i + 1];
       p.x = pedSpots[i][0]; p.z = pedSpots[i][1]; p.angle = 2.6;
     }
-    return { camera: { x: SHOP.x + 20, y: 4, z: SHOP.z + 50 }, look: { x: SHOP.x + 5, y: 8, z: SHOP.z } };
+    return { camera: { x: SHOP.x - 10, y: 4, z: SHOP.z + 50 }, look: { x: SHOP.x - 5, y: 8, z: SHOP.z } };
   }
   if (n === 3) {
     // Pier at night: Mara LARGE and whole, back view, facing the
@@ -159,17 +166,22 @@ export function applyShot(n, world, traffic, police) {
   // Shot 4: port at dusk, crane load in frame, boat at the south dock.
   // Mara LARGE + boat LARGE + crane all fit by DEPTH, and the
   // camera now sits SOUTH-EAST of the dock, just over the water
-  // (z = 624, past the dock edge at z = 620), looking
-  // west-northwest: the near foreground is blue water, not grey
-  // concrete, so the boat reads as a boat ON the water. Mara is
-  // large in the right foreground on the dock edge (back view,
-  // whole), the hero car is side-on near the centre, the boat is
-  // large in the left mid-ground well out in open water (its hull
-  // sits ~23 units south of the dock edge, water all around it),
-  // and the crane and the freeway bridge close the background —
-  // the camera is far enough east that the crane's jib and load
-  // fit inside the frame instead of being cut at the edge. The
-  // mission is M8 (Orin Beck).
+  // (645, 3, 626 — east of the v20 spot, so the tall blue
+  // container at (580, 580) sits further off-centre and reads
+  // smaller, and the green container at (600, 560) falls at the
+  // far right edge), looking west-northwest: the near foreground
+  // is blue water, not grey concrete, so the boat reads as a boat
+  // ON the water. Mara is large in the right foreground on the
+  // dock edge (back view, whole, ~15 units from the camera), the
+  // hero car is side-on near the centre, the boat is LARGE in the
+  // left mid-ground in open water — moved east and north from the
+  // v20 spot (465, 655) to (530, 648), ~110 units from the camera
+  // instead of ~160, and scaled up, so hull + cabin + mast read
+  // as one boat shape at a glance instead of a small yellow shape
+  // at the horizon — and the crane and the freeway bridge close
+  // the background, the camera far enough east that the crane's
+  // jib and load fit inside the frame instead of being cut at the
+  // edge. The mission is M8 (Orin Beck).
   world.hour = 18;
   world.wanted.level = 2;
   // The hero car sits east of the dock centre, side-on, near the
@@ -179,15 +191,16 @@ export function applyShot(n, world, traffic, police) {
   world.player.onFoot = true;
   // Mara on the dock edge, facing northwest away from the camera
   // (back view); the camera sits southeast of her, over the water.
-  world.player.x = 607; world.player.z = 615; world.player.angle = -3 * Math.PI / 4;
+  world.player.x = 632; world.player.z = 618; world.player.angle = -3 * Math.PI / 4;
   world.money = 5100; world.rp = 900; world.rankCode = 'A';
   world.missions.current = 8; world.missions.objective = 0;
   // The boat turns to a three-quarter view so the hull, the teal
   // cabin and the mast all read instead of one long grey side.
-  // Moored well out in open water south of the dock, so blue
-  // water shows around the amber hull on every side and it reads
-  // as one boat shape at a glance, not a dock wall.
-  world.boat.x = 465; world.boat.z = 655; world.boat.angle = Math.PI / 4;
+  // Moored in open water south of the dock, close enough and
+  // scaled up (see scene.js) that blue water shows around the
+  // amber hull and it reads as one boat shape at a glance, not a
+  // dock wall and not a small yellow shape at the horizon.
+  world.boat.x = 530; world.boat.z = 648; world.boat.angle = Math.PI / 4;
   startRace(world.race, 'port', 42);
   const carSpots = [[420, 540], [520, 560], [360, 580], [560, 520], [580, 590]];
   for (let i = 0; i < carSpots.length; i += 1) {
@@ -199,7 +212,7 @@ export function applyShot(n, world, traffic, police) {
     const p = traffic.peds[i];
     p.x = pedSpots[i][0]; p.z = pedSpots[i][1]; p.angle = 2.2;
   }
-  return { camera: { x: 620, y: 2.5, z: 624 }, look: { x: 506, y: 6, z: 587 } };
+  return { camera: { x: 645, y: 3, z: 626 }, look: { x: 510, y: 5, z: 600 } };
 }
 
 export function shotFile(n) {
