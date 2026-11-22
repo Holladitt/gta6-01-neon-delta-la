@@ -123,7 +123,7 @@ export const SHOTS = [
   {
     n: 4, name: 'port', hour: 18, mission: 8, wanted: 2, money: 3400, day: 8,
     mara: { x: SHOT4_MARA.x, z: SHOT4_MARA.z, scale: 2, angle: -1.28 },
-    car: { x: 600, z: 612, angle: 0, scale: 1.5 },
+    car: { x: 615, z: 615, angle: 0, scale: 1.8 },
     boat: { x: SHOT4_BOAT.x, z: SHOT4_BOAT.z, scale: 4, angle: 0.4 },
     camera: { x: SHOT4_CAMERA.x, y: SHOT4_CAMERA.y, z: SHOT4_CAMERA.z },
     look: { x: 560, y: 2, z: 638 },

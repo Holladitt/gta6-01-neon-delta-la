@@ -480,11 +480,11 @@ export function createScene(container, world) {
   // DELTA ARMS shop: building, billboard, yellow door, bench, crates, tree.
   const shopG = new THREE.Group();
   const shopBase = box(60, 26, 30, 0, 0, 13, 0, new THREE.MeshLambertMaterial({ color: 0x2c3e50, map: winTex }));
-  const billboard = new THREE.Mesh(new THREE.PlaneGeometry(46, 14), new THREE.MeshBasicMaterial({ map: signTexture('NEON DELTA LA', 'DISTRICT WARS', '#c0392b', '#ffffff') }));
-  billboard.position.set(0, 28, 15.2);
+  const billboard = new THREE.Mesh(new THREE.PlaneGeometry(32, 10), new THREE.MeshBasicMaterial({ map: signTexture('NEON DELTA LA', 'DISTRICT WARS', '#c0392b', '#ffffff') }));
+  billboard.position.set(0, 25, 15.2);
   const frontSign = new THREE.Mesh(new THREE.PlaneGeometry(18, 5), new THREE.MeshBasicMaterial({ map: signTexture('DELTA ARMS', 'GUNS · AMMO · 4 TIERS', '#1a5276', '#ffffff') }));
   frontSign.position.set(-20, 10, 15.5);
-  const door = box(6, 12, 1, 0, -6, 6, 15.2, new THREE.MeshLambertMaterial({ color: 0xf1c40f }));
+  const door = box(6, 12, 1, 0, 8, 6, 15.2, new THREE.MeshLambertMaterial({ color: 0xf1c40f }));
   const bench = box(8, 1, 2, 0, 12, 1, 22, new THREE.MeshLambertMaterial({ color: 0x8a6d3b }));
   const benchLeg1 = box(0.6, 1, 1.8, 0, 9, 0.5, 22, new THREE.MeshLambertMaterial({ color: 0x333333 }));
   const benchLeg2 = box(0.6, 1, 1.8, 0, 15, 0.5, 22, new THREE.MeshLambertMaterial({ color: 0x333333 }));
@@ -562,6 +562,17 @@ export function createScene(container, world) {
     const cont = box(14, 6, 6, 0, cx, 3, cz, new THREE.MeshLambertMaterial({ color: cc }));
     scene.add(cont);
   }
+  // Foreground dressing for the shot-4 camera: crates and a small
+  // container on the dock apron, breaking up the flat concrete in the
+  // lower frame. All on land, clear of the hero car, Mara and the boat.
+  const apronCrate1 = box(2.5, 2.5, 2.5, 0, 608, 1.25, 620, new THREE.MeshLambertMaterial({ color: 0x8a6d3b }));
+  const apronCrate2 = box(3, 3, 3, 0, 600, 1.5, 624, new THREE.MeshLambertMaterial({ color: 0xa08a5a }));
+  const apronBox = box(8, 4, 4, 0, 598, 2, 610, new THREE.MeshLambertMaterial({ color: 0x27ae60 }));
+  // Two small crates low in the frame, on the apron right in front of
+  // the camera, so the bottom third is not one flat surface.
+  const apronCrate3 = box(2, 2, 2, 0, 628, 1, 624, new THREE.MeshLambertMaterial({ color: 0xa08a5a }));
+  const apronCrate4 = box(2.5, 2.5, 2.5, 0, 620, 1.25, 628, new THREE.MeshLambertMaterial({ color: 0x8a6d3b }));
+  scene.add(apronCrate1, apronCrate2, apronBox, apronCrate3, apronCrate4);
   const crane = makeCrane();
   crane.position.set(CRANE.x, 0, CRANE.z);
   scene.add(crane);
