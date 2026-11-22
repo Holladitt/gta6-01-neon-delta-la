@@ -1,48 +1,42 @@
-# Neon Delta LA
+# Neon Delta LA — Make GTA 6 (gta6-01)
 
-[![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun)
-[![rank](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/rank.svg)](https://make.fun)
-[![reward](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/reward.svg)](https://make.fun)
+[![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/c/gta6-01)
+[![rank](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/rank.svg)](https://make.fun/c/gta6-01)
+[![reward](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/reward.svg)](https://make.fun/c/gta6-01)
 
-An original open-world crime game set on a fictional LA coast — Downtown,
-Venice canals, Santa Monica-style pier, Long Beach port, Marina, Hollywood
-Hills, and the freeways between them. You are **Mara Solano**, an ex-getaway
-driver hunting the truth about her vanished sister, who held proof of
-corruption reaching the mayor, the port, and the NDPD.
+An original open-world crime game in a Los Angeles coastal city — Downtown,
+the Venice canals, the Santa Monica pier (Coral Pier), the Long Beach port,
+the Marina and the Hollywood Hills. No Rockstar material anywhere.
+
+Mara Solano, an ex-getaway driver, is back in LA. Her sister vanished holding
+proof of a corruption ring — a mayor, a port businessman, the NDPD. Drive,
+steal, fight and finish all ten jobs to take the city back.
+
+## What is in the game
+
+- A drivable open city: traffic, 104 pedestrians, cars to steal, working
+  traffic lights, a day/night cycle with a dusk ramp and warm pier lights.
+- Wanted level 1–5: NDPD cars flank with A* pathfinding, a helicopter with a
+  spotlight joins at level 3, and officers close in on foot.
+- Ten story missions ($13,750 total) with a mission scripting engine, plus a
+  crew of three — Juno Reyes (clean plates), Petra Hale (field repair) and
+  Cassia Wren (overwatch).
+- DELTA ARMS gun shop with six weapons (three owned, three to buy),
+  collision damage, ranks from D GREENHORN to S DELTA LEGEND, a save system,
+  a radio, a minimap and a pause menu.
 
 ## Play
 
 ```sh
 node serve.ts
-# open http://localhost:8080/
+# open http://localhost:8080
 ```
 
-## The game
+WASD drive / walk • E enter a car (or the gun shop) • mouse aim, click shoot •
+R reload • C clean plates • V field repair ($150) • X overwatch • M next job •
+Esc pause (S save, L reload).
 
-- **10 missions** across 11 days, $13,750 in payouts, from a $400 first gear
-  run to a $3,000 last witness. Contacts: Eden Voss, Harlan Dray, Lucia
-  Marlow, Dante Kovac, Sable Okonkwo, Vera Lindqvist, Inez Vargas, Orin Beck,
-  Lena Marsh, Elias Frost.
-- **Wanted 1–5** with NDPD patrol cars that flank with A* pathfinding and a
-  helicopter from level 3, its beam landing exactly on your car.
-- **Crew abilities**: Juno's CLEAN PLATES [C] drops a wanted star, Petra's
-  FIELD REPAIR [V] restores the car for $150, Cassia's OVERWATCH [X] watches
-  the roofs for 20 seconds.
-- **DELTA ARMS shop** [TAB]: Pistol, SMG and Shotgun come with the kit;
-  Delta Carbine $900, Longshot $1,800, Marauder $2,500 — all six fireable.
-- **Arcade driving** with drift, collision damage, day/night cycle, traffic
-  lights, 104 pedestrians and 22 traffic cars.
-- **Ranks** from D GREENHORN to S DELTA LEGEND (1,000 RP). Progress saves
-  locally (`neon-delta-la.save.v3`).
+## Shots
 
-## Controls
-
-WASD drive · E enter/exit car · F interact · Space handbrake / fire ·
-R reload · C clean plates · V field repair · X overwatch · 1–6 weapons ·
-Tab shop · M radio · Enter start mission
-
-## Tech
-
-Three.js (vendored) for the 3D city, plain ES modules, no build step.
-`main.ts` copies `game/` and `screenshots/` into the output directory and
-writes `dossier.json` via the kit's `buildDossier`.
+1. A chase under the helicopter beam. 2. The DELTA ARMS shop front.
+3. Coral Pier at night. 4. The Long Beach port at dusk.

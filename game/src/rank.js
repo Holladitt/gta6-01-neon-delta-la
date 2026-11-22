@@ -1,9 +1,8 @@
-// Rank points and rank ladder. Ten rank points per hundred dollars earned.
-
+// rank.js — rank points and rank titles (pure).
 import { RANKS } from './config.js';
 
 export function rpForReward(reward) {
-  return reward / 10;
+  return Math.round(reward / 10);
 }
 
 export function rankFor(rp) {

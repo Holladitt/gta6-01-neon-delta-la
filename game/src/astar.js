@@ -1,70 +1,79 @@
-// A* pathfinding over a coarse grid, so police cars route around buildings
-// instead of driving through them. The grid is a plain 2D array of 0/1,
-// 1 meaning blocked, with a fixed cell size in metres.
+// astar.js — A* pathfinding over the road grid (pure).
+// Nodes are [x, z] road intersections; edges join orthogonal neighbours.
+import { roadNodes } from './geo.js';
+import { ROAD_SPACING, WORLD_HALF } from './config.js';
 
-export function astar(grid, sx, sz, gx, gz) {
-  const rows = grid.length;
-  const cols = grid[0].length;
-  const key = (x, z) => z * cols + x;
-  const open = [{ x: sx, z: sz, g: 0, f: 0, parent: null }];
-  const best = new Map([[key(sx, sz), 0]]);
+function key(x, z) {
+  return x + ',' + z;
+}
+
+export function buildGraph() {
+  const nodes = new Map();
+  for (const [x, z] of roadNodes()) nodes.set(key(x, z), [x, z]);
+  return nodes;
+}
+
+function neighbours(nodes, x, z) {
+  const out = [];
+  for (const [dx, dz] of [[ROAD_SPACING, 0], [-ROAD_SPACING, 0], [0, ROAD_SPACING], [0, -ROAD_SPACING]]) {
+    const nx = x + dx, nz = z + dz;
+    if (nx < -WORLD_HALF || nx > WORLD_HALF || nz < -WORLD_HALF || nz > 750) continue;
+    if (nodes.has(key(nx, nz))) out.push([nx, nz]);
+  }
+  return out;
+}
+
+function heuristic(a, b) {
+  return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]);
+}
+
+// Returns an array of [x, z] waypoints from start to goal (inclusive),
+// or null when no route exists.
+export function findPath(nodes, start, goal) {
+  const s = nearestInGraph(nodes, start);
+  const g = nearestInGraph(nodes, goal);
+  if (!s || !g) return null;
+  const open = [{ node: s, f: heuristic(s, g), g: 0 }];
+  const came = new Map();
+  const cost = new Map([[key(s[0], s[1]), 0]]);
   const closed = new Set();
-  const heuristic = (x, z) => Math.abs(x - gx) + Math.abs(z - gz);
-  while (open.length > 0) {
+  while (open.length) {
     let bi = 0;
-    for (let i = 1; i < open.length; i++) {
-      if (open[i].f < open[bi].f) bi = i;
-    }
-    const node = open.splice(bi, 1)[0];
-    if (node.x === gx && node.z === gz) {
-      const path = [];
-      let cur = node;
-      while (cur) {
-        path.unshift([cur.x, cur.z]);
-        cur = cur.parent;
+    for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
+    const cur = open.splice(bi, 1)[0].node;
+    const ck = key(cur[0], cur[1]);
+    if (closed.has(ck)) continue;
+    closed.add(ck);
+    if (cur[0] === g[0] && cur[1] === g[1]) {
+      const path = [cur];
+      let k = ck;
+      while (came.has(k)) {
+        const prev = came.get(k);
+        path.unshift(prev);
+        k = key(prev[0], prev[1]);
       }
       return path;
     }
-    closed.add(key(node.x, node.z));
-    const neighbours = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-    for (const [dx, dz] of neighbours) {
-      const nx = node.x + dx;
-      const nz = node.z + dz;
-      if (nx < 0 || nz < 0 || nx >= cols || nz >= rows) continue;
-      if (grid[nz][nx] === 1) continue;
-      const k = key(nx, nz);
-      if (closed.has(k)) continue;
-      const stepCost = dx !== 0 && dz !== 0 ? 1.414 : 1;
-      const g = node.g + stepCost;
-      if (best.has(k) && best.get(k) <= g) continue;
-      best.set(k, g);
-      open.push({ x: nx, z: nz, g, f: g + heuristic(nx, nz), parent: node });
+    for (const nb of neighbours(nodes, cur[0], cur[1])) {
+      const nk = key(nb[0], nb[1]);
+      if (closed.has(nk)) continue;
+      const nc = cost.get(ck) + ROAD_SPACING;
+      if (nc < (cost.get(nk) ?? Infinity)) {
+        cost.set(nk, nc);
+        came.set(nk, cur);
+        open.push({ node: nb, f: nc + heuristic(nb, g), g: nc });
+      }
     }
   }
   return null;
 }
 
-// Convenience wrapper: path in world metres between two points, using a
-// blocked(x, z) predicate and a cell size. Returns waypoints in metres.
-export function findPath(startX, startZ, goalX, goalZ, blocked, cell = 10, span = 90) {
-  const half = span * cell;
-  const cols = span * 2 + 1;
-  const rows = span * 2 + 1;
-  const grid = [];
-  for (let rz = 0; rz < rows; rz++) {
-    const row = [];
-    for (let cx = 0; cx < cols; cx++) {
-      const wx = startX - half + cx * cell;
-      const wz = startZ - half + rz * cell;
-      row.push(blocked(wx, wz) ? 1 : 0);
-    }
-    grid.push(row);
-  }
-  const sx = Math.round((startX - (startX - half)) / cell);
-  const sz = Math.round((startZ - (startZ - half)) / cell);
-  const gx = Math.max(0, Math.min(cols - 1, Math.round((goalX - (startX - half)) / cell)));
-  const gz = Math.max(0, Math.min(rows - 1, Math.round((goalZ - (startZ - half)) / cell)));
-  const path = astar(grid, sx, sz, gx, gz);
-  if (!path) return null;
-  return path.map(([cx, rz]) => [startX - half + cx * cell, startZ - half + rz * cell]);
+function nearestInGraph(nodes, p) {
+  const nx = Math.round(p[0] / ROAD_SPACING) * ROAD_SPACING;
+  const nz = Math.round(p[1] / ROAD_SPACING) * ROAD_SPACING;
+  const clamped = [
+    Math.max(-WORLD_HALF, Math.min(WORLD_HALF, nx)),
+    Math.max(-WORLD_HALF, Math.min(750, nz)),
+  ];
+  return nodes.has(key(clamped[0], clamped[1])) ? clamped : null;
 }

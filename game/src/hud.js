@@ -1,220 +1,209 @@
-// The HUD: money and wanted stars, circular minimap, speed, mission bar,
-// district name, NDPD dispatch panel, crew panel, dialogue, shop, toasts.
+// hud.js — DOM HUD: money/stars, minimap, speed, mission bar, district,
+// dispatch panel, crew panel, shop, dialog, toasts, title/pause/busted.
+import { nightLevel } from './lights.js';
+import { districtAt, RADIO_TEXT, CREW } from './config.js';
+import { drawPortrait } from './portraits.js';
+import { roadLines, SEA_Z } from './geo.js';
+import { WEAPONS } from './config.js';
 
-import { WEAPONS, RANKS } from './config.js';
-import { rankFor } from './rank.js';
-import { districtAt } from './geo.js';
-import { shopItems } from './shop.js';
+const css = `
+#hud{position:fixed;inset:0;pointer-events:none;font-family:'Arial Black',Arial,sans-serif;color:#fff;z-index:5}
+.panel{background:rgba(10,14,20,.72);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:8px 12px}
+#money{position:absolute;top:14px;right:16px;text-align:right;font-size:22px}
+#money .stars{color:#ffd24a;font-size:20px;letter-spacing:2px;text-shadow:0 0 6px #000}
+#money .cash{color:#7dff9a;text-shadow:0 0 6px #000}
+#district{position:absolute;top:14px;left:16px;font-size:34px;font-style:italic;letter-spacing:2px;text-shadow:0 2px 8px #000}
+#radio{position:absolute;top:56px;left:18px;font-size:13px;color:#ffd27a;text-shadow:0 1px 4px #000}
+#minimap{position:absolute;left:16px;bottom:16px;width:170px;height:170px;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,.5);box-shadow:0 0 12px #000}
+#minimap canvas{width:170px;height:170px;display:block}
+#speed{position:absolute;right:18px;bottom:18px;text-align:right;font-size:44px;text-shadow:0 2px 8px #000}
+#speed .unit{font-size:16px;color:#ffd27a}
+#cond{font-size:13px;color:#9ad1ff}
+#missionbar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);text-align:center;min-width:340px;font-size:15px}
+#missionbar .mname{color:#ffd24a;font-size:17px}
+#dispatch{position:absolute;top:96px;left:16px;font-size:12px;line-height:1.7}
+#dispatch .u{color:#9ad1ff}
+#crew{position:absolute;left:16px;bottom:200px;font-size:12px;line-height:1.8}
+#crew .k{color:#ffd24a}
+#shop{position:absolute;top:90px;right:16px;width:280px;pointer-events:auto;font-size:13px}
+#shop h3{margin:0 0 6px;color:#ffd24a;font-size:16px}
+#shop .row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,.15)}
+#shop button{pointer-events:auto;background:#1f8a8a;color:#fff;border:1px solid #fff;border-radius:5px;padding:3px 10px;font-family:inherit;cursor:pointer}
+#shop button:disabled{background:#444;color:#999;cursor:default}
+#dialog{position:absolute;top:64px;left:50%;transform:translateX(-50%);width:520px;display:flex;gap:12px;align-items:flex-start}
+#dialog img{width:72px;height:72px;border:2px solid #ffd24a;border-radius:6px}
+#dialog .who{color:#ffd24a;font-size:15px}
+#dialog .txt{font-size:13px;font-family:Arial,sans-serif;line-height:1.45}
+#toasts{position:absolute;left:50%;bottom:110px;transform:translateX(-50%);text-align:center;font-size:14px}
+#toasts div{margin-top:4px;text-shadow:0 1px 4px #000}
+#title{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(160deg,rgba(10,40,50,.88),rgba(40,10,30,.88));pointer-events:auto}
+#title h1{font-size:64px;font-style:italic;color:#2fd8c8;margin:0;text-shadow:0 4px 0 #ff5e4a,0 8px 24px #000;letter-spacing:3px}
+#title h2{font-size:20px;color:#ffd24a;letter-spacing:6px;margin:8px 0 24px}
+#title p{font-family:Arial,sans-serif;font-size:14px;line-height:1.7;text-align:center;color:#dfe8ef}
+#title .go{color:#7dff9a;font-size:18px;margin-top:18px}
+#pause,#busted{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(5,8,14,.8);pointer-events:auto}
+#pause h1,#busted h1{font-size:48px;font-style:italic;margin:0}
+#busted h1{color:#ff3b30}
+#pause p,#busted p{font-family:Arial,sans-serif;font-size:15px}
+`;
 
-export function createHud() {
-  const root = document.getElementById('hud');
+export function createHUD(G) {
+  const style = document.createElement('style');
+  style.textContent = css;
+  document.head.appendChild(style);
+  const root = document.createElement('div');
+  root.id = 'hud';
   root.innerHTML = `
-    <div id="hud-money"></div>
-    <div id="hud-dispatch"></div>
-    <div id="hud-crew"></div>
-    <div id="hud-district"></div>
-    <div id="hud-mission"></div>
-    <div id="hud-minimap-wrap"><canvas id="hud-minimap" width="220" height="220"></canvas></div>
-    <div id="hud-speed"></div>
-    <div id="hud-weapon"></div>
-    <div id="hud-radio">RADIO: NEON 88</div>
-    <div id="hud-hint">WASD DRIVE &nbsp;·&nbsp; E ENTER/EXIT &nbsp;·&nbsp; F INTERACT &nbsp;·&nbsp; R RELOAD &nbsp;·&nbsp; C PLATES &nbsp;·&nbsp; V REPAIR &nbsp;·&nbsp; X OVERWATCH &nbsp;·&nbsp; TAB SHOP &nbsp;·&nbsp; M RADIO</div>
-    <div id="hud-dialogue"></div>
-    <div id="hud-shop"></div>
-    <div id="hud-toast"></div>
-    <div id="hud-center"></div>
-  `;
-  const el = (id) => document.getElementById(id);
-  const minimap = el('hud-minimap');
-  const mctx = minimap.getContext('2d');
+    <div id="district">DOWNTOWN</div>
+    <div id="radio">${RADIO_TEXT}</div>
+    <div id="money"><div class="stars"></div><div class="cash"></div></div>
+    <div id="minimap"><canvas width="170" height="170"></canvas></div>
+    <div id="speed"><span class="num">0</span><span class="unit"> km/h</span><div id="cond"></div></div>
+    <div id="missionbar" class="panel"><div class="mname"></div><div class="step"></div></div>
+    <div id="dispatch" class="panel" style="display:none"></div>
+    <div id="crew" class="panel"></div>
+    <div id="shop" class="panel" style="display:none"></div>
+    <div id="dialog" class="panel" style="display:none"><img alt=""><div><div class="who"></div><div class="txt"></div></div></div>
+    <div id="toasts"></div>
+    <div id="title"><h1>NEON DELTA LA</h1><h2>MAKE GTA 6 • LOS ANGELES</h2>
+      <p>Mara Solano is back in Los Angeles. Her sister vanished holding proof<br>
+      of a corruption ring — a mayor, a port businessman, the NDPD.<br>
+      Drive, steal, fight and finish all ten jobs to take the city back.</p>
+      <p>WASD drive / walk &nbsp;•&nbsp; E enter car &nbsp;•&nbsp; Mouse aim + click shoot &nbsp;•&nbsp; R reload<br>
+      C clean plates &nbsp;•&nbsp; V field repair ($150) &nbsp;•&nbsp; X overwatch &nbsp;•&nbsp; Esc pause</p>
+      <div class="go">PRESS ENTER TO START</div></div>
+    <div id="pause"><h1>PAUSED</h1><p>Esc resume &nbsp;•&nbsp; S save &nbsp;•&nbsp; L load</p></div>
+    <div id="busted"><h1>BUSTED</h1><p>The NDPD took you in. You lose $200 and wake up downtown.</p></div>`;
+  document.body.appendChild(root);
+  const $ = (id) => root.querySelector('#' + id);
+  const mapCtx = $('minimap').querySelector('canvas').getContext('2d');
+
+  function drawMinimap() {
+    const S = 170 / 1800;
+    mapCtx.fillStyle = '#10161d';
+    mapCtx.fillRect(0, 0, 170, 170);
+    mapCtx.fillStyle = '#2f7fae';
+    mapCtx.fillRect(0, (SEA_Z + 900) * S, 170, 170 - (SEA_Z + 900) * S);
+    mapCtx.strokeStyle = '#5a5a5a';
+    mapCtx.lineWidth = 2;
+    for (const L of roadLines()) {
+      if (L <= 750) {
+        mapCtx.beginPath(); mapCtx.moveTo(0, (L + 900) * S); mapCtx.lineTo(170, (L + 900) * S); mapCtx.stroke();
+      }
+      mapCtx.beginPath(); mapCtx.moveTo((L + 900) * S, 0); mapCtx.lineTo((L + 900) * S, (750 + 900) * S); mapCtx.stroke();
+    }
+    // Mission marker.
+    if (G.missionTarget) {
+      mapCtx.fillStyle = '#ffd24a';
+      const mx = (G.missionTarget.x + 900) * S, my = (G.missionTarget.z + 900) * S;
+      mapCtx.beginPath();
+      mapCtx.moveTo(mx, my - 6); mapCtx.lineTo(mx + 6, my); mapCtx.lineTo(mx, my + 6); mapCtx.lineTo(mx - 6, my);
+      mapCtx.closePath(); mapCtx.fill();
+    }
+    // Police dots.
+    mapCtx.fillStyle = '#ff3b30';
+    for (const c of G.police.activeCars) {
+      mapCtx.beginPath();
+      mapCtx.arc((c.x + 900) * S, (c.z + 900) * S, 3, 0, Math.PI * 2);
+      mapCtx.fill();
+    }
+    // Player arrow.
+    const px = (G.player.x + 900) * S, py = (G.player.z + 900) * S;
+    mapCtx.fillStyle = '#2fd8c8';
+    mapCtx.save();
+    mapCtx.translate(px, py);
+    mapCtx.rotate(G.player.heading);
+    mapCtx.beginPath();
+    mapCtx.moveTo(0, -7); mapCtx.lineTo(5, 5); mapCtx.lineTo(-5, 5);
+    mapCtx.closePath(); mapCtx.fill();
+    mapCtx.restore();
+  }
+
   let toastTimer = 0;
-  let districtTimer = 0;
-  let lastDistrict = '';
-  let dialogueTimer = 0;
-
-  function stars(n) {
-    let out = '';
-    for (let i = 0; i < 5; i++) out += i < n ? '★' : '☆';
-    return out;
-  }
-
-  function drawMinimap(state) {
-    const W = 220;
-    const H = 220;
-    const R = 104;
-    const scale = R / 720;
-    mctx.clearRect(0, 0, W, H);
-    mctx.save();
-    mctx.beginPath();
-    mctx.arc(W / 2, H / 2, R, 0, Math.PI * 2);
-    mctx.clip();
-    mctx.fillStyle = 'rgba(10,18,26,0.82)';
-    mctx.fillRect(0, 0, W, H);
-    const px = state.x;
-    const pz = state.z;
-    const toMap = (x, z) => [W / 2 + (x - px) * scale, H / 2 + (z - pz) * scale];
-    // water
-    mctx.fillStyle = '#1b6ca8';
-    mctx.fillRect(W / 2 + (540 - px) * scale, 0, W, H);
-    // roads
-    mctx.strokeStyle = 'rgba(200,200,200,0.5)';
-    mctx.lineWidth = 2;
-    for (let k = -8; k <= 8; k++) {
-      const gx = W / 2 + (k * 80 - px) * scale;
-      const gz = H / 2 + (k * 80 - pz) * scale;
-      mctx.beginPath(); mctx.moveTo(gx, 0); mctx.lineTo(gx, H); mctx.stroke();
-      mctx.beginPath(); mctx.moveTo(0, gz); mctx.lineTo(W, gz); mctx.stroke();
-    }
-    // pier
-    mctx.fillStyle = '#8a6a4a';
-    const [pierX, pierY] = toMap(615, 422);
-    mctx.fillRect(pierX - 22, pierY - 6, 44, 12);
-    // mission marker
-    if (state.missionTarget) {
-      const [mx, my] = toMap(state.missionTarget.x, state.missionTarget.z);
-      mctx.fillStyle = '#ffc300';
-      mctx.beginPath();
-      mctx.arc(mx, my, 7, 0, Math.PI * 2);
-      mctx.fill();
-      mctx.fillStyle = '#111';
-      mctx.font = 'bold 10px Arial';
-      mctx.textAlign = 'center';
-      mctx.textBaseline = 'middle';
-      mctx.fillText('!', mx, my);
-    }
-    // police
-    mctx.fillStyle = '#4a90ff';
-    for (const car of state.policeCars || []) {
-      const [cx, cy] = toMap(car.x, car.z);
-      mctx.beginPath();
-      mctx.arc(cx, cy, 4, 0, Math.PI * 2);
-      mctx.fill();
-    }
-    // player arrow
-    mctx.save();
-    mctx.translate(W / 2, H / 2);
-    mctx.rotate(state.heading || 0);
-    mctx.fillStyle = '#ff5a5f';
-    mctx.beginPath();
-    mctx.moveTo(0, -9);
-    mctx.lineTo(6, 7);
-    mctx.lineTo(-6, 7);
-    mctx.closePath();
-    mctx.fill();
-    mctx.restore();
-    mctx.restore();
-    mctx.strokeStyle = 'rgba(255,255,255,0.75)';
-    mctx.lineWidth = 3;
-    mctx.beginPath();
-    mctx.arc(W / 2, H / 2, R, 0, Math.PI * 2);
-    mctx.stroke();
-  }
-
-  return {
-    toast(msg) {
-      el('hud-toast').textContent = msg;
-      el('hud-toast').style.opacity = '1';
-      toastTimer = 3;
+  const hud = {
+    toast(msg, ms = 3500) {
+      const d = document.createElement('div');
+      d.textContent = msg;
+      $('toasts').appendChild(d);
+      setTimeout(() => d.remove(), ms);
+      void toastTimer;
     },
-    showDialogue(name, color, line) {
-      el('hud-dialogue').innerHTML = `<div class="dlg-name" style="color:${color}">${name}</div><div class="dlg-line">${line}</div>`;
-      el('hud-dialogue').style.display = 'block';
-      dialogueTimer = 6;
+    showDialog(contact, title, text) {
+      const img = $('dialog').querySelector('img');
+      img.src = drawPortrait(contact).toDataURL();
+      $('dialog').querySelector('.who').textContent = `${contact} — ${title}`;
+      $('dialog').querySelector('.txt').textContent = text;
+      $('dialog').style.display = 'flex';
+      setTimeout(() => { $('dialog').style.display = 'none'; }, 9000);
     },
-    hideDialogue() {
-      el('hud-dialogue').style.display = 'none';
-    },
-    update(state, dt) {
-      if (toastTimer > 0) {
-        toastTimer -= dt;
-        if (toastTimer <= 0) el('hud-toast').style.opacity = '0';
-      }
-      if (dialogueTimer > 0) {
-        dialogueTimer -= dt;
-        if (dialogueTimer <= 0) el('hud-dialogue').style.display = 'none';
-      }
-      const rank = rankFor(state.rp);
-      el('hud-money').innerHTML =
-        `<div class="money">$${state.money.toLocaleString('en-US')}</div>` +
-        `<div class="stars">${stars(state.wanted)}</div>` +
-        `<div class="rankline">${rank.title} · ${state.rp} RP · DAY ${state.day}</div>` +
-        `<div class="healthline">HP ${Math.round(state.health)} &nbsp; ARMOR ${Math.round(state.armor)}</div>`;
-      const d = districtAt(state.x, state.z);
-      if (d.name !== lastDistrict) {
-        lastDistrict = d.name;
-        districtTimer = 3.5;
-        el('hud-district').innerHTML = `<div class="dist-name">${d.name}</div><div class="dist-sub">${d.sub}</div>`;
-        el('hud-district').style.opacity = '1';
-      }
-      if (districtTimer > 0) {
-        districtTimer -= dt;
-        if (districtTimer <= 0) el('hud-district').style.opacity = '0';
-      }
-      if (state.mission) {
-        const m = state.mission;
-        const step = m.def.steps[m.step];
-        el('hud-mission').innerHTML =
-          `<div class="m-title">MISSION ${m.index + 1} — ${m.def.name}</div>` +
-          `<div class="m-stage">TAHAP ${m.step + 1}/${m.def.steps.length}: ${step ? step.label.toUpperCase() : 'DONE'}</div>` +
-          `<div class="m-contact">${m.def.contact} · $${m.def.reward}</div>`;
-        el('hud-mission').style.display = 'block';
-      } else if (state.nextMission != null) {
-        el('hud-mission').innerHTML =
-          `<div class="m-title">FREE ROAM</div>` +
-          `<div class="m-stage">PRESS ENTER TO START MISSION ${state.nextMission + 1}</div>`;
-        el('hud-mission').style.display = 'block';
-      } else {
-        el('hud-mission').style.display = 'none';
-      }
-      const kmh = Math.round(Math.abs(state.speedKmh || 0));
-      el('hud-speed').innerHTML = `<div class="speed-num">${kmh}</div><div class="speed-unit">KM/H</div>`;
-      const w = WEAPONS[state.weapon];
-      el('hud-weapon').innerHTML =
-        `<div class="w-name">${w.name}</div>` +
-        `<div class="w-ammo">${state.ammo} / ${state.reserve}</div>`;
-      if (state.dispatch) {
-        const dp = state.dispatch;
-        let html = `<div class="dp-head">NDPD DISPATCH — CODE ${dp.code} · ${dp.crime}</div>`;
-        html += `<div class="dp-status">${dp.status}</div>`;
-        for (const u of dp.units) {
-          html += `<div class="dp-unit"><span class="dp-call">${u.callsign}</span> <span class="dp-role">${u.role}</span> <span class="dp-dist">${u.dist}m</span></div>`;
-        }
-        if (dp.more > 0) html += `<div class="dp-more">+${dp.more} MORE UNITS</div>`;
-        el('hud-dispatch').innerHTML = html;
-        el('hud-dispatch').style.display = 'block';
-      } else {
-        el('hud-dispatch').style.display = 'none';
-      }
-      let crewHtml = '<div class="crew-head">CREW</div>';
-      for (const member of state.crew) {
-        crewHtml += `<div class="crew-row"><span class="crew-dot" style="background:${member.color}"></span><span class="crew-name">${member.name.toUpperCase()}</span><span class="crew-role">${member.role}</span></div>`;
-      }
-      crewHtml += `<div class="crew-keys">[C] CLEAN PLATES ${state.plateT > 0 ? Math.ceil(state.plateT) + 's' : 'READY'} &nbsp; [V] FIELD REPAIR ${state.repairT > 0 ? Math.ceil(state.repairT) + 's' : '$150'} &nbsp; [X] OVERWATCH ${state.watchT > 0 ? Math.ceil(state.watchT) + 's' : state.watchCd > 0 ? Math.ceil(state.watchCd) + 's' : 'READY'}</div>`;
-      el('hud-crew').innerHTML = crewHtml;
-      el('hud-radio').textContent = state.radioOn ? 'RADIO: NEON 88 ●' : 'RADIO: NEON 88';
-      drawMinimap(state);
-    },
-    renderShop(state, onBuy) {
-      const items = shopItems();
-      let html = '<div class="shop-head">DELTA ARMS</div><div class="shop-sub">GUNS • AMMO • GEAR</div>';
-      for (const item of items) {
-        const owned = state.ownedWeapons.includes(item.index);
-        html += `<div class="shop-row"><div class="shop-name">${item.name}</div>` +
-          `<div class="shop-stats">DMG ${item.dmg} &nbsp; MAG ${item.mag} &nbsp; RANGE ${item.range}m${item.auto ? ' &nbsp; AUTO' : ''}${item.pellets > 1 ? ` &nbsp; ${item.pellets} PELLETS` : ''}</div>` +
-          `<button class="shop-buy" data-idx="${item.index}" ${owned ? 'disabled' : ''}>${owned ? 'OWNED' : 'BUY $' + item.price}</button></div>`;
-      }
-      html += `<div class="shop-cash">CASH $${state.money.toLocaleString('en-US')} &nbsp;·&nbsp; PRESS TAB TO CLOSE</div>`;
-      el('hud-shop').innerHTML = html;
-      el('hud-shop').style.display = state.shopOpen ? 'block' : 'none';
-      if (state.shopOpen) {
-        el('hud-shop').querySelectorAll('.shop-buy').forEach((btn) => {
-          btn.onclick = () => onBuy(parseInt(btn.dataset.idx, 10));
+    openShop() {
+      G.shopOpen = true;
+      const el = $('shop');
+      el.style.display = 'block';
+      const rows = WEAPONS.map((w, i) => {
+        const owned = G.combat.owned.includes(i);
+        const afford = G.money >= w.price;
+        const label = w.price > 0 ? `$${w.price}` : 'OWNED';
+        const dis = owned || w.price <= 0 || !afford ? 'disabled' : '';
+        const btn = owned || w.price <= 0 ? 'OWNED' : 'BUY';
+        return `<div class="row"><span>${w.name}</span><span>${w.mag} rnd</span><span>${label}</span><button data-i="${i}" ${dis}>${btn}</button></div>`;
+      }).join('');
+      el.innerHTML = `<h3>DELTA ARMS</h3>${rows}<div style="margin-top:6px;font-size:12px">Cash: $${G.money.toLocaleString()} — click BUY to purchase</div>`;
+      el.querySelectorAll('button').forEach((b) => {
+        b.addEventListener('click', () => {
+          const i = Number(b.dataset.i);
+          const r = G.buyWeapon(i);
+          if (r.ok) {
+            hud.toast(`${WEAPONS[i].name} purchased — $${WEAPONS[i].price}`);
+            hud.openShop();
+          } else {
+            hud.toast(`Cannot buy: ${r.reason}`);
+          }
         });
-      }
+      });
     },
-    center(text) {
-      el('hud-center').textContent = text;
-      el('hud-center').style.opacity = text ? '1' : '0';
+    closeShop() {
+      G.shopOpen = false;
+      $('shop').style.display = 'none';
+    },
+    showTitle() { $('title').style.display = 'flex'; },
+    hideTitle() { $('title').style.display = 'none'; },
+    showPaused(v) { $('pause').style.display = v ? 'flex' : 'none'; },
+    showBusted(v) { $('busted').style.display = v ? 'flex' : 'none'; },
+    update() {
+      const d = districtAt(G.player.x, G.player.z);
+      $('district').textContent = d.name;
+      $('district').style.color = d.color;
+      const stars = '★'.repeat(G.wanted.level) + '☆'.repeat(5 - G.wanted.level);
+      $('money').querySelector('.stars').textContent = stars;
+      $('money').querySelector('.cash').textContent = '$' + G.money.toLocaleString();
+      const kmh = G.player.inCar ? Math.round(Math.abs(G.car.speed) * 3.6) : Math.round(G.player.speed * 3.6);
+      $('speed').querySelector('.num').textContent = kmh;
+      $('cond').textContent = G.player.inCar ? `CONDITION ${Math.round(G.car.health)}% • ${WEAPONS[G.combat.current].name} ${G.combat.ammo[G.combat.current]}/${G.combat.reserves[G.combat.current]}` : `ON FOOT • ${WEAPONS[G.combat.current].name} ${G.combat.ammo[G.combat.current]}/${G.combat.reserves[G.combat.current]}`;
+      const mb = $('missionbar');
+      if (G.mission && G.mission.status === 'active') {
+        const s = G.mission.def.steps[G.mission.step];
+        mb.querySelector('.mname').textContent = `M${G.missionIndex + 1} • ${G.mission.def.name} — $${G.mission.def.reward}`;
+        mb.querySelector('.step').textContent = s ? `${G.mission.step + 1}/${G.mission.def.steps.length} ${s.label}` : '';
+      } else {
+        mb.querySelector('.mname').textContent = 'FREE ROAM — press M for the next job';
+        mb.querySelector('.step').textContent = `DAY ${G.day} • ${G.missionIndex}/10 jobs done`;
+      }
+      const disp = $('dispatch');
+      if (G.wanted.level > 0 && G.dispatchUnits.length) {
+        disp.style.display = 'block';
+        disp.innerHTML = '<b>NDPD DISPATCH</b><br>' + G.dispatchUnits.map((u) => `<span class="u">${u.sign}</span> ${u.role} — ${u.dist}m`).join('<br>');
+      } else {
+        disp.style.display = 'none';
+      }
+      $('crew').innerHTML = CREW.map((c) => {
+        const t = c.key === 'C' ? G.crew.cooldownT : c.key === 'V' ? G.crew.repairT : G.crew.watchCd;
+        const cd = t > 0 ? ` (${Math.ceil(t)}s)` : '';
+        return `<span class="k">[${c.key}]</span> ${c.ability}${cd} — ${c.name}`;
+      }).join('<br>');
+      drawMinimap();
+      void nightLevel;
     },
   };
+  return hud;
 }

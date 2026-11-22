@@ -1,69 +1,56 @@
-// Save data, version 3. Old or partial saves load with sane defaults;
-// corrupt text and wrong versions are rejected outright.
-
+// save.js — save encoding/decoding with old-save defaults (pure).
 import { WEAPONS } from './config.js';
 
 export function makeSave(state) {
-  return { ...state, v: 3, savedAt: Date.now() };
+  return { v: 3, savedAt: Date.now(), ...state };
 }
 
 export function encodeSave(state) {
   return JSON.stringify(makeSave(state));
 }
 
-function padAmmo(rawAmmo) {
+function padToSix(arr, defaults) {
   const out = [];
   for (let i = 0; i < 6; i++) {
-    const v = rawAmmo && rawAmmo[i] != null ? rawAmmo[i] : WEAPONS[i].mag;
-    out.push(v);
+    out.push(Array.isArray(arr) && typeof arr[i] === 'number' ? arr[i] : defaults[i]);
   }
   return out;
 }
 
-function padReserves(rawReserves) {
-  const out = [];
-  for (let i = 0; i < 6; i++) {
-    const v = rawReserves && rawReserves[i] != null ? rawReserves[i] : WEAPONS[i].reserve;
-    out.push(v);
-  }
-  return out;
-}
-
-export function decodeSave(str) {
-  let raw;
+export function decodeSave(text) {
+  let d;
   try {
-    raw = JSON.parse(str);
+    d = JSON.parse(text);
   } catch {
     return null;
   }
-  if (!raw || typeof raw !== 'object' || raw.v !== 3) return null;
-  const stats = raw.stats || {};
+  if (!d || typeof d !== 'object' || d.v !== 3) return null;
   return {
     v: 3,
-    money: raw.money ?? 250,
-    mission: raw.mission ?? 0,
-    step: raw.step ?? 0,
-    health: raw.health ?? 100,
-    armor: raw.armor ?? 0,
-    x: raw.x ?? 0,
-    z: raw.z ?? 0,
-    heading: raw.heading ?? 0,
-    hour: raw.hour ?? 9,
-    weapons: raw.weapons ?? [0, 1, 2],
-    ammo: padAmmo(raw.ammo),
-    reserves: padReserves(raw.reserves),
-    day: raw.day ?? 1,
-    rp: raw.rp ?? 0,
-    standing: raw.standing ?? {},
-    plateT: raw.plateT ?? 0,
-    repairT: raw.repairT ?? 0,
-    watchT: raw.watchT ?? 0,
-    watchCd: raw.watchCd ?? 0,
+    money: d.money ?? 250,
+    mission: d.mission ?? 0,
+    step: d.step ?? 0,
+    health: d.health ?? 100,
+    armor: d.armor ?? 0,
+    x: d.x ?? 0,
+    z: d.z ?? 0,
+    heading: d.heading ?? 0,
+    hour: d.hour ?? 12,
+    weapons: Array.isArray(d.weapons) ? d.weapons.slice() : [0, 1, 2],
+    ammo: padToSix(d.ammo, WEAPONS.map((w) => w.mag)),
+    reserves: padToSix(d.reserves, WEAPONS.map((w) => w.reserve)),
+    day: d.day ?? 1,
+    rp: d.rp ?? 0,
+    standing: d.standing ?? {},
+    plateT: d.plateT ?? 0,
+    repairT: d.repairT ?? 0,
+    watchT: d.watchT ?? 0,
+    watchCd: d.watchCd ?? 0,
     stats: {
-      missionsDone: stats.missionsDone ?? 0,
-      totalEarned: stats.totalEarned ?? 0,
-      carsStolen: stats.carsStolen ?? 0,
+      missionsDone: d.stats?.missionsDone ?? 0,
+      totalEarned: d.stats?.totalEarned ?? 0,
+      carsStolen: d.stats?.carsStolen ?? 0,
     },
-    savedAt: raw.savedAt ?? 0,
+    savedAt: d.savedAt ?? 0,
   };
 }

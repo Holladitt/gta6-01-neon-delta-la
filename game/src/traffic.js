@@ -1,107 +1,81 @@
-// Ambient city life: traffic cars that follow the road grid and stop at red
-// lights, and pedestrians who stroll the sidewalks. Counts are fixed by the
-// brief: 104 pedestrians, 22 traffic cars (16 by day, 6 at night).
-
-import * as THREE from '../vendor/three.module.min.js';
+// traffic.js — ambient traffic on the road grid (browser).
+// 22 cars exist; 16 run by day and 6 by night. Cars drive along road
+// lines, turn at intersections, and stop for red lights.
+import * as THREE from 'three';
 import { makeCarMesh } from './vehicles.js';
-import { makeRng } from './rng.js';
-import { ROAD_SPACING, isOnRoad } from './geo.js';
-import { lightState } from './lights.js';
+import { lightState, isNight } from './lights.js';
+import { RNG } from './rng.js';
+import { ROAD_SPACING, WORLD_HALF } from './config.js';
 
-export const PED_COUNT = 104;
-export const TRAFFIC_DAY = 16;
-export const TRAFFIC_NIGHT = 6;
+const DAY_CARS = 16;
 
-const CAR_COLORS = [0x3a7bd5, 0xd5a23a, 0x7a4a9a, 0x4a9a6a, 0xc0c0c0, 0x2a2a2a, 0x8a5a3a, 0x5a8a8a];
-
-export function createTraffic(scene) {
-  const rng = makeRng(777);
-  const cars = [];
-  for (let i = 0; i < TRAFFIC_DAY + TRAFFIC_NIGHT; i++) {
-    const color = CAR_COLORS[i % CAR_COLORS.length];
-    const mesh = makeCarMesh({ body: color });
-    const onX = rng.chance(0.5);
-    const line = (rng.int(-8, 8)) * ROAD_SPACING;
-    const along = rng.range(-600, 600);
-    const car = {
-      mesh,
-      x: onX ? along : line,
-      z: onX ? line : along,
-      heading: onX ? (rng.chance(0.5) ? Math.PI / 2 : -Math.PI / 2) : (rng.chance(0.5) ? 0 : Math.PI),
-      speed: rng.range(6, 11),
-      night: i >= TRAFFIC_DAY,
-      wait: 0,
-    };
-    mesh.position.set(car.x, 0, car.z);
-    mesh.rotation.y = car.heading;
-    scene.add(mesh);
-    cars.push(car);
+export class TrafficSystem {
+  constructor(scene) {
+    this.scene = scene;
+    this.cars = [];
+    const rng = new RNG(2024);
+    const palette = [0xc0392b, 0x2e86c1, 0xf1c40f, 0x7d3c98, 0x1abc9c, 0xe67e22, 0xdddddd, 0x333a45];
+    for (let i = 0; i < 22; i++) {
+      const axis = rng.chance(0.5) ? 'x' : 'z';
+      const road = Math.round(rng.range(-5, 5)) * ROAD_SPACING;
+      const along = rng.range(-WORLD_HALF, WORLD_HALF);
+      const dir = rng.chance(0.5) ? 1 : -1;
+      const mesh = makeCarMesh('sedan', palette[rng.int(0, palette.length - 1)]);
+      scene.add(mesh);
+      this.cars.push({
+        axis, road, along, dir,
+        speed: rng.range(7, 11),
+        targetSpeed: rng.range(7, 11),
+        mesh, rng,
+      });
+    }
   }
-  const peds = [];
-  const pedGeo = new THREE.CapsuleGeometry(0.35, 0.9, 3, 6);
-  const pedMats = [0xe65a8a, 0x5aa9e6, 0x7bc96f, 0xe6a35a, 0xb388eb, 0xdddddd].map(
-    (c) => new THREE.MeshLambertMaterial({ color: c, roughness: 0.8 }),
-  );
-  for (let i = 0; i < PED_COUNT; i++) {
-    const mat = pedMats[i % pedMats.length];
-    const mesh = new THREE.Mesh(pedGeo, mat);
-    const bx = rng.int(-8, 7) * ROAD_SPACING + ROAD_SPACING / 2 + rng.range(-25, 25);
-    const bz = rng.int(-8, 7) * ROAD_SPACING + ROAD_SPACING / 2 + rng.range(-25, 25);
-    const ped = {
-      mesh,
-      x: bx,
-      z: bz,
-      heading: rng.range(0, Math.PI * 2),
-      speed: rng.range(0.8, 1.6),
-      phase: rng.range(0, Math.PI * 2),
-    };
-    mesh.position.set(bx, 0.95, bz);
-    scene.add(mesh);
-    peds.push(ped);
-  }
-  return { cars, peds };
-}
 
-export function updateTraffic(state, dt, time) {
-  const lights = lightState(time);
-  for (const car of state.cars) {
-    if (car.night && state.night < 0.5) {
-      car.mesh.visible = false;
-      continue;
-    }
-    car.mesh.visible = true;
-    // stop at red lights when approaching an intersection
-    const nearX = Math.abs(car.x - Math.round(car.x / ROAD_SPACING) * ROAD_SPACING) < 9;
-    const nearZ = Math.abs(car.z - Math.round(car.z / ROAD_SPACING) * ROAD_SPACING) < 9;
-    const onEastWest = Math.abs(Math.sin(car.heading)) > 0.7;
-    let stop = false;
-    if (nearX && nearZ) {
-      const nsGreen = lights.ns === 'green';
-      stop = onEastWest ? nsGreen : !nsGreen;
-    }
-    if (stop) {
-      car.wait += dt;
-    } else {
-      car.wait = 0;
-      car.x += Math.sin(car.heading) * car.speed * dt;
-      car.z += Math.cos(car.heading) * car.speed * dt;
-      if (car.x > 680) car.x = -680;
-      if (car.x < -680) car.x = 680;
-      if (car.z > 680) car.z = -680;
-      if (car.z < -680) car.z = 680;
-    }
-    car.mesh.position.set(car.x, 0, car.z);
-    car.mesh.rotation.y = car.heading;
+  get activeCount() {
+    return this._night ? 6 : DAY_CARS;
   }
-  for (const ped of state.peds) {
-    ped.phase += dt;
-    ped.x += Math.sin(ped.heading) * ped.speed * dt;
-    ped.z += Math.cos(ped.heading) * ped.speed * dt;
-    if (!isOnRoad(ped.x, ped.z) && Math.random() < 0.01) {
-      ped.heading += Math.PI / 2;
+
+  update(dt, time, hour) {
+    this._night = isNight(hour);
+    const lights = lightState(time);
+    const active = this.activeCount;
+    for (let i = 0; i < this.cars.length; i++) {
+      const c = this.cars[i];
+      const on = i < active;
+      c.mesh.visible = on;
+      if (!on) continue;
+      // Approaching an intersection? Stop for a red light on this axis.
+      const nextCross = Math.round(c.along / ROAD_SPACING) * ROAD_SPACING;
+      const distToCross = (nextCross - c.along) * c.dir;
+      let want = c.targetSpeed;
+      if (distToCross > 0 && distToCross < 16) {
+        const light = c.axis === 'x' ? lights.ew : lights.ns;
+        if (light === 'red') want = 0;
+        else if (light === 'yellow') want = Math.min(want, 3);
+      }
+      c.speed += (want - c.speed) * Math.min(1, 2.5 * dt);
+      c.along += c.dir * c.speed * dt;
+      // Turn or U-turn at intersections / map edge.
+      const atCross = Math.abs(c.along - Math.round(c.along / ROAD_SPACING) * ROAD_SPACING) < 1.2;
+      if (atCross && Math.abs(c.along) < WORLD_HALF - 10 && c.rng.next() < 0.12) {
+        // Turn onto the crossing road: the axis swaps, and the car's
+        // coordinates swap roles (road <-> along) at the intersection.
+        const cross = Math.round(c.along / ROAD_SPACING) * ROAD_SPACING;
+        const oldRoad = c.road;
+        c.axis = c.axis === 'x' ? 'z' : 'x';
+        c.road = cross;
+        c.along = oldRoad;
+        c.dir = c.rng.chance(0.5) ? 1 : -1;
+      }
+      if (Math.abs(c.along) > WORLD_HALF - 6) {
+        c.dir *= -1;
+        c.along = Math.max(-WORLD_HALF + 6, Math.min(WORLD_HALF - 6, c.along));
+      }
+      const x = c.axis === 'x' ? c.along : c.road;
+      const z = c.axis === 'x' ? c.road : c.along;
+      c.mesh.position.set(x, 0, z);
+      const heading = c.axis === 'x' ? (c.dir > 0 ? Math.PI / 2 : -Math.PI / 2) : (c.dir > 0 ? Math.PI : 0);
+      c.mesh.rotation.y = heading;
     }
-    if (Math.abs(ped.x) > 660 || Math.abs(ped.z) > 660) ped.heading += Math.PI;
-    ped.mesh.position.set(ped.x, 0.95 + Math.sin(ped.phase * 6) * 0.06, ped.z);
-    ped.mesh.rotation.y = ped.heading;
   }
 }

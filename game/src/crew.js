@@ -1,47 +1,44 @@
-// Crew abilities and their cooldowns. Plates drop the heat, Petra fixes the
-// car, Cassia watches the street from above.
-
+// crew.js — crew abilities: clean plates, field repair, overwatch (pure).
 export function newCrewState() {
   return { cooldownT: 0, repairT: 0, watchT: 0, watchCd: 0 };
 }
 
 export function canSwap(state, wanted) {
-  if (wanted <= 0) return { ok: false, reason: 'no-heat' };
-  if (state.cooldownT > 0) return { ok: false, reason: 'cooldown' };
-  return { ok: true };
+  return wanted > 0 && state.cooldownT <= 0;
 }
 
-export function applySwap(state, wanted, cooldown = 45) {
+// Juno Reyes — CLEAN PLATES: drops wanted by 1.
+export function applySwap(state, wanted, cd = 45) {
   if (wanted <= 0) return { ok: false, reason: 'no-heat', wanted };
   if (state.cooldownT > 0) return { ok: false, reason: 'cooldown', wanted };
-  state.cooldownT = cooldown;
+  state.cooldownT = cd;
   return { ok: true, wanted: wanted - 1 };
 }
 
-export function applyRepair(state, car, money, cost = 150, cooldown = 60) {
-  if (state.repairT > 0) return { ok: false, reason: 'cooldown', money };
+// Petra Hale — FIELD REPAIR: $150 restores the car to 100%.
+// Cooldown is checked before "full", so a press during the 60 s recharge
+// answers 'cooldown' (the toast reads "recharging"), not 'full'.
+export function applyRepair(state, car, money, cost = 150, cd = 60) {
   if (!car) return { ok: false, reason: 'no-car', money };
+  if (state.repairT > 0) return { ok: false, reason: 'cooldown', money };
+  if (car.health >= 100) return { ok: false, reason: 'full', money };
   if (money < cost) return { ok: false, reason: 'no-funds', money };
-  const health = car.health != null ? car.health : car.condition;
-  if (health != null && health >= 100) return { ok: false, reason: 'full', money };
+  state.repairT = cd;
   car.health = 100;
-  if ('condition' in car) car.condition = 100;
-  state.repairT = cooldown;
   return { ok: true, condition: 100, money: money - cost };
 }
 
-export function applyOverwatch(state, duration = 20, cooldown = 45) {
+// Cassia Wren — OVERWATCH: marks police for a while.
+export function applyOverwatch(state, duration = 20, cd = 45) {
   if (state.watchT > 0) return { ok: false, reason: 'active' };
   if (state.watchCd > 0) return { ok: false, reason: 'cooldown' };
   state.watchT = duration;
-  state.watchCd = cooldown;
-  return { ok: true };
+  state.watchCd = cd;
+  return { ok: true, duration };
 }
 
 export function tickCooldown(state, dt) {
-  for (const key of ['cooldownT', 'repairT', 'watchT', 'watchCd']) {
-    if (typeof state[key] === 'number') {
-      state[key] = Math.max(0, state[key] - dt);
-    }
+  for (const k of ['cooldownT', 'repairT', 'watchT', 'watchCd']) {
+    if (typeof state[k] === 'number') state[k] = Math.max(0, state[k] - dt);
   }
 }

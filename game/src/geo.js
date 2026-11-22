@@ -1,120 +1,170 @@
-// City geography: the road grid, the water on the east, the pier, the port,
-// the building footprints, and the places the missions point at.
+// geo.js — city layout data for Neon Delta LA (pure, no THREE, no DOM).
+// The city is a 150-unit road grid over x,z in [-900, 900]. The sea lies
+// south of z = 760; the Coral Pier reaches into it. All positions the
+// game stages (shop, pier, port, marina, overlook) are defined here so
+// the scene, the missions and the shots all agree on them.
+import { RNG } from './rng.js';
+import { ROAD_SPACING, WORLD_HALF } from './config.js';
 
-import { DISTRICTS, MISSIONS } from './config.js';
-import { makeRng } from './rng.js';
+export const SEA_Z = 760; // water south of this line
+export const PIER = { x0: -45, x1: 45, z0: 700, z1: 880 };
+export const SHOP = { x: 90, z: 152, face: Math.PI }; // DELTA ARMS storefront
+export const PORT = { x0: 600, z0: 300, x1: 900, z1: 750 };
+export const CRANE = { x: 760, z: 520 };
+export const MARINA = { x: -720, z: -520, r: 90 };
+export const OVERLOOK = { x: 300, z: -680 };
+export const CANALS = { x0: -720, z0: 220, x1: -480, z1: 420 };
 
-export const MAP_HALF = 700;
-export const ROAD_SPACING = 80;
-export const ROAD_HALF = 6;
-export const SHORE_X = 540;
-
-export const SHOP_POS = { x: 140, z: 180 };
-export const PIER_DECK = { x0: 540, x1: 690, z0: 400, z1: 444 };
-export const PORT_RECT = { x0: 540, x1: 690, z0: 170, z1: 340 };
-export const MARINA_POS = { x: 600, z: 480 };
-export const SPAWN_POS = { x: 0, z: 0 };
-export const HILLS_POS = { x: -50, z: -400 };
-
-export function isOnPier(x, z) {
-  return x >= PIER_DECK.x0 && x <= PIER_DECK.x1 && z >= PIER_DECK.z0 && z <= PIER_DECK.z1;
+// Road lines (multiples of 150). The southernmost road is the coastal road.
+export function roadLines() {
+  const lines = [];
+  for (let v = -WORLD_HALF; v <= WORLD_HALF; v += ROAD_SPACING) lines.push(v);
+  return lines;
 }
 
-export function isInPort(x, z) {
-  return x >= PORT_RECT.x0 && x <= PORT_RECT.x1 && z >= PORT_RECT.z0 && z <= PORT_RECT.z1;
-}
-
-export function isWater(x, z) {
-  if (x <= SHORE_X) return false;
-  if (isOnPier(x, z)) return false;
-  if (isInPort(x, z)) return false;
-  return true;
-}
-
-export function isOnRoad(x, z) {
-  const dx = Math.abs(x - Math.round(x / ROAD_SPACING) * ROAD_SPACING);
-  const dz = Math.abs(z - Math.round(z / ROAD_SPACING) * ROAD_SPACING);
-  return dx <= ROAD_HALF || dz <= ROAD_HALF;
-}
-
-// All the points the missions and the key places point at, so no building
-// ever lands on one of them.
-function protectedPoints() {
-  const pts = [
-    [SHOP_POS.x, SHOP_POS.z],
-    [SPAWN_POS.x, SPAWN_POS.z],
-    [HILLS_POS.x, HILLS_POS.z],
-    [530, 500],
-    [520, 410],
-    [500, 400],
-    [480, 390],
-    [300, 200],
-  ];
-  for (const m of MISSIONS) {
-    for (const s of m.steps) {
-      if (s.x != null) pts.push([s.x, s.z]);
-      if (s.points) for (const p of s.points) pts.push(p);
+// Intersections of the road grid (drivable, z <= 750 keeps cars off the sea).
+export function roadNodes() {
+  const nodes = [];
+  for (let x = -WORLD_HALF; x <= WORLD_HALF; x += ROAD_SPACING) {
+    for (let z = -WORLD_HALF; z <= 750; z += ROAD_SPACING) {
+      nodes.push([x, z]);
     }
   }
-  return pts;
+  return nodes;
 }
 
-function buildBuildings() {
-  const rng = makeRng(20261122);
-  const keep = protectedPoints();
+export function nearestNode(x, z) {
+  const nx = Math.round(x / ROAD_SPACING) * ROAD_SPACING;
+  const nz = Math.round(z / ROAD_SPACING) * ROAD_SPACING;
+  return [Math.max(-WORLD_HALF, Math.min(WORLD_HALF, nx)), Math.max(-WORLD_HALF, Math.min(750, nz))];
+}
+
+// ---- Buildings (procedural, seeded, deterministic) ----
+// A block is the square between four roads. Special areas stay clear.
+function inSpecial(x, z) {
+  if (z >= 690) return true; // pier / beach
+  if (x >= PORT.x0 && z >= PORT.z0) return true; // port yard
+  if (x >= CANALS.x0 && x <= CANALS.x1 && z >= CANALS.z0 && z <= CANALS.z1) return true; // canals
+  const dx = x - MARINA.x, dz = z - MARINA.z;
+  if (dx * dx + dz * dz < (MARINA.r + 40) * (MARINA.r + 40)) return true; // marina basin
+  if (Math.abs(x - SHOP.x) < 90 && Math.abs(z - SHOP.z) < 90) return true; // shop block
+  return false;
+}
+
+export function buildBuildings() {
+  const rng = new RNG(1337);
   const list = [];
-  for (let i = -8; i <= 7; i++) {
-    for (let j = -8; j <= 7; j++) {
-      const cx = i * ROAD_SPACING + ROAD_SPACING / 2;
-      const cz = j * ROAD_SPACING + ROAD_SPACING / 2;
-      if (cx > SHORE_X - 60) continue;
-      if (isInPort(cx, cz)) continue;
-      if (keep.some(([px, pz]) => Math.hypot(px - cx, pz - cz) < 55)) continue;
-      if (!rng.chance(0.72)) continue;
-      const w = rng.range(28, 52);
-      const d = rng.range(22, 44);
-      const h = rng.range(10, 46);
-      const hue = rng.pick([0x8a93a6, 0x9a8f7a, 0x7a8a9a, 0xa67c52, 0x6f7f8a, 0xb0a08a]);
-      list.push({ x: cx, z: cz, w, d, h, color: hue });
+  const palette = [0x8a7f70, 0x7d8a99, 0xa89a80, 0x6f7d6a, 0x9c8a7a, 0x7a6f8a, 0xb0a08a, 0x5f7080];
+  for (let bx = -WORLD_HALF; bx < WORLD_HALF; bx += ROAD_SPACING) {
+    for (let bz = -WORLD_HALF; bz < 750; bz += ROAD_SPACING) {
+      const cx = bx + ROAD_SPACING / 2;
+      const cz = bz + ROAD_SPACING / 2;
+      if (inSpecial(cx, cz)) continue;
+      const downtown = Math.abs(cx) < 300 && Math.abs(cz) < 300;
+      const n = downtown ? rng.int(2, 4) : rng.int(1, 3);
+      for (let i = 0; i < n; i++) {
+        const w = rng.range(22, 46);
+        const d = rng.range(22, 46);
+        const x = cx + rng.range(-42, 42);
+        const z = cz + rng.range(-42, 42);
+        if (inSpecial(x, z)) continue;
+        const h = downtown ? rng.range(24, 68) : rng.range(9, 26);
+        list.push({ x, z, w, d, h, color: palette[rng.int(0, palette.length - 1)] });
+      }
     }
   }
-  // The DELTA ARMS shop is a low, wide building with a forecourt.
-  list.push({ x: SHOP_POS.x, z: SHOP_POS.z + 18, w: 34, d: 16, h: 9, color: 0x2e4a5a, shop: true });
   return list;
 }
 
-export const BUILDINGS = buildBuildings();
+// ---- Hand-placed props (v16: dense, lived-in scenes) ----
+export function buildProps() {
+  const rng = new RNG(4242);
+  const props = [];
+  const add = (type, x, z, rot = 0, s = 1) => props.push({ type, x, z, rot, s });
 
-export function buildingAt(x, z) {
-  for (const b of BUILDINGS) {
-    if (Math.abs(x - b.x) < b.w / 2 && Math.abs(z - b.z) < b.d / 2) return b;
+  // Shop forecourt (DELTA ARMS at 90,152; forecourt to its south).
+  add('planter', 62, 132); add('planter', 118, 132);
+  add('tree', 66, 135); add('tree', 114, 128);
+  add('crate', 70, 120); add('crate', 74, 120); add('crate', 72, 117);
+  add('crate', 108, 118); add('barrel', 112, 118); add('barrel', 112, 122);
+  add('bikerack', 84, 124); add('bike', 82, 124); add('bike', 86, 124);
+  add('newsbox', 96, 126); add('bin', 104, 126);
+  add('board', 78, 140, 0.4); // OPEN sandwich board
+  add('hedge', 64, 142); add('hedge', 70, 142); add('hedge', 76, 142);
+  add('flower', 64, 144); add('flower', 76, 144);
+
+  // Street props along the avenue (parked cars on the edge, lawn props).
+  for (let i = 0; i < 8; i++) {
+    const x = -300 + i * 85 + rng.range(-8, 8);
+    add('parked', x, -8, 0, rng.pick([0.9, 1, 1.1]));
   }
-  return null;
-}
+  add('tree', -40, 60); add('tree', 150, -60); add('tree', -160, 120);
+  add('bench', -30, 48); add('bench', 170, -40);
+  add('hydrant', 30, 52); add('bin', -90, -48);
 
-export function isBlocked(x, z) {
-  if (x < -MAP_HALF || x > MAP_HALF || z < -MAP_HALF || z > MAP_HALF) return true;
-  if (isWater(x, z)) return true;
-  return buildingAt(x, z) != null;
-}
-
-export function districtAt(x, z) {
-  let best = DISTRICTS[0];
-  let bestScore = Infinity;
-  for (const d of DISTRICTS) {
-    const dist = Math.hypot(x - d.x, z - d.z);
-    const score = dist - d.r;
-    if (score < bestScore) {
-      bestScore = score;
-      best = d;
-    }
+  // Pier: lamp posts, stalls, boats, glow pools.
+  for (let z = 720; z <= 860; z += 28) {
+    add('lamp', -38, z); add('lamp', 38, z);
   }
-  return best;
+  add('stall', -25, 800, 0, 1); // BALLOONS
+  add('stall', 0, 820, 0, 1); // ARCADE
+  add('stall', 25, 800, 0, 1); // SNO-CONES
+  add('stall', -25, 845, 0, 1);
+  add('stall', 25, 845, 0, 1);
+  add('boat', -90, 800, 0.3); add('boat', 90, 830, -0.4); add('boat', 120, 790, 0.1);
+  add('glowpool', -20, 780); add('glowpool', 20, 800); add('glowpool', 0, 840);
+  add('glowpool', -30, 830); add('glowpool', 30, 760);
+
+  // Port yard: containers, lamps, puddles, forklift, pallet stack.
+  for (let i = 0; i < 10; i++) {
+    add('container', 640 + (i % 5) * 46, 340 + Math.floor(i / 5) * 40, rng.chance(0.5) ? 0 : Math.PI / 2);
+  }
+  add('container', 700, 620, 0.2); add('container', 740, 630, -0.15);
+  add('container', 820, 420, Math.PI / 2); add('container', 820, 460, Math.PI / 2);
+  add('lamp', 660, 380); add('lamp', 780, 420); add('lamp', 860, 560);
+  add('puddle', 700, 500); add('puddle', 780, 560); add('puddle', 660, 620);
+  add('forklift', 720, 580, 0.6); add('pallet', 730, 590); add('pallet', 734, 590);
+  add('crate', 690, 560); add('crate', 694, 560); add('barrel', 800, 600);
+
+  // Marina quay: boats, crates, lamps.
+  add('boat', -700, -500, 0.5); add('boat', -760, -560, -0.3);
+  add('crate', -660, -440); add('lamp', -640, -470); add('lamp', -680, -430);
+
+  // Hills overlook: a couple of trees and a viewpoint bench.
+  add('tree', 280, -660); add('tree', 330, -700); add('bench', 300, -672);
+  return props;
 }
 
-export function clampToMap(x, z) {
-  return {
-    x: Math.max(-MAP_HALF, Math.min(MAP_HALF, x)),
-    z: Math.max(-MAP_HALF, Math.min(MAP_HALF, z)),
-  };
+// Parked cars the player can steal (kind + spot).
+export function buildParkedCars() {
+  const rng = new RNG(777);
+  const kinds = ['sedan', 'sports', 'van', 'taxi', 'sedan', 'sports'];
+  const spots = [
+    [60, -12], [-120, 138], [240, -138], [-240, 12], [420, 138], [-420, -12],
+    [120, 288], [-60, -288], [660, 288], [-660, -138], [300, 438], [-300, 438],
+  ];
+  return spots.map(([x, z], i) => ({
+    x, z, kind: kinds[i % kinds.length],
+    color: [0xc0392b, 0x2e86c1, 0xf1c40f, 0x7d3c98, 0x1abc9c, 0xe67e22][i % 6],
+    heading: rng.chance(0.5) ? 0 : Math.PI / 2,
+  }));
+}
+
+// Warm ground light discs at night (28 of them).
+export function glowDiscs() {
+  const discs = [];
+  // Pier lamps + stall glow.
+  for (let z = 720; z <= 860; z += 28) {
+    discs.push([-38, z]); discs.push([38, z]);
+  }
+  discs.push([-25, 800]); discs.push([0, 820]); discs.push([25, 800]);
+  discs.push([-25, 845]); discs.push([25, 845]);
+  discs.push([-20, 780]); discs.push([20, 800]); discs.push([0, 840]);
+  discs.push([-30, 830]); discs.push([30, 760]);
+  // Port yard.
+  discs.push([660, 380]); discs.push([780, 420]); discs.push([860, 560]);
+  discs.push([700, 500]); discs.push([780, 560]); discs.push([660, 620]);
+  // Street lamps near the shop + avenue.
+  discs.push([62, 132]); discs.push([118, 132]); discs.push([0, 0]);
+  return discs.slice(0, 28);
 }

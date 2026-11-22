@@ -1,6 +1,4 @@
-// Combat: the six weapons, switching, firing with a per-shot cooldown,
-// and reloading from reserve stock.
-
+// combat.js — shooting: owned weapons, ammo, cooldown, reload (pure).
 import { WEAPONS } from './config.js';
 
 export class Combat {
@@ -12,32 +10,33 @@ export class Combat {
     this.cooldown = 0;
   }
 
-  switchTo(idx) {
-    if (!this.owned.includes(idx)) return false;
-    this.current = idx;
+  switchTo(index) {
+    if (!this.owned.includes(index)) return false;
+    this.current = index;
     return true;
   }
 
   fire() {
     if (this.cooldown > 0) return null;
     if (this.ammo[this.current] <= 0) return null;
-    this.ammo[this.current] -= 1;
     const w = WEAPONS[this.current];
-    this.cooldown = w.auto ? 0.12 : 0.35;
-    return { weapon: this.current, dmg: w.dmg, pellets: w.pellets };
+    this.ammo[this.current] -= 1;
+    this.cooldown = w.rate;
+    return { weapon: this.current, damage: w.damage, range: w.range };
   }
 
   reload() {
     const w = WEAPONS[this.current];
-    if (this.ammo[this.current] >= w.mag) return false;
     const need = w.mag - this.ammo[this.current];
+    if (need <= 0) return false;
     const take = Math.min(need, this.reserves[this.current]);
+    if (take <= 0) return false;
     this.ammo[this.current] += take;
     this.reserves[this.current] -= take;
     return true;
   }
 
   tick(dt) {
-    this.cooldown = Math.max(0, this.cooldown - dt);
+    if (this.cooldown > 0) this.cooldown = Math.max(0, this.cooldown - dt);
   }
 }

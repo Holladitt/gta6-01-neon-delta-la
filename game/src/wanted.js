@@ -1,29 +1,29 @@
-// Wanted level. Heat rises on crime and fades when the NDPD loses sight of
-// you for a while; the helicopter only flies once the heat is serious.
-
+// wanted.js — wanted level: heat, quiet decay, police response (pure).
 export function newWantedState() {
   return { level: 0, quietTimer: 0 };
 }
 
 export const WANTED = {
   add(state, n) {
-    state.level = Math.min(5, Math.max(0, state.level + n));
-    if (n > 0) state.quietTimer = 0;
-    return state.level;
+    state.level = Math.min(5, state.level + n);
+    state.quietTimer = 0;
   },
+  // seen = the police currently have eyes on the player.
+  // After 14 quiet game-seconds the level drops by one.
   update(state, dt, seen) {
     if (seen) {
       state.quietTimer = 0;
       return;
     }
+    if (state.level <= 0) return;
     state.quietTimer += dt;
-    if (state.quietTimer >= 14 && state.level > 0) {
+    if (state.quietTimer >= 14) {
       state.level -= 1;
       state.quietTimer = 0;
     }
   },
   policeFor(level) {
-    return level;
+    return Math.max(0, Math.min(5, level));
   },
   heliFor(level) {
     return level >= 3 ? 1 : 0;
