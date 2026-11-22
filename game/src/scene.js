@@ -573,6 +573,20 @@ export function createScene(container, world) {
   const apronCrate3 = box(2, 2, 2, 0, 628, 1, 624, new THREE.MeshLambertMaterial({ color: 0xa08a5a }));
   const apronCrate4 = box(2.5, 2.5, 2.5, 0, 620, 1.25, 628, new THREE.MeshLambertMaterial({ color: 0x8a6d3b }));
   scene.add(apronCrate1, apronCrate2, apronBox, apronCrate3, apronCrate4);
+  // Dockside road for the shot-4 camera: a dark asphalt strip with
+  // yellow centre dashes running across the lower frame, so the
+  // foreground reads as a road instead of flat tan concrete. It lies
+  // on land (clear of the water south of z=635), clear of the boat,
+  // the hero car and the apron crates; Mara stands on it.
+  const portRoad = box(8, 0.12, 52, 0, 633.9, 0.06, 608.4, new THREE.MeshLambertMaterial({ color: 0x3a3a3d }));
+  portRoad.rotation.y = -3.0;
+  scene.add(portRoad);
+  const dashMat = new THREE.MeshLambertMaterial({ color: 0xf1c40f });
+  for (const [dx, dz] of [[637.4, 633.1], [636.6, 627.2], [635.8, 621.3]]) {
+    const dash = box(0.8, 0.14, 3, 0, dx, 0.13, dz, dashMat);
+    dash.rotation.y = -3.0;
+    scene.add(dash);
+  }
   const crane = makeCrane();
   crane.position.set(CRANE.x, 0, CRANE.z);
   scene.add(crane);
