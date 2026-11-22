@@ -1,221 +1,146 @@
-// Screenshot staging: four frozen dioramas, one per shot.
-// In shot mode the game freezes hour, mission, wanted, standing,
-// cover, tapes and money — the car, traffic, police and heli still
-// move visually. Each shot is composed DENSE: no large empty
-// ground or empty sky in the frame. Cameras sit LOW on the road
-// or the deck, looking along the action — never high above a
-// building roof.
-//   1 chase: wanted 5, golden-hour dusk, heli visible ahead-left with
-//      its beam slanting onto the car, roadblock ahead, SWAT van in
-//      frame, 4+ traffic cars and 6+ pedestrians visible, weapon
-//      wheel open showing the 4 tiers (small, off-centre). Camera
-//      LOW and CLOSE behind the car on the x=-320 road, looking north.
-//   2 shop: DELTA ARMS front with tier labels, Mara LARGE and whole
-//      right-of-centre (east of the door, against the dark wall),
-//      parked car + bench + crates + newspaper box +
-//      bin, no bike rack, rooftop billboard with DISTRICT WARS
-//      readable. Camera just behind Mara, pulled back and raised
-//      so the billboard clears the DELTA ARMS sign.
-//   3 pier at night: stalls readable (name signs, none cut off),
-//      string lights, ferris wheel + fireworks, palm, COTTON CANDY
-//      sign, 8+ NPCs on the deck, Mara large and visible
-//      right-of-centre, bright night market. Camera on the deck,
-//      low, pulled back a little so Mara is a quarter of the
-//      frame and the wheel stays clear of her.
-//   4 port at dusk 18:00: crane load in frame, deep red dusk sky,
-//      freeway bridge, containers + lamps + puddles + the boat LARGE
-//      at the south dock, the hero car LARGE side-on, Mara LARGE on
-//      foot in the foreground. Camera LOW east of the boat, over
-//      the water, looking west-northwest across the dock.
-import { SHOP, CRANE, BOAT } from './config.js';
-import { startRace } from './races.js';
+// Screenshot staging for Neon Delta LA: District Wars.
+// Four frozen dioramas. Shot mode freezes hour, mission, wanted,
+// standing, cover, tapes and money; vehicles, police and the helicopter
+// still move visually. Mara is large in shots 2, 3 and 4 (red jacket,
+// blue backpack, back view, whole) and the boat reads as a boat in
+// shot 4. Unstaged pedestrians stand on validated grids, never near
+// the camera: the port-yard grid keeps every ped at least 60 units
+// from the shot-4 camera, the forecourt grid at least 32 from the
+// shot-2 camera, so no foreground ped reads as a random block.
+import { SHOP, BOAT, CRANE, PIER_DECK } from './config.js';
+import { inBuilding, inOcean, onRoad } from './geo.js';
+import { dist2 } from './rng.js';
 
-// Story lines shown in the dialogue box in shot mode (shots 1, 3, 4).
-export const SHOT_DIALOGUE = {
-  1: { speaker: 'Mara Solano', line: 'Five stars and a roadblock ahead — punch through, don\'t stop.' },
-  3: { speaker: 'Inez Vargas', line: 'Meet me where the lights are loudest. The ledger pages are already moving.' },
-  4: { speaker: 'Orin Beck', line: 'Two drops left and the proof goes out tonight. Keep the car running.' },
-};
+export const SHOT2_CAMERA = { x: SHOP.x, y: 4, z: SHOP.z + 50 };
+export const SHOT4_CAMERA = { x: 645, y: 3, z: 626 };
+export const SHOT2_MARA = { x: SHOP.x - 10, z: SHOP.z + 40 };
+export const SHOT4_MARA = { x: 632, z: 618 };
+export const SHOT4_BOAT = { x: 530, z: 648 };
+export const SHOP_FOOTPRINT = { x0: -350, x1: -290, z0: -230, z1: -170 };
 
-export const SHOT_DEFS = [
-  { n: 1, name: 'chase', file: '01-chase.jpg' },
-  { n: 2, name: 'shop', file: '02-shop.jpg' },
-  { n: 3, name: 'pier', file: '03-pier.jpg' },
-  { n: 4, name: 'port', file: '04-tracker.jpg' },
+// Port yard grid: 13 columns x 9 rows over the open yard, filtered to
+// spots clear of buildings and water and at least 60 units from the
+// shot-4 camera, so no ped ever blocks the foreground.
+export function shot4YardSpots() {
+  const spots = [];
+  for (let i = 0; i < 13; i += 1) {
+    for (let j = 0; j < 9; j += 1) {
+      const x = 380 + i * 20;
+      const z = 500 + j * 15;
+      if (inBuilding(x, z)) continue;
+      if (inOcean(x, z)) continue;
+      if (dist2(x, z, SHOT4_CAMERA.x, SHOT4_CAMERA.z) < 60) continue;
+      if (dist2(x, z, CRANE.x, CRANE.z) < 12) continue;
+      spots.push({ x, z });
+    }
+  }
+  return spots;
+}
+
+// Shop forecourt grid: a wide sweep of the forecourt, filtered to spots
+// clear of buildings and water, off the road, clear of the shop front
+// and at least 32 units from the shot-2 camera.
+export function shot2ForecourtSpots() {
+  const spots = [];
+  for (let i = 0; i < 16; i += 1) {
+    for (let j = 0; j < 14; j += 1) {
+      const x = -460 + i * 20;
+      const z = -300 + j * 20;
+      if (inBuilding(x, z)) continue;
+      if (inOcean(x, z)) continue;
+      if (onRoad(x, z)) continue;
+      if (x >= SHOP_FOOTPRINT.x0 && x <= SHOP_FOOTPRINT.x1 && z >= SHOP_FOOTPRINT.z0 && z <= SHOP_FOOTPRINT.z1) continue;
+      if (dist2(x, z, SHOT2_CAMERA.x, SHOT2_CAMERA.z) < 32) continue;
+      spots.push({ x, z });
+    }
+  }
+  return spots;
+}
+
+// Staged pedestrians the shots place by hand (visible in the frame).
+export const SHOT1_PEDS = [
+  { x: -308, z: -250 }, { x: -332, z: -300 }, { x: -308, z: -340 },
+  { x: -332, z: -260 }, { x: -308, z: -270 }, { x: -332, z: -380 },
+];
+export const SHOT2_PEDS = [
+  { x: -342, z: -160 }, { x: -310, z: -165 }, { x: -342, z: -185 },
+  { x: -305, z: -190 }, { x: -340, z: -200 },
+];
+export const SHOT2_FOREGROUND_PEDS = [
+  { x: -348, z: -152 }, { x: -312, z: -152 }, { x: -346, z: -168 }, { x: -316, z: -170 },
+];
+export const SHOT3_PEDS = [
+  { x: -670, z: 415 }, { x: -668, z: 445 }, { x: -675, z: 425 }, { x: -672, z: 450 },
+  { x: -680, z: 440 }, { x: -678, z: 420 }, { x: -685, z: 435 }, { x: -682, z: 455 },
+  { x: -690, z: 430 }, { x: -688, z: 448 },
+];
+export const SHOT4_PEDS = [
+  { x: 400, z: 520 }, { x: 440, z: 560 }, { x: 500, z: 540 }, { x: 460, z: 600 },
+  { x: 540, z: 580 }, { x: 380, z: 560 }, { x: 470, z: 600 }, { x: 585, z: 605 },
 ];
 
-export function shotFromUrl() {
-  try {
-    const u = new URL(window.location.href);
-    const n = parseInt(u.searchParams.get('shot') || '0', 10);
-    return n >= 1 && n <= 4 ? n : 0;
-  } catch (e) {
-    return 0;
-  }
+// The four shots: hour, mission, wanted and the full staging.
+// Mara is the hero of shots 2-4; the car is the hero of shot 1.
+export const SHOTS = [
+  {
+    n: 1, name: 'chase', hour: 18, mission: 1, wanted: 5, money: 1250, day: 3,
+    car: { x: -320, z: -260, angle: Math.PI },
+    camera: { x: -320, y: 3.5, z: -248 },
+    look: { x: -320, y: 1, z: -320 },
+    heli: { x: -320, z: -270 },
+    roadblock: { x: -320, z: -350 },
+    swat: { x: -300, z: -330 },
+    police: [{ x: -340, z: -330 }, { x: -300, z: -300 }],
+    traffic: [{ x: -320, z: -400 }, { x: -280, z: -320 }, { x: -320, z: -180 }, { x: -280, z: -220 }],
+    peds: SHOT1_PEDS,
+    dialogue: { name: 'MARA SOLANO', line: 'Five stars and a roadblock ahead — punch through, don\'t stop.' },
+    missionBar: { title: 'M1 THE GETAWAY', stage: 'TAHAP 1/2', objective: 'Pick up Eden', next: 'Lose the tail' },
+    wheelOpen: true,
+  },
+  {
+    n: 2, name: 'shop', hour: 10, mission: 2, wanted: 0, money: 850, day: 2,
+    mara: { x: SHOT2_MARA.x, z: SHOT2_MARA.z, scale: 1.8, angle: Math.PI },
+    camera: { x: SHOT2_CAMERA.x, y: SHOT2_CAMERA.y, z: SHOT2_CAMERA.z },
+    look: { x: -330, y: 1.2, z: -160 },
+    parkedCar: { x: SHOP.x - 45, z: SHOP.z - 35, angle: 0.4 },
+    peds: SHOT2_PEDS,
+    foregroundPeds: SHOT2_FOREGROUND_PEDS,
+    dialogue: null,
+    missionBar: { title: 'M2 VENICE CANALS', stage: 'TAHAP 1/2', objective: 'Meet Harlan', next: 'Drop the package' },
+    wheelOpen: false,
+  },
+  {
+    n: 3, name: 'pier', hour: 21, mission: 7, wanted: 1, money: 2100, day: 7,
+    mara: { x: -652, z: 428, scale: 1.8, angle: Math.PI * 0.5 },
+    camera: { x: -639, y: 1.8, z: 428 },
+    look: { x: -720, y: 2, z: 445 },
+    peds: SHOT3_PEDS,
+    dialogue: { name: 'INEZ VARGAS', line: 'Meet me where the lights are loudest. The ledger pages are already moving.' },
+    missionBar: { title: 'M7 THE NIGHT LEDGER', stage: 'TAHAP 1/2', objective: 'Meet Inez', next: 'Take the ledger' },
+    wheelOpen: false,
+  },
+  {
+    n: 4, name: 'port', hour: 18, mission: 8, wanted: 2, money: 3400, day: 8,
+    mara: { x: SHOT4_MARA.x, z: SHOT4_MARA.z, scale: 2, angle: -1.28 },
+    car: { x: 595, z: 605, angle: 0 },
+    boat: { x: SHOT4_BOAT.x, z: SHOT4_BOAT.z, scale: 3, angle: 0.4 },
+    camera: { x: SHOT4_CAMERA.x, y: SHOT4_CAMERA.y, z: SHOT4_CAMERA.z },
+    look: { x: 560, y: 2, z: 630 },
+    peds: SHOT4_PEDS,
+    dialogue: { name: 'ORIN BECK', line: 'Two drops left and the proof goes out tonight. Keep the car running.' },
+    missionBar: { title: 'M8 THE LAST SIGNAL', stage: 'TAHAP 1/3', objective: 'Marina drop', next: 'Pier drop' },
+    wheelOpen: false,
+  },
+];
+
+export function shotByNumber(n) {
+  return SHOTS.find((s) => s.n === n) || SHOTS[0];
 }
 
-export function applyShot(n, world, traffic, police) {
-  world.shotMode = n;
-  world.frozen = true;
-  world.state = 'FREE_ROAM';
-  if (n === 1) {
-    // Northbound chase on the x=-320 road (angle PI = heading -z).
-    // Golden-hour dusk: the hero car is LOW and LARGE, the heli is
-    // staged ahead-left so it reads in the sky, beam slanting down.
-    world.hour = 17.5;
-    world.wanted.level = 5;
-    world.car.x = -320; world.car.z = -260; world.car.angle = Math.PI; world.car.speed = 22;
-    world.player.onFoot = false;
-    world.player.x = world.car.x; world.player.z = world.car.z;
-    world.combat.wheelOpen = true;
-    world.combat.current = 'carbine';
-    world.money = 2450; world.rp = 620; world.rankCode = 'A';
-    world.missions.current = 1; world.missions.objective = 0;
-    // Roadblocks ahead on the road, SWAT van ahead-left.
-    police.roadblocks = [
-      { x: -320, z: -350, angle: 0, cars: 2 },
-      { x: -320, z: -382, angle: 0, cars: 2 },
-    ];
-    police.swat = { type: 'swat', color: 0x111111, x: -300, z: -330, angle: Math.PI, speed: 12, topSpeed: 26, armour: true, swat: true };
-    police.heli = { x: -330, z: -295, y: 30, angle: 0, rotor: 0 };
-    police.cars = [];
-    const copSpots = [[-340, -300], [-300, -310], [-320, -340], [-340, -360], [-300, -280], [-280, -320], [-360, -290]];
-    for (let i = 0; i < copSpots.length; i += 1) {
-      police.cars.push({ type: 'ndpd', color: 0x1a1a2e, x: copSpots[i][0], z: copSpots[i][1], angle: Math.PI, speed: 14, topSpeed: 32, path: [], pathI: 0, scripted: i === 0, swat: false });
-    }
-    // Traffic on the road and the cross street, all ahead of the camera.
-    const carSpots = [[-320, -420], [-280, -360], [-280, -320], [-240, -320]];
-    for (let i = 0; i < carSpots.length; i += 1) {
-      const c = traffic.cars[i];
-      c.x = carSpots[i][0]; c.z = carSpots[i][1]; c.angle = i < 2 ? Math.PI : Math.PI / 2; c.speed = 8;
-    }
-    // Pedestrians on the sidewalks along the road, all ahead of the camera.
-    const pedSpots = [[-308, -250], [-332, -300], [-308, -340], [-332, -260], [-308, -270], [-332, -380]];
-    for (let i = 0; i < pedSpots.length; i += 1) {
-      const p = traffic.peds[i];
-      p.x = pedSpots[i][0]; p.z = pedSpots[i][1]; p.angle = 1.2;
-    }
-    return { camera: { x: -320, y: 6, z: -238 }, look: { x: -320, y: 5, z: -290 } };
-  }
-  if (n === 2) {
-    // Mara LARGE, whole, centre-frame, back view, standing WEST
-    // of the door's centreline (SHOP.x - 10) so the yellow door is
-    // a separate element to her right, not a huge flat wall directly
-    // behind her — she reads against the dark shop wall instead.
-    // This also moves her OFF the x = -300 tree line: the road
-    // tree at (-300, -160) sat directly behind her in v20 and its
-    // trunk overlapped her, with its canopy above her head. From
-    // the west side the tree is a background element at the right
-    // of the frame, clear of her, and the tall building at
-    // (-260, -140) sits at the far right edge instead of filling
-    // the right third. The camera sits 10 units behind her,
-    // pulled back to z = SHOP.z + 50 and raised to y = 4: from
-    // there the sightline to the rooftop billboard clears the top
-    // of the DELTA ARMS sign, so the "DISTRICT WARS" subtitle
-    // reads instead of hiding behind the sign. The DELTA ARMS
-    // sign and the NEON DELTA LA billboard both stay readable
-    // above her.
-    world.hour = 10;
-    world.wanted.level = 0;
-    world.player.onFoot = true;
-    world.player.x = SHOP.x - 10; world.player.z = SHOP.z + 40; world.player.angle = Math.PI;
-    world.money = 3200; world.rp = 340; world.rankCode = 'B';
-    world.shopOpen = true;
-    // Parked car on the road west of the shop, in frame, clear of
-    // the shop panel.
-    const c = traffic.cars[0];
-    c.x = SHOP.x - 45; c.z = SHOP.z - 35; c.angle = 0; c.speed = 0;
-    const pedSpots = [[-342, -160], [-310, -165], [-342, -185], [-305, -190], [-340, -200]];
-    for (let i = 0; i < pedSpots.length; i += 1) {
-      const p = traffic.peds[i + 1];
-      p.x = pedSpots[i][0]; p.z = pedSpots[i][1]; p.angle = 2.6;
-    }
-    return { camera: { x: SHOP.x - 10, y: 4, z: SHOP.z + 50 }, look: { x: SHOP.x - 5, y: 8, z: SHOP.z } };
-  }
-  if (n === 3) {
-    // Pier at night: Mara LARGE and whole, back view, facing the
-    // stalls (angle -PI/2, back to the camera) — but OFF-CENTRE
-    // to the right, and the camera pulled back a little, so she
-    // is roughly a quarter of the frame tall and does NOT block
-    // the ferris wheel or the ARCADE sign: the wheel, the
-    // fireworks and all three stall signs (SNO-CONES, ARCADE,
-    // BALLOONS) stay fully visible around her. She stands 13
-    // units west of the camera and 4 units south of the look
-    // line, which puts her right-of-centre; the mission is M7
-    // (Inez Vargas). The camera sits 58 units east of the stall
-    // row, so the row's 80-unit span fits the frame with all
-    // three signs readable.
-    world.hour = 22;
-    world.wanted.level = 1;
-    world.player.onFoot = true;
-    world.player.x = -652; world.player.z = 428; world.player.angle = -Math.PI / 2;
-    world.money = 1800; world.rp = 480; world.rankCode = 'B';
-    world.missions.current = 7; world.missions.objective = 0;
-    // 10 NPCs on the pier deck around the stalls.
-    const pedSpots = [[-670, 415], [-668, 445], [-675, 425], [-672, 450], [-680, 440], [-678, 420], [-685, 435], [-682, 455], [-690, 430], [-688, 448]];
-    for (let i = 0; i < pedSpots.length; i += 1) {
-      const p = traffic.peds[i];
-      p.x = pedSpots[i][0]; p.z = pedSpots[i][1]; p.angle = 0.6 + i * 0.3;
-    }
-    for (let i = 0; i < 4; i += 1) {
-      const c = traffic.cars[i];
-      c.x = -640 + i * 8; c.z = 560 + i * 6; c.angle = 0; c.speed = 0;
-    }
-    return { camera: { x: -639, y: 1.8, z: 432 }, look: { x: -720, y: 6, z: 435 } };
-  }
-  // Shot 4: port at dusk, crane load in frame, boat at the south dock.
-  // Mara LARGE + boat LARGE + crane all fit by DEPTH, and the
-  // camera now sits SOUTH-EAST of the dock, just over the water
-  // (645, 3, 626 — east of the v20 spot, so the tall blue
-  // container at (580, 580) sits further off-centre and reads
-  // smaller, and the green container at (600, 560) falls at the
-  // far right edge), looking west-northwest: the near foreground
-  // is blue water, not grey concrete, so the boat reads as a boat
-  // ON the water. Mara is large in the right foreground on the
-  // dock edge (back view, whole, ~15 units from the camera), the
-  // hero car is side-on near the centre, the boat is LARGE in the
-  // left mid-ground in open water — moved east and north from the
-  // v20 spot (465, 655) to (530, 648), ~110 units from the camera
-  // instead of ~160, and scaled up, so hull + cabin + mast read
-  // as one boat shape at a glance instead of a small yellow shape
-  // at the horizon — and the crane and the freeway bridge close
-  // the background, the camera far enough east that the crane's
-  // jib and load fit inside the frame instead of being cut at the
-  // edge. The mission is M8 (Orin Beck).
-  world.hour = 18;
-  world.wanted.level = 2;
-  // The hero car sits east of the dock centre, side-on, near the
-  // camera so it reads large in the mid-ground without Mara
-  // blocking it.
-  world.car.x = 570; world.car.z = 600; world.car.angle = 0.4; world.car.speed = 0;
-  world.player.onFoot = true;
-  // Mara on the dock edge, facing northwest away from the camera
-  // (back view); the camera sits southeast of her, over the water.
-  world.player.x = 632; world.player.z = 618; world.player.angle = -3 * Math.PI / 4;
-  world.money = 5100; world.rp = 900; world.rankCode = 'A';
-  world.missions.current = 8; world.missions.objective = 0;
-  // The boat turns to a three-quarter view so the hull, the teal
-  // cabin and the mast all read instead of one long grey side.
-  // Moored in open water south of the dock, close enough and
-  // scaled up (see scene.js) that blue water shows around the
-  // amber hull and it reads as one boat shape at a glance, not a
-  // dock wall and not a small yellow shape at the horizon.
-  world.boat.x = 530; world.boat.z = 648; world.boat.angle = Math.PI / 4;
-  startRace(world.race, 'port', 42);
-  const carSpots = [[420, 540], [520, 560], [360, 580], [560, 520], [580, 590]];
-  for (let i = 0; i < carSpots.length; i += 1) {
-    const c = traffic.cars[i];
-    c.x = carSpots[i][0]; c.z = carSpots[i][1]; c.angle = -0.6; c.speed = 0;
-  }
-  const pedSpots = [[400, 520], [440, 560], [500, 540], [460, 600], [540, 580], [380, 560], [470, 600], [585, 605]];
-  for (let i = 0; i < pedSpots.length; i += 1) {
-    const p = traffic.peds[i];
-    p.x = pedSpots[i][0]; p.z = pedSpots[i][1]; p.angle = 2.2;
-  }
-  return { camera: { x: 645, y: 3, z: 626 }, look: { x: 510, y: 5, z: 600 } };
+export function pierDeck() {
+  return { x0: PIER_DECK.x0, x1: PIER_DECK.x1, z0: PIER_DECK.z0, z1: PIER_DECK.z1 };
 }
 
-export function shotFile(n) {
-  const d = SHOT_DEFS.find((x) => x.n === n);
-  return d ? d.file : '0' + n + '.jpg';
+export function boatSpot() {
+  return { x: BOAT.x, z: BOAT.z };
 }

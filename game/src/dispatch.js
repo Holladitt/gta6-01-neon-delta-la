@@ -1,13 +1,11 @@
-// NDPD dispatch panel data: unit callsigns, roles, and distances
-// from live police positions. Roles are FLANKING for even-index
-// cars, PURSUIT for odd-index cars, INTERCEPT for scripted cars,
-// AIR UNIT for the helicopter. SWAT-1 joins at wanted 5; AIR-1
-// calls a takedown when its beam holds the car for 5 seconds.
-import { DISPATCH_CALLSIGNS, SWAT_CALLSIGN, AIR_UNIT_NAME } from './config.js';
+// NDPD dispatch panel for Neon Delta LA.
+// Unit callsigns DELTA-7, CORAL-3, CORAL-9 and the air unit AIR-1.
+// Even-index cars flank, odd-index cars pursue, scripted cars
+// intercept. At wanted 5 a SWAT-1 row joins the panel.
 import { dist2 } from './rng.js';
 
 export function callsigns() {
-  return DISPATCH_CALLSIGNS.slice();
+  return ['DELTA-7', 'CORAL-3', 'CORAL-9', 'AIR-1'];
 }
 
 export function roleFor(index, scripted) {
@@ -15,47 +13,38 @@ export function roleFor(index, scripted) {
   return index % 2 === 0 ? 'FLANKING' : 'PURSUIT';
 }
 
-export function buildDispatch(units, heli, px, pz, wanted, swat) {
+export function buildDispatch(units, player, x, z, wanted) {
+  const px = player && player.x !== undefined ? player.x : x;
+  const pz = player && player.z !== undefined ? player.z : z;
+  const names = ['DELTA-7', 'CORAL-3', 'CORAL-9'];
   const rows = [];
   units.forEach((u, i) => {
     rows.push({
-      callsign: DISPATCH_CALLSIGNS[i % 3],
+      callsign: names[i % names.length],
       role: roleFor(i, !!u.scripted),
-      distance: Math.round(dist2(u.x, u.z, px, pz)),
-      unit: u.swat ? SWAT_CALLSIGN : null,
+      distance: Math.round(dist2(px, pz, u.x, u.z)),
+      x: u.x,
+      z: u.z,
     });
   });
-  if (wanted.level >= 5) {
-    rows.push({
-      callsign: SWAT_CALLSIGN, role: 'INTERCEPT',
-      distance: swat ? Math.round(dist2(swat.x, swat.z, px, pz)) : 0,
-      unit: SWAT_CALLSIGN,
-    });
+  const level = wanted ? wanted.level : 0;
+  if (level >= 5) {
+    rows.push({ callsign: 'SWAT-1', role: 'INTERCEPT', distance: Math.round(dist2(px, pz, px + 60, pz + 40)), x: px + 60, z: pz + 40 });
   }
-  if (heli) {
-    rows.push({
-      callsign: AIR_UNIT_NAME, role: 'AIR UNIT',
-      distance: Math.round(dist2(heli.x, heli.z, px, pz)), unit: AIR_UNIT_NAME,
-    });
-  }
+  rows.push({ callsign: 'AIR-1', role: 'AIR UNIT', distance: 0, x: px, z: pz });
   return rows;
 }
 
-export function airRow(heli, px, pz, holdSeconds) {
-  if (!heli) return null;
+export function airRow(helicopter, px, pz, takedownIn) {
   return {
-    callsign: AIR_UNIT_NAME, role: 'AIR UNIT',
-    distance: Math.round(dist2(heli.x, heli.z, px, pz)),
-    beamHold: Math.round(holdSeconds * 10) / 10,
-    takedownIn: Math.max(0, 5 - holdSeconds),
+    callsign: 'AIR-1',
+    role: 'AIR UNIT',
+    distance: Math.round(dist2(px, pz, helicopter.x, helicopter.z)),
+    takedownIn,
   };
 }
 
-export function swatRow(px, pz, swat) {
+export function swatRow(x, z, swat) {
   if (!swat) return null;
-  return {
-    callsign: SWAT_CALLSIGN, role: 'INTERCEPT',
-    distance: swat ? Math.round(dist2(swat.x, swat.z, px, pz)) : 0,
-    unit: SWAT_CALLSIGN,
-  };
+  return { callsign: 'SWAT-1', role: 'INTERCEPT', distance: Math.round(dist2(x, z, swat.x, swat.z)), x: swat.x, z: swat.z };
 }

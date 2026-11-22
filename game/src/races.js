@@ -1,117 +1,112 @@
-// Side activities: street races, side jobs, and collectibles.
-// A street race is 5 checkpoints in one district; finishing pays
-// $350 and adds 5 standing there. Taxi and courier jobs pay $120 /
-// $150 and add 3 standing. 20 Aurora tapes are hidden around the
-// city; each one collected pays a $50 bonus. The HUD shows the
-// tapes counter (found / 20).
-import { RACE, JOBS, TAPES_TOTAL, TAPE_BONUS, DISTRICTS, districtAt } from './config.js';
-import { makeRng, range, dist2 } from './rng.js';
-import { randomRoadPoint, inBuilding } from './geo.js';
+// Street races, side jobs and Aurora tapes for Neon Delta LA.
+// A race marker starts a 5-checkpoint race in a district (pays money,
+// +5 standing). Taxi and courier jobs pay money and +3 standing. Twenty
+// collectible Aurora tapes hide around the city; the HUD counts them.
+import { RACE, JOBS, TAPES_TOTAL, TAPE_BONUS, STANDING_GAIN, DISTRICTS, districtAt } from './config.js';
+import { makeRng, dist2 } from './rng.js';
+import { randomRoadPoint } from './geo.js';
 
 export function createRaceState() {
-  return { active: false, district: null, checkpoints: [], next: 0, startedAt: 0, finished: 0 };
+  return { active: false, checkpoints: [], index: 0, district: null, startedAt: 0 };
 }
 
-export function startRace(state, districtId, seed) {
-  const d = DISTRICTS.find((x) => x.id === districtId) || DISTRICTS[0];
-  const rng = makeRng(seed || 1234);
+export function startRace(rs, district, seed) {
+  const rng = makeRng(seed === undefined ? 99 : seed);
+  const d = DISTRICTS.find((x) => x.id === district) || DISTRICTS[0];
   const cps = [];
   let guard = 0;
   while (cps.length < RACE.checkpoints && guard < 200) {
     guard += 1;
     const p = randomRoadPoint(rng);
     if (districtAt(p.x, p.z).id !== d.id) continue;
-    if (inBuilding(p.x, p.z)) continue;
-    cps.push({ x: p.x, z: p.z, label: 'CHECKPOINT ' + (cps.length + 1) });
+    if (cps.some((c) => dist2(c.x, c.z, p.x, p.z) < 60)) continue;
+    cps.push({ x: Math.round(p.x), z: Math.round(p.z) });
   }
-  state.active = true;
-  state.district = d.id;
-  state.checkpoints = cps;
-  state.next = 0;
-  state.startedAt = Date.now();
+  rs.active = true;
+  rs.checkpoints = cps;
+  rs.index = 0;
+  rs.district = d.id;
   return cps;
 }
 
-export function raceCheckpoint(state, x, z) {
-  if (!state.active) return { event: 'none' };
-  const cp = state.checkpoints[state.next];
+export function raceCheckpoint(rs, x, z) {
+  if (!rs.active) return { event: 'none' };
+  const cp = rs.checkpoints[rs.index];
   if (!cp) return { event: 'none' };
-  if (dist2(x, z, cp.x, cp.z) > 22) return { event: 'none' };
-  state.next += 1;
-  if (state.next >= state.checkpoints.length) {
-    state.active = false;
-    state.finished += 1;
-    return { event: 'finish', reward: RACE.reward, standing: RACE.standing, district: state.district };
+  if (dist2(x, z, cp.x, cp.z) > 15) return { event: 'none' };
+  rs.index += 1;
+  if (rs.index >= rs.checkpoints.length) {
+    rs.active = false;
+    return { event: 'finish', reward: RACE.reward, standing: STANDING_GAIN.race };
   }
-  return { event: 'checkpoint', next: state.next, total: state.checkpoints.length };
+  return { event: 'checkpoint', index: rs.index };
 }
 
 export function createJobState() {
-  return { active: false, kind: null, from: null, to: null, fare: 0 };
+  return { active: false, type: null, from: null, to: null, reward: 0 };
 }
 
-export function startJob(state, kind, px, pz) {
-  const job = JOBS[kind];
-  if (!job) return { ok: false, reason: 'no such job' };
-  const d = districtAt(px, pz);
-  let to = { x: px + 120, z: pz + 120 };
-  let guard = 0;
-  while (guard < 60) {
-    guard += 1;
-    const p = randomRoadPoint(makeRng(Math.floor(Math.random() * 999999)));
-    if (districtAt(p.x, p.z).id !== d.id) continue;
-    if (inBuilding(p.x, p.z)) continue;
-    to = p;
-    break;
-  }
-  state.active = true;
-  state.kind = kind;
-  state.from = { x: px, z: pz };
-  state.to = to;
-  state.fare = job.reward;
-  return { ok: true, kind, to };
+export function startJob(js, type, x, z) {
+  const job = JOBS[type];
+  if (!job) return { ok: false };
+  const rng = makeRng(1000 + Math.round(x) + Math.round(z));
+  const to = randomRoadPoint(rng);
+  js.active = true;
+  js.type = type;
+  js.from = { x, z };
+  js.to = { x: Math.round(to.x), z: Math.round(to.z) };
+  js.reward = job.reward;
+  return { ok: true, to: js.to };
 }
 
-export function completeJob(state, x, z) {
-  if (!state.active) return { event: 'none' };
-  if (dist2(x, z, state.to.x, state.to.z) > 22) return { event: 'none' };
-  const job = JOBS[state.kind];
-  const d = districtAt(x, z);
-  state.active = false;
-  return { event: 'complete', kind: state.kind, reward: job.reward, standing: job.standing, district: d.id };
+export function completeJob(js, x, z) {
+  if (!js.active) return { event: 'none' };
+  if (dist2(x, z, js.to.x, js.to.z) > 15) return { event: 'none' };
+  js.active = false;
+  return { event: 'complete', reward: js.reward, standing: STANDING_GAIN.job, type: js.type };
 }
 
-// Aurora tapes: 20 fixed hiding spots spread over all six districts.
 export function tapeSpots() {
-  return [
-    { x: -520, z: -520, district: 'downtown' }, { x: -200, z: -420, district: 'downtown' },
-    { x: -420, z: -220, district: 'downtown' }, { x: 120, z: -520, district: 'hills' },
-    { x: 420, z: -420, district: 'hills' }, { x: 560, z: -220, district: 'hills' },
-    { x: -520, z: -40, district: 'venice' }, { x: -320, z: 120, district: 'venice' },
-    { x: -160, z: 220, district: 'venice' }, { x: 40, z: -40, district: 'marina' },
-    { x: 220, z: 120, district: 'marina' }, { x: 80, z: 220, district: 'marina' },
-    { x: -560, z: 340, district: 'pier' }, { x: -300, z: 480, district: 'pier' },
-    { x: -680, z: 430, district: 'pier' }, { x: 60, z: 360, district: 'port' },
-    { x: 300, z: 480, district: 'port' }, { x: 560, z: 560, district: 'port' },
-    { x: 160, z: 580, district: 'port' }, { x: -60, z: 40, district: 'marina' },
+  const spots = [
+    { x: -350, z: -350, district: 'downtown' },
+    { x: -150, z: -450, district: 'downtown' },
+    { x: -450, z: -150, district: 'downtown' },
+    { x: -100, z: -500, district: 'downtown' },
+    { x: -450, z: 150, district: 'venice' },
+    { x: -350, z: 50, district: 'venice' },
+    { x: -500, z: 250, district: 'venice' },
+    { x: -200, z: 150, district: 'venice' },
+    { x: -700, z: 420, district: 'pier' },
+    { x: -650, z: 480, district: 'pier' },
+    { x: -750, z: 380, district: 'pier' },
+    { x: 450, z: 450, district: 'port' },
+    { x: 600, z: 500, district: 'port' },
+    { x: 350, z: 550, district: 'port' },
+    { x: 150, z: 100, district: 'marina' },
+    { x: 50, z: 200, district: 'marina' },
+    { x: 250, z: 50, district: 'marina' },
+    { x: 200, z: -400, district: 'hills' },
+    { x: 400, z: -350, district: 'hills' },
+    { x: 100, z: -500, district: 'hills' },
   ];
+  return spots.slice(0, TAPES_TOTAL);
 }
 
 export function createTapeState() {
-  return { found: [], total: TAPES_TOTAL };
+  return { found: [] };
 }
 
-export function collectTape(state, x, z) {
+export function collectTape(ts, x, z) {
   const spots = tapeSpots();
   for (let i = 0; i < spots.length; i += 1) {
-    if (state.found.includes(i)) continue;
-    if (dist2(x, z, spots[i].x, spots[i].z) > 12) continue;
-    state.found.push(i);
-    return { event: 'tape', index: i, bonus: TAPE_BONUS, found: state.found.length, total: TAPES_TOTAL };
+    if (ts.found.includes(i)) continue;
+    if (dist2(x, z, spots[i].x, spots[i].z) > 10) continue;
+    ts.found.push(i);
+    return { event: 'tape', bonus: TAPE_BONUS, index: i };
   }
   return { event: 'none' };
 }
 
-export function tapesFound(state) {
-  return state.found.length;
+export function tapesFound(ts) {
+  return ts.found.length;
 }

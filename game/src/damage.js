@@ -1,20 +1,18 @@
-// Collision damage: an impact of 5 m/s or more deals damage equal
-// to the impact times 1.2 rounded, minimum 5, with a 0.5 s cooldown.
-import { COLLISION } from './config.js';
-
-export function collisionDamage(impactSpeed) {
-  if (impactSpeed < COLLISION.minSpeed) return 0;
-  const raw = Math.round(impactSpeed * COLLISION.mult);
-  return raw < COLLISION.minDamage ? COLLISION.minDamage : raw;
+// Collision damage for Neon Delta LA.
+// An impact of 5 m/s or more deals damage equal to the impact times 1.2,
+// rounded, with a minimum of 5, and a 0.5-second cooldown between hits.
+// Garage armour halves the damage (never below 1).
+export function collisionDamage(impact) {
+  if (impact < 5) return 0;
+  return Math.max(5, Math.round(impact * 1.2));
 }
 
-export function canDamage(lastHitAt, now) {
-  return now - lastHitAt >= COLLISION.cooldown;
+export function canDamage(lastHit, now) {
+  return now - lastHit >= 0.5;
 }
 
-export function applyDamage(condition, impactSpeed, armour) {
-  const dmg = collisionDamage(impactSpeed);
-  if (dmg === 0) return { condition, dealt: 0 };
-  const reduced = armour ? Math.max(1, Math.round(dmg * 0.6)) : dmg;
-  return { condition: Math.max(0, condition - reduced), dealt: reduced };
+export function applyDamage(condition, impact, armoured) {
+  let dealt = collisionDamage(impact);
+  if (armoured) dealt = Math.max(1, Math.floor(dealt / 2));
+  return { condition: Math.max(0, condition - dealt), dealt };
 }

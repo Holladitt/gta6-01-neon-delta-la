@@ -1,50 +1,58 @@
-// Combat: six weapons in four tiers, and the weapon wheel.
-// Hold Q to open the radial wheel showing the four tiers and the
-// owned weapons; pick with the mouse or the number keys 1-4.
-// The HUD shows the current weapon and its tier.
+// Combat and the weapon wheel for Neon Delta LA.
+// Six weapons in four tiers. Holding Q opens a radial wheel showing the
+// four tiers and the owned weapons; pick with the mouse or keys 1-4.
+// Firing is rate-limited (0.5s between shots).
 import { WEAPONS, weaponById } from './config.js';
 
+export const FIRE_COOLDOWN = 0.5;
+
 export function createCombat() {
-  return { current: 'pistol', wheelOpen: false, lastShotAt: 0, shotsFired: 0 };
+  return { current: 'pistol', wheelOpen: false, lastShot: -1e9, shotsFired: 0 };
 }
 
 export function currentWeapon(c) {
   return weaponById(c.current);
 }
 
-export function selectWeapon(c, id, owned) {
-  const w = weaponById(id);
-  if (!owned || !owned[w.id]) return { ok: false, reason: 'not owned' };
-  c.current = w.id;
-  return { ok: true, weapon: w };
-}
-
-export function selectTier(c, tier, owned) {
-  const inTier = WEAPONS.filter((w) => w.tier === tier && owned && owned[w.id]);
-  if (inTier.length === 0) return { ok: false, reason: 'no weapon in tier' };
-  c.current = inTier[0].id;
-  return { ok: true, weapon: inTier[0] };
-}
-
 export function openWheel(c) {
   c.wheelOpen = true;
-  return c.wheelOpen;
+  return true;
 }
 
 export function closeWheel(c) {
   c.wheelOpen = false;
-  return c.wheelOpen;
+  return false;
 }
 
 export function wheelItems(owned) {
-  return WEAPONS.map((w) => ({ id: w.id, name: w.name, tier: w.tier, owned: !!(owned && owned[w.id]) }));
+  return WEAPONS.map((w) => ({
+    id: w.id,
+    name: w.name,
+    tier: w.tier,
+    price: w.price,
+    dmg: w.dmg,
+    mag: w.mag,
+    range: w.range,
+    owned: !!owned[w.id],
+  }));
+}
+
+export function selectWeapon(c, id, owned) {
+  if (!owned[id]) return { ok: false, reason: 'not owned' };
+  c.current = id;
+  return { ok: true, weapon: id };
+}
+
+export function selectTier(c, tier, owned) {
+  const w = WEAPONS.find((x) => x.tier === tier && owned[x.id]);
+  if (!w) return { ok: false, reason: 'empty tier' };
+  c.current = w.id;
+  return { ok: true, weapon: w.id };
 }
 
 export function fire(c, now) {
-  const w = weaponById(c.current);
-  const gap = 1 / w.rate;
-  if (now - c.lastShotAt < gap) return { ok: false, reason: 'rate limited' };
-  c.lastShotAt = now;
+  if (now - c.lastShot < FIRE_COOLDOWN) return { ok: false, reason: 'rate' };
+  c.lastShot = now;
   c.shotsFired += 1;
-  return { ok: true, damage: w.damage, range: w.range, weapon: w };
+  return { ok: true, damage: currentWeapon(c).dmg, weapon: c.current };
 }

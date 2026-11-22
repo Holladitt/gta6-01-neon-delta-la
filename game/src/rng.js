@@ -1,46 +1,37 @@
-// Seeded random numbers for Neon Delta LA: District Wars.
-// A small deterministic generator so the world, traffic and races
-// can be rebuilt from one seed. No browser or library dependency.
+// Deterministic random numbers for Neon Delta LA.
+// A single seeded generator drives traffic, spawns and races, so a
+// screenshot staged from a fixed seed is reproducible tick for tick.
 export function makeRng(seed) {
   let a = seed >>> 0;
   return function next() {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-export function range(rng, lo, hi) {
-  return lo + rng() * (hi - lo);
+export function range(rng, min, max) {
+  return min + rng() * (max - min);
 }
 
-export function intRange(rng, lo, hi) {
-  return lo + Math.floor(rng() * (hi - lo + 1));
+export function rangeInt(rng, min, max) {
+  return Math.floor(range(rng, min, max + 1));
 }
 
 export function pick(rng, list) {
   return list[Math.floor(rng() * list.length)];
 }
 
-export function shuffle(rng, list) {
-  const out = list.slice();
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(rng() * (i + 1));
-    const tmp = out[i]; out[i] = out[j]; out[j] = tmp;
-  }
-  return out;
-}
-
 export function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-export function lerp(a, b, t) {
-  return a + (b - a) * t;
+export function dist2(x1, z1, x2, z2) {
+  return Math.hypot(x2 - x1, z2 - z1);
 }
 
-export function dist2(ax, az, bx, bz) {
-  const dx = ax - bx; const dz = az - bz;
-  return Math.sqrt(dx * dx + dz * dz);
+export function lerp(a, b, t) {
+  return a + (b - a) * t;
 }

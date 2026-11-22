@@ -1,59 +1,44 @@
-// All fixed numbers for Neon Delta LA: District Wars.
-// One source of truth: missions, ranks, weapons, districts, crew,
-// races, jobs, tapes, garage, police escalation and the save keys.
-// Pure data plus the district lookup; nothing here touches the DOM.
+// Neon Delta LA: District Wars — world constants, districts, weapons,
+// missions, ranks, crew and every number the game and the sim share.
+// The city is a coastal Los Angeles of six districts on a 1600-unit map:
+// Downtown and Hollywood Hills in the north, Venice and Marina in the
+// middle, Coral Pier in the south-west over the water, Long Beach Port
+// in the south-east. West of x=-660 and south of z=635 is ocean.
 export const TITLE = 'Neon Delta LA: District Wars';
 export const ENTRY_TITLE = 'Neon Delta LA: District Wars — 6 districts, 10 story jobs, SWAT roadblocks, 4 weapon tiers, 3 save slots, street races';
-export const RADIO = 'RADIO: NEON 88';
-export const SAVE_KEY_BASE = 'neon-delta-la.save.v3';
-export const SAVE_SLOTS = 3;
+export const MAP_COVERAGE = '6 districts across 1600 units of coastal Los Angeles: Downtown, Venice, Coral Pier, Long Beach Port, Marina, Hollywood Hills';
+export const WORLD_HALF = 780;
+export const OCEAN_WEST = -660;
+export const OCEAN_SOUTH = 635;
 
-export const MAP = { x0: -700, z0: -700, x1: 700, z1: 700 };
-export const OCEAN_WEST = -620;
-export const OCEAN_SOUTH = 620;
-export const MAP_COVERAGE = '6 districts across a 1,400 by 1,400 coastal map';
-
-// Six districts. Bounds are inline on each district; look them up
-// with districtAt, never from a separate bounds table.
 export const DISTRICTS = [
-  { id: 'downtown', name: 'Downtown', x0: -620, z0: -620, x1: -80, z1: -120 },
-  { id: 'hills', name: 'Hollywood Hills', x0: -80, z0: -620, x1: 700, z1: -120 },
-  { id: 'venice', name: 'Venice', x0: -620, z0: -120, x1: -80, z1: 280 },
-  { id: 'marina', name: 'Marina', x0: -80, z0: -120, x1: 320, z1: 280 },
-  { id: 'pier', name: 'Coral Pier', x0: -620, z0: 280, x1: -80, z1: 620 },
-  { id: 'port', name: 'Long Beach Port', x0: -80, z0: 280, x1: 700, z1: 620 },
+  { id: 'downtown', name: 'Downtown', x0: -800, x1: 0, z0: -800, z1: -200 },
+  { id: 'hills', name: 'Hollywood Hills', x0: 0, x1: 800, z0: -800, z1: -200 },
+  { id: 'venice', name: 'Venice', x0: -800, x1: -100, z0: -200, z1: 300 },
+  { id: 'marina', name: 'Marina', x0: -100, x1: 800, z0: -200, z1: 300 },
+  { id: 'pier', name: 'Coral Pier', x0: -800, x1: -100, z0: 300, z1: 800 },
+  { id: 'port', name: 'Long Beach Port', x0: -100, x1: 800, z0: 300, z1: 800 },
 ];
 
 export function districtAt(x, z) {
-  for (const d of DISTRICTS) {
-    if (x >= d.x0 && x < d.x1 && z >= d.z0 && z < d.z1) return d;
-  }
-  // The pier deck hangs over the ocean west of Coral Pier.
-  if (x < -620 && z >= 280 && z < 620) return districtById('pier');
-  if (x < -620 && z >= -120 && z < 280) return districtById('venice');
-  if (x < -620) return districtById('downtown');
-  return DISTRICTS[0];
+  if (z < -200) return x < 0 ? DISTRICTS[0] : DISTRICTS[1];
+  if (z < 300) return x < -100 ? DISTRICTS[2] : DISTRICTS[3];
+  return x < -100 ? DISTRICTS[4] : DISTRICTS[5];
 }
 
 export function districtById(id) {
   return DISTRICTS.find((d) => d.id === id) || DISTRICTS[0];
 }
 
-// Four weapon tiers. Tier 1 is owned from the start.
-export const WEAPON_TIERS = [
-  { tier: 1, name: 'STREET' },
-  { tier: 2, name: 'DELTA' },
-  { tier: 3, name: 'PRECISION' },
-  { tier: 4, name: 'HEAVY' },
-];
+export const OBJECTIVE_RADIUS = 14;
 
 export const WEAPONS = [
-  { id: 'pistol', name: 'PISTOL', tier: 1, price: 0, damage: 12, rate: 3, range: 40, owned: true },
-  { id: 'smg', name: 'SMG', tier: 1, price: 0, damage: 8, rate: 9, range: 35, owned: true },
-  { id: 'shotgun', name: 'SHOTGUN', tier: 1, price: 0, damage: 30, rate: 1, range: 18, owned: true },
-  { id: 'carbine', name: 'DELTA CARBINE', tier: 2, price: 900, damage: 18, rate: 7, range: 70, owned: false },
-  { id: 'longshot', name: 'LONGSHOT', tier: 3, price: 1800, damage: 45, rate: 1, range: 120, owned: false },
-  { id: 'marauder', name: 'MARAUDER', tier: 4, price: 2500, damage: 60, rate: 5, range: 90, owned: false },
+  { id: 'pistol', name: 'PISTOL', tier: 1, price: 0, dmg: 12, mag: 12, range: 40 },
+  { id: 'smg', name: 'SMG', tier: 1, price: 0, dmg: 8, mag: 30, range: 35 },
+  { id: 'shotgun', name: 'SHOTGUN', tier: 1, price: 0, dmg: 24, mag: 6, range: 20 },
+  { id: 'carbine', name: 'DELTA CARBINE', tier: 2, price: 900, dmg: 18, mag: 24, range: 60 },
+  { id: 'longshot', name: 'LONGSHOT', tier: 3, price: 1800, dmg: 40, mag: 8, range: 120 },
+  { id: 'marauder', name: 'MARAUDER', tier: 4, price: 2500, dmg: 55, mag: 10, range: 90 },
 ];
 
 export function weaponById(id) {
@@ -61,90 +46,59 @@ export function weaponById(id) {
 }
 
 export function tierName(tier) {
-  const t = WEAPON_TIERS.find((x) => x.tier === tier);
-  return t ? t.name : 'STREET';
+  return ['', 'STANDARD', 'TACTICAL', 'PRECISION', 'HEAVY'][tier] || 'STANDARD';
 }
 
-// Ten story missions. Payouts are exact; the total is 13,750.
 export const MISSIONS = [
-  { id: 1, title: 'THE GETAWAY', contact: 'Eden Voss', payout: 400, startWanted: 0, hour: 9, points: [{ x: -300, z: -400, label: 'Pick up Eden' }, { x: -140, z: -300, label: 'Lose the tail' }] },
-  { id: 2, title: 'CANAL RUN', contact: 'Harlan Dray', payout: 650, startWanted: 0, hour: 11, points: [{ x: -480, z: 0, label: 'Meet Harlan' }, { x: -300, z: 180, label: 'Drop the package' }] },
-  { id: 3, title: 'PIER LIGHTS', contact: 'Lucia Marlow', payout: 700, startWanted: 0, hour: 20, points: [{ x: -560, z: 420, label: 'Find Lucia' }, { x: -420, z: 480, label: 'Light the fuse' }] },
-  { id: 4, title: 'HARBOR HEIST', contact: 'Dante Kovac', payout: 800, startWanted: 1, hour: 14, points: [{ x: 200, z: 420, label: 'Crack the gate' }, { x: 480, z: 520, label: 'Grab the crate' }] },
-  { id: 5, title: 'HILL CLIMB', contact: 'Sable Okonkwo', payout: 1000, startWanted: 0, hour: 8, points: [{ x: 100, z: -420, label: 'Climb the hill' }, { x: 420, z: -300, label: 'Plant the beacon' }] },
-  { id: 6, title: 'MARINA GHOST', contact: 'Vera Lindqvist', payout: 2000, startWanted: 1, hour: 22, points: [{ x: 120, z: 120, label: 'Board the yacht' }, { x: 260, z: 220, label: 'Copy the ledger' }] },
-  { id: 7, title: 'THE NIGHT LEDGER', contact: 'Inez Vargas', payout: 1200, startWanted: 0, hour: 21, minute: 30, points: [{ x: -420, z: -300, label: 'Meet Inez' }, { x: -200, z: -500, label: 'Deliver the ledger' }] },
-  { id: 8, title: 'THE LAST SIGNAL', contact: 'Orin Beck', payout: 2500, startWanted: 2, hour: 18, minute: 30, points: [{ x: 100, z: 100, label: 'Marina drop' }, { x: -590, z: 430, label: 'Pier drop' }, { x: -50, z: -400, label: 'Hill overlook' }] },
-  { id: 9, title: 'THE SUNKEN KEY', contact: 'Lena Marsh', payout: 1500, startWanted: 1, hour: 16, points: [{ x: 180, z: 200, label: 'Dive the marina' }, { x: 40, z: 60, label: 'Unlock the locker' }] },
-  { id: 10, title: 'THE LAST WITNESS', contact: 'Elias Frost', payout: 3000, startWanted: 3, hour: 19, points: [{ x: -300, z: -200, label: 'Reach the witness' }, { x: 500, z: 400, label: 'Get them to the port' }] },
+  { id: 1, name: 'THE GETAWAY', contact: 'Eden Voss', hour: 10, payout: 400, district: 'downtown', startWanted: 0, points: [{ x: -320, z: -260, label: 'Pick up Eden' }, { x: -200, z: -400, label: 'Lose the tail' }] },
+  { id: 2, name: 'VENICE CANALS', contact: 'Harlan Dray', hour: 12, payout: 650, district: 'venice', startWanted: 0, points: [{ x: -400, z: 200, label: 'Meet Harlan' }, { x: -500, z: 100, label: 'Drop the package' }] },
+  { id: 3, name: 'MARINA LIGHTS', contact: 'Lucia Marlow', hour: 14, payout: 700, district: 'marina', startWanted: 0, points: [{ x: 100, z: 100, label: 'Find Lucia' }, { x: 200, z: 200, label: 'Deliver the keys' }] },
+  { id: 4, name: 'HILLSIDE', contact: 'Dante Kovac', hour: 16, payout: 800, district: 'hills', startWanted: 0, points: [{ x: 200, z: -400, label: 'Climb the hill' }, { x: 300, z: -300, label: 'Take the overlook' }] },
+  { id: 5, name: 'THE LAST BRIDGE', contact: 'Sable Okonkwo', hour: 17, payout: 1000, district: 'downtown', startWanted: 0, points: [{ x: 0, z: -560, label: 'Cross the bridge' }, { x: 300, z: -560, label: 'Reach the far side' }] },
+  { id: 6, name: 'THE VAULT', contact: 'Vera Lindqvist', hour: 19, payout: 2000, district: 'port', startWanted: 0, points: [{ x: 400, z: 400, label: 'Case the vault' }, { x: 500, z: 500, label: 'Crack the vault' }] },
+  { id: 7, name: 'THE NIGHT LEDGER', contact: 'Inez Vargas', hour: 21, payout: 1200, district: 'pier', startWanted: 0, points: [{ x: -640, z: 430, label: 'Meet Inez' }, { x: -700, z: 450, label: 'Take the ledger' }] },
+  { id: 8, name: 'THE LAST SIGNAL', contact: 'Orin Beck', hour: 18, payout: 2500, district: 'port', startWanted: 2, points: [{ x: 100, z: 100, label: 'Marina drop' }, { x: -640, z: 430, label: 'Pier drop' }, { x: 200, z: -400, label: 'Hill overlook' }] },
+  { id: 9, name: 'THE SUNKEN KEY', contact: 'Lena Marsh', hour: 20, payout: 1500, district: 'marina', startWanted: 0, points: [{ x: 300, z: 200, label: 'Find the key' }, { x: 100, z: 300, label: 'Open the locker' }] },
+  { id: 10, name: 'THE LAST WITNESS', contact: 'Elias Frost', hour: 22, payout: 3000, district: 'hills', startWanted: 3, points: [{ x: 400, z: -400, label: 'Reach the witness' }, { x: 100, z: -100, label: 'Get them out' }] },
 ];
+export const MISSION_TOTAL_PAYOUT = 13750;
+export const MISSION_TOTAL_RP = 1375;
 
-export const MISSION_TOTAL_PAYOUT = MISSIONS.reduce((s, m) => s + m.payout, 0);
-export const MISSION_TOTAL_RP = MISSION_TOTAL_PAYOUT / 10;
-
-export function missionById(id) {
-  return MISSIONS.find((m) => m.id === id) || null;
-}
-
-// Ranks: D at 0, C at 100, B at 300, A at 600, S at 1000.
 export const RANKS = [
-  { min: 0, code: 'D', name: 'GREENHORN' },
-  { min: 100, code: 'C', name: 'RUNNER' },
-  { min: 300, code: 'B', name: 'NIGHTHAWK' },
-  { min: 600, code: 'A', name: 'OUTLAW' },
-  { min: 1000, code: 'S', name: 'DELTA LEGEND' },
+  { code: 'D', name: 'GREENHORN', rp: 0 },
+  { code: 'C', name: 'RUNNER', rp: 100 },
+  { code: 'B', name: 'NIGHTHAWK', rp: 300 },
+  { code: 'A', name: 'OUTLAW', rp: 600 },
+  { code: 'S', name: 'DELTA LEGEND', rp: 1000 },
 ];
 
-// Crew of three. Keys and cooldowns are exact.
 export const CREW = [
-  { id: 'juno', name: 'Juno Reyes', role: 'Driver', ability: 'CLEAN PLATES', key: 'C', cooldown: 45, cost: 0, district: 'venice', text: 'Wanted -1' },
-  { id: 'petra', name: 'Petra Hale', role: 'Mechanic', ability: 'FIELD REPAIR', key: 'V', cooldown: 60, cost: 150, district: 'port', text: 'Condition 100%' },
-  { id: 'cassia', name: 'Cassia Wren', role: 'Lookout', ability: 'OVERWATCH', key: 'X', cooldown: 25, duration: 20, cost: 0, district: 'hills', text: 'Police marked 20s' },
+  { id: 'juno', name: 'Juno Reyes', role: 'driver', ability: 'CLEAN PLATES', key: 'C', cooldown: 45, desc: 'Wanted -1' },
+  { id: 'petra', name: 'Petra Hale', role: 'mechanic', ability: 'FIELD REPAIR', key: 'V', cooldown: 60, desc: '$150, condition 100%' },
+  { id: 'cassia', name: 'Cassia Wren', role: 'lookout', ability: 'OVERWATCH', key: 'X', cooldown: 25, desc: '20s police blind spot' },
 ];
-
-export const DISPATCH_CALLSIGNS = ['DELTA-7', 'CORAL-3', 'CORAL-9', 'AIR-1'];
-export const SWAT_CALLSIGN = 'SWAT-1';
-export const AIR_UNIT_NAME = 'AIR-1';
 
 export const PED_COUNT = 104;
-export const TRAFFIC_DAY = 16;
-export const TRAFFIC_NIGHT = 6;
-export const TRAFFIC_TOTAL = TRAFFIC_DAY + TRAFFIC_NIGHT;
+export const TRAFFIC_TOTAL = 22;
 export const NIGHT_DISCS = 28;
-
 export const WANTED_MAX = 5;
-export const HELI_WANTED = 3;
-export const ROADBLOCK_WANTED = 4;
-export const SWAT_WANTED = 5;
-export const AIR_TAKEDOWN_SECONDS = 5;
-export const SPIKE_SLOW_SECONDS = 5;
-
-export const COLLISION = { minSpeed: 5, mult: 1.2, minDamage: 5, cooldown: 0.5 };
-
 export const STANDING_GAIN = { mission: 10, race: 5, job: 3 };
-export const STANDING_DISCOUNT_AT = 50;
-export const STANDING_DISCOUNT = 0.1;
-
-export const RACE = { checkpoints: 5, reward: 350, standing: 5 };
+export const RACE = { checkpoints: 5, reward: 300 };
 export const JOBS = {
-  taxi: { name: 'TAXI', reward: 120, standing: 3 },
-  courier: { name: 'COURIER', reward: 150, standing: 3 },
+  taxi: { name: 'TAXI', reward: 120, desc: 'Pick up a pedestrian, drop them at the marked point' },
+  courier: { name: 'COURIER', reward: 150, desc: 'Deliver a package to the marked point' },
 };
 export const TAPES_TOTAL = 20;
 export const TAPE_BONUS = 50;
-
 export const GARAGE_UPGRADES = [
-  { id: 'engine', name: 'ENGINE', price: 1200, text: 'Higher top speed' },
-  { id: 'armour', name: 'ARMOUR', price: 900, text: 'Less collision damage' },
-  { id: 'nitro', name: 'NITRO', price: 800, text: 'Boost on SHIFT' },
+  { id: 'engine', name: 'ENGINE', price: 1200, desc: '+25% top speed' },
+  { id: 'armour', name: 'ARMOUR', price: 900, desc: 'Half collision damage' },
+  { id: 'nitro', name: 'NITRO', price: 800, desc: 'Boost on N, 3s' },
 ];
-
 export const COVER_MAX = 100;
-export const WITNESS_SECONDS = 3;
-export const WITNESS_RANGE = 45;
 
-export const BOAT = { x: 600, z: 650, name: 'DELTA SKIFF' };
-export const CRANE = { x: 450, z: 470 };
-export const SHOP = { x: -320, z: -180, name: 'DELTA ARMS' };
-export const GARAGE_POS = { x: -180, z: -180, name: 'DELTA GARAGE' };
-export const PIER_DECK = { x0: -780, z0: 360, x1: -620, z1: 500 };
+export const BOAT = { x: 530, z: 648 };
+export const CRANE = { x: 420, z: 600 };
+export const SHOP = { x: -320, z: -200 };
+export const PIER_DECK = { x0: -780, x1: -620, z0: 360, z1: 500 };
+export const GARAGE_POS = { x: -260, z: -320 };

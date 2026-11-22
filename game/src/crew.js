@@ -1,15 +1,15 @@
-// Crew of three, each with one ability on a key.
-// CLEAN PLATES [C] lowers wanted by 1 (45 s cooldown).
-// FIELD REPAIR [V] costs exactly 150 and restores condition to 100%
-// (60 s cooldown; while recharging a second use is refused, money
-// stays unchanged, and a toast says it is recharging).
-// OVERWATCH [X] lasts 20 s with a 25 s cooldown.
+// Crew abilities for Neon Delta LA.
+// Juno Reyes (driver): CLEAN PLATES [C] lowers wanted by 1, 45s cooldown.
+// Petra Hale (mechanic): FIELD REPAIR [V] costs exactly $150 and restores
+// the car condition to 100%, 60s cooldown; a use while recharging is
+// refused and the money stays unchanged. Cassia Wren (lookout):
+// OVERWATCH [X] lasts 20 seconds, 25s cooldown.
 import { CREW } from './config.js';
 
 export function createCrewState() {
-  const s = { cooldowns: {}, overwatchUntil: 0 };
-  for (const c of CREW) s.cooldowns[c.id] = 0;
-  return s;
+  const lastUsed = {};
+  for (const c of CREW) lastUsed[c.id] = -1e9;
+  return { lastUsed, overwatchUntil: -1e9 };
 }
 
 export function crewMember(id) {
@@ -17,37 +17,39 @@ export function crewMember(id) {
 }
 
 export function abilityReady(crew, id, now) {
-  return (crew.cooldowns[id] || 0) <= now;
+  const m = crewMember(id);
+  if (!m) return false;
+  return now - crew.lastUsed[id] >= m.cooldown;
 }
 
 export function cooldownLeft(crew, id, now) {
-  return Math.max(0, (crew.cooldowns[id] || 0) - now);
+  const m = crewMember(id);
+  if (!m) return 0;
+  return Math.max(0, m.cooldown - (now - crew.lastUsed[id]));
 }
 
 export function useAbility(crew, id, now, game) {
-  const c = crewMember(id);
-  if (!c) return { ok: false, reason: 'no such crew' };
-  if (!abilityReady(crew, id, now)) {
-    return { ok: false, reason: 'recharging', left: cooldownLeft(crew, id, now) };
-  }
+  const m = crewMember(id);
+  if (!m) return { ok: false, reason: 'unknown' };
+  if (!abilityReady(crew, id, now)) return { ok: false, reason: 'recharging' };
   if (id === 'juno') {
-    crew.cooldowns.juno = now + c.cooldown;
-    game.wanted.level = Math.max(0, game.wanted.level - 1);
-    return { ok: true, reason: 'clean plates', wanted: game.wanted.level };
+    crew.lastUsed[id] = now;
+    if (game && game.wanted) game.wanted.level = Math.max(0, game.wanted.level - 1);
+    return { ok: true, ability: 'CLEAN PLATES' };
   }
   if (id === 'petra') {
-    if (game.money < c.cost) return { ok: false, reason: 'not enough money' };
-    game.money -= c.cost;
-    game.car.condition = 100;
-    crew.cooldowns.petra = now + c.cooldown;
-    return { ok: true, reason: 'field repair', money: game.money };
+    if (!game || game.money < 150) return { ok: false, reason: 'broke' };
+    game.money -= 150;
+    if (game.car) game.car.condition = 100;
+    crew.lastUsed[id] = now;
+    return { ok: true, ability: 'FIELD REPAIR', cost: 150 };
   }
   if (id === 'cassia') {
-    crew.cooldowns.cassia = now + c.cooldown;
-    crew.overwatchUntil = now + c.duration;
-    return { ok: true, reason: 'overwatch', until: crew.overwatchUntil };
+    crew.lastUsed[id] = now;
+    crew.overwatchUntil = now + 20;
+    return { ok: true, ability: 'OVERWATCH' };
   }
-  return { ok: false, reason: 'unknown ability' };
+  return { ok: false, reason: 'unknown' };
 }
 
 export function overwatchActive(crew, now) {

@@ -1,37 +1,35 @@
-// Save system: 3 slots, per-slot keys. Saving writes the slot;
-// loading returns the data or null; a corrupt save starts safe
-// (null, never a crash). Works in the browser and in node tests
-// (falls back to an in-memory store when localStorage is absent).
-import { SAVE_KEY_BASE, SAVE_SLOTS } from './config.js';
+// Save system for Neon Delta LA: 3 save slots, one key per slot.
+// A corrupt save starts safe (load returns null). In the browser the
+// store is localStorage; in node it is a module-level in-memory store,
+// so the simulation can round-trip saves without a browser.
+import { MISSIONS } from './config.js';
 
-function backend() {
-  try {
-    if (typeof globalThis !== 'undefined' && globalThis.localStorage) return globalThis.localStorage;
-  } catch (e) { /* fall through */ }
-  const mem = new Map();
-  return {
-    getItem: (k) => (mem.has(k) ? mem.get(k) : null),
-    setItem: (k, v) => { mem.set(k, String(v)); },
-    removeItem: (k) => { mem.delete(k); },
-  };
-}
-
-let store = null;
-export function saveStore() {
-  if (!store) store = backend();
-  return store;
-}
+export const SAVE_BASE = 'neon-delta-la.save.v3';
 
 export function slotKey(slot) {
-  return SAVE_KEY_BASE + '.slot' + slot;
+  return SAVE_BASE + '.slot' + slot;
 }
 
 export function slotCount() {
-  return SAVE_SLOTS;
+  return 3;
+}
+
+let memoryStore = null;
+
+export function saveStore() {
+  if (typeof localStorage !== 'undefined') return localStorage;
+  if (!memoryStore) {
+    const map = new Map();
+    memoryStore = {
+      getItem: (k) => (map.has(k) ? map.get(k) : null),
+      setItem: (k, v) => { map.set(k, String(v)); },
+      removeItem: (k) => { map.delete(k); },
+    };
+  }
+  return memoryStore;
 }
 
 export function saveGame(slot, data) {
-  if (slot < 1 || slot > SAVE_SLOTS) return false;
   try {
     saveStore().setItem(slotKey(slot), JSON.stringify(data));
     return true;
@@ -41,7 +39,6 @@ export function saveGame(slot, data) {
 }
 
 export function loadGame(slot) {
-  if (slot < 1 || slot > SAVE_SLOTS) return null;
   let raw = null;
   try {
     raw = saveStore().getItem(slotKey(slot));
@@ -50,9 +47,7 @@ export function loadGame(slot) {
   }
   if (!raw) return null;
   try {
-    const data = JSON.parse(raw);
-    if (!data || typeof data !== 'object') return null;
-    return data;
+    return JSON.parse(raw);
   } catch (e) {
     return null;
   }
@@ -61,7 +56,7 @@ export function loadGame(slot) {
 export function slotSummary(slot) {
   const d = loadGame(slot);
   if (!d) return null;
-  return { money: d.money || 0, day: d.day || 1, rank: d.rank || 'D', district: d.district || 'Downtown' };
+  return { money: d.money, day: d.day, rp: d.rp, rank: d.rank, district: d.district };
 }
 
 export function clearSlot(slot) {
@@ -75,10 +70,31 @@ export function clearSlot(slot) {
 
 export function serializeWorld(w) {
   return {
-    money: w.money, day: w.day, rp: w.rp, hour: w.hour,
-    district: w.districtId, standing: w.standing, tapes: w.tapesFound,
-    missionsDone: w.missions.completed, currentMission: w.missions.current,
-    rank: w.rankCode, carCondition: w.car.condition, owned: w.shop.owned,
-    garage: w.garage, savedAt: Date.now(),
+    money: w.money,
+    day: w.day,
+    rp: w.rp,
+    rank: w.rank,
+    district: w.district,
+    missionsDone: (w.missions ? w.missions.done.slice() : []),
+    standing: w.standing ? { ...w.standing } : {},
+    tapesFound: w.tapes ? w.tapes.found.length : 0,
+    hour: w.hour,
   };
+}
+
+export function deserializeWorld(w, data) {
+  if (!data) return false;
+  w.money = data.money || 0;
+  w.day = data.day || 1;
+  w.rp = data.rp || 0;
+  w.rank = data.rank || 'D';
+  w.district = data.district || 'downtown';
+  if (w.missions && Array.isArray(data.missionsDone)) {
+    w.missions.done = data.missionsDone.slice();
+    w.missions.current = Math.min(data.missionsDone.length + 1, MISSIONS.length + 1);
+  }
+  if (w.standing && data.standing) {
+    for (const k of Object.keys(data.standing)) w.standing[k] = data.standing[k];
+  }
+  return true;
 }

@@ -1,30 +1,26 @@
-// Rank ladder: D GREENHORN 0, C RUNNER 100, B NIGHTHAWK 300,
-// A OUTLAW 600, S DELTA LEGEND 1000. Rank points are payout / 10.
+// Rank ladder for Neon Delta LA: rank points (RP) earned from mission
+// payouts (1 RP per $10) move Mara up five ranks to DELTA LEGEND.
 import { RANKS } from './config.js';
 
 export function rankFor(rp) {
-  let found = RANKS[0];
+  let best = RANKS[0];
   for (const r of RANKS) {
-    if (rp >= r.min) found = r;
+    if (rp >= r.rp) best = r;
   }
-  return found;
+  return best;
 }
 
 export function rankCode(rp) {
   return rankFor(rp).code;
 }
 
-export function rankName(rp) {
-  return rankFor(rp).name;
-}
-
 export function rpForPayout(payout) {
-  return payout / 10;
+  return Math.floor(payout / 10);
 }
 
 export function nextRank(rp) {
   for (const r of RANKS) {
-    if (rp < r.min) return r;
+    if (r.rp > rp) return r;
   }
   return null;
 }

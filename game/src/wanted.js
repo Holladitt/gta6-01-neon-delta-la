@@ -1,16 +1,12 @@
-// Wanted level 1-5 and the tactical police escalation.
-// Heli from 3. Roadblocks (2 units) from 4. Black SWAT van at 5.
-// Spike strips cap the car's speed for 5 s. AIR-1, the named air
-// unit: when its spotlight holds on the car for 5 unbroken seconds
-// it calls a takedown (wanted +1 and two more police cars spawn).
-import { WANTED_MAX, HELI_WANTED, ROADBLOCK_WANTED, SWAT_WANTED, AIR_TAKEDOWN_SECONDS, SPIKE_SLOW_SECONDS } from './config.js';
+// Wanted level for Neon Delta LA: 0 to 5.
+// Helicopter AIR-1 from level 3, two roadblocks at 4, a black SWAT van
+// at 5. Police drop spike strips; driving over one caps the car speed
+// for 5 seconds. AIR-1 calls a takedown when its spotlight holds on the
+// car for 5 unbroken seconds (wanted +1, two more police cars).
+import { WANTED_MAX } from './config.js';
 
 export function createWanted() {
-  return {
-    level: 0, heat: 0, lastCrimeAt: -999,
-    spikeUntil: 0, airHold: 0, takedowns: 0,
-    roadblocks: [], swat: false, spikes: [],
-  };
+  return { level: 0, spikes: [], airLock: 0, lastSpikeHit: -1e9, lastCrime: -1e9 };
 }
 
 export function setWanted(w, level) {
@@ -18,45 +14,53 @@ export function setWanted(w, level) {
   return w.level;
 }
 
-export function addWanted(w, n, now) {
-  w.level = Math.max(0, Math.min(WANTED_MAX, w.level + n));
-  w.lastCrimeAt = now;
-  return w.level;
+export function addWanted(w, amount, now) {
+  if (now !== undefined) w.lastCrime = now;
+  return setWanted(w, w.level + amount);
 }
 
 export function decayWanted(w, dt, now) {
-  if (w.level === 0) return w.level;
-  w.heat += dt;
-  if (w.heat >= 20 && now - w.lastCrimeAt > 20) {
-    w.level = Math.max(0, w.level - 1);
-    w.heat = 0;
+  if (w.level <= 0) return w.level;
+  if (now - w.lastCrime > 30) {
+    w.decayAcc = (w.decayAcc || 0) + dt;
+    if (w.decayAcc >= 30) {
+      w.decayAcc = 0;
+      w.level = Math.max(0, w.level - 1);
+    }
+  } else {
+    w.decayAcc = 0;
   }
   return w.level;
 }
 
 export function heliActive(w) {
-  return w.level >= HELI_WANTED;
+  return w.level >= 3;
 }
 
 export function roadblockCount(w) {
-  return w.level >= ROADBLOCK_WANTED ? 2 : 0;
+  return w.level >= 4 ? 2 : 0;
 }
 
 export function swatActive(w) {
-  return w.level >= SWAT_WANTED;
+  return w.level >= 5;
+}
+
+export function policeCarCount(w) {
+  return Math.min(12, 2 + w.level * 2);
 }
 
 export function dropSpike(w, x, z, now) {
-  w.spikes.push({ x, z, at: now });
+  w.spikes.push({ x, z, t: now });
   if (w.spikes.length > 6) w.spikes.shift();
-  return w.spikes.length;
 }
 
 export function hitSpike(w, x, z, now) {
   for (const s of w.spikes) {
-    const dx = x - s.x; const dz = z - s.z;
-    if (dx * dx + dz * dz < 6 * 6) {
-      w.spikeUntil = now + SPIKE_SLOW_SECONDS;
+    if (now - s.t > 30) continue;
+    const dx = x - s.x;
+    const dz = z - s.z;
+    if (dx * dx + dz * dz <= 36) {
+      w.lastSpikeHit = now;
       return true;
     }
   }
@@ -64,22 +68,18 @@ export function hitSpike(w, x, z, now) {
 }
 
 export function spikeSlowed(w, now) {
-  return now < w.spikeUntil;
+  return now - w.lastSpikeHit <= 5;
 }
 
-// Call every tick with whether the heli beam is on the car.
-// Returns 'takedown' once the hold reaches 5 seconds.
 export function updateAirLock(w, dt, beamOn) {
-  if (!beamOn) { w.airHold = 0; return null; }
-  w.airHold += dt;
-  if (w.airHold >= AIR_TAKEDOWN_SECONDS) {
-    w.airHold = 0;
-    w.takedowns += 1;
+  if (!beamOn) {
+    w.airLock = 0;
+    return null;
+  }
+  w.airLock += dt;
+  if (w.airLock >= 5) {
+    w.airLock = 0;
     return 'takedown';
   }
   return null;
-}
-
-export function policeCarCount(w) {
-  return Math.min(2 + w.level * 2 + w.takedowns * 2, 12);
 }
