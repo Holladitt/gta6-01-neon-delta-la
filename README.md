@@ -1,54 +1,41 @@
 # Neon Delta LA: District Wars
 
-An original open-world crime game for the make.fun **gta6-01 "Make GTA 6"** bounty.
-A coastal Los Angeles of six districts — Downtown, Hollywood Hills, Venice, Marina,
-Coral Pier, Long Beach Port — at ember dusk. You are **Mara Solano**, an ex-getaway
-driver hunting the proof her vanished sister left behind. Nothing in here is from
-Rockstar; the city, the people and the story are invented.
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![rank](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
+[![reward](https://make.fun/badge/gta6-01/Holladitt/gta6-01-neon-delta-la/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
-## Play
+An original open-world crime game built for the make.fun **gta6-01 "Make GTA 6"** bounty: https://make.fun/bounty/gta6-01
 
-Open `game/index.html` in a desktop browser (offline, static files), or run
-`node serve.ts` and open http://localhost:8080.
+## The game
 
-- **WASD / arrows** — drive / walk. **E** — enter or exit a car (or steal a parked one).
-- **Q** — weapon wheel (keys **1–4** pick a tier). **C / V / X** — crew abilities
-  (Juno: clean plates, Petra: field repair $150, Cassia: overwatch).
-- **M** — current mission. **R** — GPS to the objective. **F** — board / leave the boat.
-- **G** — buy the engine upgrade at the garage. **Shift** — nitro. **P** — pause.
+You are Mara Solano, an ex-getaway driver back on the streets of a sun-soaked Los Angeles that never sleeps. Your sister vanished holding proof of a corruption ring, and the only way to find her is to work the city — job by job, district by district — until the people who took her run out of places to hide.
 
-## Systems
+Neon Delta LA is a coastal open world: Downtown towers, the Venice canals, Coral Pier, the Long Beach port, the Marina, and the Hollywood Hills, all connected by freeways under a sodium-yellow sky. Ten story jobs carry Mara from a small-time wheelman to the figure the whole city whispers about, while the NDPD closes in with every wanted star you earn.
 
-- **10 story jobs** ($13,750 total, 1,375 RP, rank S "DELTA LEGEND"), each with a
-  contact, a payout and a district; one day passes per job.
-- **Wanted 1–5**: patrol cars flank with A*, the AIR-1 heli spotlights you from
-  level 3, roadblocks at 4, a black SWAT van at 5, spike strips, and a 5-second
-  spotlight lock that calls a takedown.
-- **6 districts with standing 0–100**: missions +10, races +5, jobs +3. At 50+ the
-  district shop gives a 10% discount and a crew ability unlocks there.
-- **DELTA ARMS**: 6 weapons in 4 tiers (Pistol / SMG / Shotgun owned; Delta Carbine
-  $900, Longshot $1,800, Marauder $2,500) with real BUY clicks.
-- **Street races** (5 checkpoints), **taxi + courier jobs**, **20 collectible Aurora
-  tapes** ($50 each), a **COVER meter** (witnesses raise the heat after 3 s in view),
-  **garage tuning** (Engine / Armour / Nitro) and a **drivable boat** at the Marina.
-- **Title screen + 3 save slots** (localStorage), a corner GPS minimap, dispatch
-  panel (DELTA-7, CORAL-3, CORAL-9, AIR-1), radio "NEON 88", day/dusk/night cycle.
+## What is in it
 
-## Tech
+- **6 districts** with their own standing (0–100). Raise standing with missions, races, and jobs; at 50+ a district gives you a 10% shop discount and unlocks a crew ability there.
+- **10 story jobs** across six contacts, paying out $13,750 in total, from a $400 first run to a $3,000 finale.
+- **Wanted levels 1–5**: patrol cars flank and pursue, a helicopter joins at 3+, roadblocks appear at 4, and a black SWAT van plus spike strips come for you at 5.
+- **4 weapon tiers** (pistol/SMG/shotgun, Delta Carbine, Longshot, Marauder) with a weapon wheel and a shop where every purchase is a real click.
+- **Crew abilities**: clean plates to shed heat, field repair to fix your car, and overwatch to watch your back.
+- **Street races** (5 checkpoints each), taxi and courier jobs, 20 collectible Aurora tapes, a cover meter that turns witnesses into heat, a garage for engine, armour, and nitro tuning, and a drivable boat at the Marina.
+- **3 save slots** on the title screen, a corner GPS minimap, a pause menu, and a radio station that never stops playing.
 
-Three.js (vendored under `game/vendor/`), plain ES modules, no network, no build
-step. The ground is a single canvas texture (roads, lane dashes, zebra crossings,
-plaza tiles, wet-sand band); buildings carry per-storey facades with lit windows;
-the pier has stalls, string lights and a ferris wheel; the port has a gantry crane,
-containers and a freeway bridge. Lambert materials, no shadows, fixed 1280×720
-render buffer.
+## How to run it
 
-## Screenshots
+Neon Delta LA is a static browser game — no build step, no backend, no network needed while you play. Serve the folder with the included dev server and open it in your browser:
 
-`01-chase.jpg` — the dusk chase (heli beam, roadblock, SWAT, spike strips).
-`02-shop.jpg` — DELTA ARMS forecourt. `03-pier.jpg` — Coral Pier at night.
-`04-tracker.jpg` — Long Beach Port at dusk.
+```sh
+node serve.ts
+```
+
+Then open http://localhost:8080 in your browser. Keyboard and mouse only: drive, shoot, and run jobs with the on-screen controls and the key hints in the pause menu.
+
+## Built with
+
+Plain JavaScript and Three.js, rendered on a single canvas. The whole game lives under `game/`, and `main.ts` (Node 22) packages it for the make.fun dossier.
 
 ## License
 
-MIT. See LICENSE.
+MIT — see `LICENSE` for the full text.
