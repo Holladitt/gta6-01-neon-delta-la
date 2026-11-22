@@ -30,16 +30,16 @@ export const SHOT_DEFS = {
     crates: [[-350, -190], [-345, -185]],
     peds: [[-342, -160], [-310, -165], [-342, -185], [-305, -190], [-340, -200]],
     forecourtPeds: [[-348, -152], [-312, -152], [-346, -168], [-316, -170]],
-    dialogue: { name: 'Harlan Dray', text: 'The canals run hot tonight. Move the package, no questions.' },
+    dialogue: { name: 'Harlan Dray', text: 'The canals are quiet tonight. Keep the package moving.' },
     missionBar: { title: 'M2 VENICE CANALS · TAHAP 1/2', objective: 'Meet Harlan', next: 'Drop the package' },
   },
   3: {
     hour: 22, mission: 7, wanted: 1, money: 4800, cover: 85, tapes: 7, sky: 'night',
     standing: { pier: 20 },
-    camera: { x: -639, y: 1.8, z: 428 }, look: { x: -705, y: 4, z: 428 },
+    camera: { x: -634, y: 1.8, z: 428 }, look: { x: -705, y: 4, z: 428 },
     // Mara 3 units south of the camera axis: the wheel hub clears her silhouette.
     mara: { x: -652, z: 431, rot: -Math.PI / 2, scale: 1.8 },
-    wheel: { x: -705, z: 428, radius: 20, hubY: 20 },
+    wheel: { x: -705, z: 428, radius: 19, hubY: 20 },
     stalls: [
       { label: 'BALLOONS', x: -690, z: 410, color: 0xe74c3c },
       { label: 'SNO-CONES', x: -690, z: 445, color: 0xf1c40f },
@@ -53,7 +53,7 @@ export const SHOT_DEFS = {
     peds: [[-665, 412], [-665, 444], [-668, 418], [-668, 438], [-663, 425], [-663, 435]],
     nearPeds: [[-652, 418], [-652, 438]],
     confetti: { x: -700, z: 430 },
-    dialogue: { name: 'Inez Vargas', text: 'The ledger names them all. Take it and vanish into the crowd.' },
+    dialogue: { name: 'Inez Vargas', text: 'The ledger is under the boards. Take it and go before the lights come on.' },
     missionBar: { title: 'M7 THE NIGHT LEDGER · TAHAP 1/3', objective: 'Meet Inez', next: 'Take the ledger' },
   },
   4: {
@@ -61,7 +61,9 @@ export const SHOT_DEFS = {
     standing: { port: 15 },
     camera: { x: 645, y: 3, z: 626 }, look: { x: 585, y: 4, z: 612 },
     mara: { x: 632, z: 618, rot: -Math.PI / 2, scale: 1.8 },
-    car: { x: 615, z: 615, rot: Math.PI, scale: 1.8 },
+    // v32: car moved north of Mara's sightline so it reads fully side-on
+    // (at 615,615 it sat directly behind her from the camera).
+    car: { x: 620, z: 596, rot: Math.PI, scale: 1.8 },
     // Boat pulled 4 units north of the v30 spot so the hull clears the frame edge.
     boat: { x: BOAT.x, z: BOAT.z, rot: 1.84, scale: 3.6 },
     wake: { x: 565, z: 641 },
@@ -70,7 +72,7 @@ export const SHOT_DEFS = {
     portRoad: { x: 633.9, z: 608.4 },
     greenContainer: { x: 600, z: 520 },
     yardPeds: [[400, 520], [440, 560], [500, 540], [460, 600], [540, 580], [380, 560], [470, 600], [585, 605]],
-    dialogue: { name: 'Orin Beck', text: 'The signal is live. Three drops, then we vanish.' },
+    dialogue: { name: 'Orin Beck', text: 'Two drops left and the proof goes out tonight. Keep the car running.' },
     missionBar: { title: 'M8 THE LAST SIGNAL · TAHAP 1/3', objective: 'Marina drop', next: 'Pier drop' },
   },
 };

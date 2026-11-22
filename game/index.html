@@ -22,7 +22,7 @@
   #hud-district { left: 50%; transform: translateX(-50%); bottom: 168px; text-align: center; background: none; border: none; }
   #hud-district .d1 { font-size: 44px; font-weight: 900; font-style: italic; letter-spacing: 2px; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,0.6), 0 0 22px rgba(255, 120, 40, 0.5); }
   #hud-district .d2 { font-size: 13px; font-weight: 700; letter-spacing: 2px; color: #ffd76a; }
-  #hud-speed { right: 16px; bottom: 168px; font-size: 30px; font-weight: 900; font-style: italic; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
+  #hud-speed { right: 16px; bottom: 168px; font-size: 30px; font-weight: 900; font-style: italic; color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,0.6); text-align: right; }
   #hud-mission { right: 16px; bottom: 16px; width: 330px; }
   #hud-mission b { display: block; font-size: 15px; color: #ffd76a; letter-spacing: 1px; }
   #hud-mission span { display: block; font-size: 14px; color: #fff; margin-top: 3px; }
@@ -45,7 +45,11 @@
   body.shot1 #wheel, body.shot2 #wheel, body.shot3 #wheel, body.shot4 #wheel,
   body.shot1 #shop-panel, body.shot2 #shop-panel, body.shot3 #shop-panel, body.shot4 #shop-panel,
   body.shot1 #hud-cover, body.shot2 #hud-cover, body.shot3 #hud-cover, body.shot4 #hud-cover,
-  body.shot1 #hud-money, body.shot2 #hud-money, body.shot3 #hud-money, body.shot4 #hud-money { display: none !important; }
+  body.shot1 #hud-money, body.shot2 #hud-money, body.shot3 #hud-money, body.shot4 #hud-money,
+  body.shot1 #hud-stats, body.shot2 #hud-stats, body.shot3 #hud-stats, body.shot4 #hud-stats,
+  body.shot1 #hud-wanted, body.shot2 #hud-wanted, body.shot3 #hud-wanted, body.shot4 #hud-wanted,
+  body.shot1 #hud-weapon, body.shot2 #hud-weapon, body.shot3 #hud-weapon, body.shot4 #hud-weapon,
+  body.shot1 #hud-tapes, body.shot2 #hud-tapes, body.shot3 #hud-tapes, body.shot4 #hud-tapes { display: none !important; }
   #title-screen { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, rgba(20,8,40,0.92), rgba(10,14,20,0.96)); color: #fff; text-align: center; }
   #title-screen.hidden { display: none; }
   #title-screen h1 { font-size: 64px; font-style: italic; font-weight: 900; color: #ffd76a; margin: 0; letter-spacing: 2px; text-shadow: 0 4px 0 #7a2a1a; }

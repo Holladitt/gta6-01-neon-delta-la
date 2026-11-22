@@ -317,11 +317,12 @@ export function makeWheel(radius) {
     cab.position.set(Math.cos(a) * radius, Math.sin(a) * radius, 0);
     g.add(cab);
   }
+  // v32: vertical support posts flanking the wheel — the splayed legs crossed
+  // behind Mara's silhouette in shot 3. Posts stand clear of her.
   const legMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
   for (const s of [-1, 1]) {
     const leg = new THREE.Mesh(new THREE.BoxGeometry(1, radius, 1), legMat);
-    leg.position.set(s * radius * 0.5, -radius / 2, 0);
-    leg.rotation.z = s * 0.5;
+    leg.position.set(s * radius * 0.85, -radius / 2, 0);
     g.add(leg);
   }
   return g;
@@ -492,8 +493,8 @@ export function createGame(canvas, world) {
   shopFront.position.set(0, 5, 15.5); shop.add(shopFront);
   const shopSign = new THREE.Mesh(new THREE.PlaneGeometry(30, 4), new THREE.MeshBasicMaterial({ map: textTex('DELTA ARMS', { w: 1024, h: 128, bg: '#111111', fg: '#ffd76a', font: 'bold 72px Arial' }) }));
   shopSign.position.set(0, 8, 16.1); shop.add(shopSign);
-  const bill = new THREE.Mesh(new THREE.PlaneGeometry(32, 10), new THREE.MeshBasicMaterial({ map: textTex('NEON DELTA LA', { w: 1024, h: 320, bg: '#c0392b', fg: '#ffffff', font: 'bold 96px Arial', sub: 'DISTRICT WARS' }) }));
-  bill.position.set(0, 15, 16.1); shop.add(bill);
+  const bill = new THREE.Mesh(new THREE.PlaneGeometry(28, 8), new THREE.MeshBasicMaterial({ map: textTex('NEON DELTA LA', { w: 1024, h: 320, bg: '#c0392b', fg: '#ffffff', font: 'bold 96px Arial', sub: 'DISTRICT WARS' }) }));
+  bill.position.set(0, 14, 16.1); shop.add(bill);
   shop.position.set(SHOP.x, 0, SHOP.z);
   scene.add(shop);
 
@@ -562,7 +563,7 @@ export function createGame(canvas, world) {
   scene.add(policeCar);
   const parkedCar = makeCar(0xf1c40f, 0x2c3e50);
   scene.add(parkedCar);
-  const wheel = makeWheel(20);
+  const wheel = makeWheel(19);
   wheel.position.set(-705, 20, 428);
   wheel.rotation.y = Math.PI / 2;
   scene.add(wheel);
@@ -581,7 +582,7 @@ export function createGame(canvas, world) {
   scene.add(confetti);
   const bench1 = makeBench(); bench1.position.set(-660, 0, 415); bench1.rotation.y = Math.PI / 2; scene.add(bench1);
   const bench2 = makeBench(); bench2.position.set(-660, 0, 440); bench2.rotation.y = Math.PI / 2; scene.add(bench2);
-  const shopBench = makeBench(); shopBench.position.set(-390, 0, -190); scene.add(shopBench);
+  const shopBench = makeBench(); shopBench.position.set(-370, 0, -200); scene.add(shopBench);
   const shopCrates = [];
   for (const [x, z] of [[-350, -190], [-345, -185]]) {
     const c = makeCrate(2.5, 0xc8a06a);

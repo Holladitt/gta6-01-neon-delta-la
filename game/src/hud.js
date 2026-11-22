@@ -53,7 +53,14 @@ export function updateHUD(world, shotN) {
   const d = districtAt(world.player.x, world.player.z);
   els.district.textContent = d.name.toUpperCase();
   els.standing.textContent = 'STANDING ' + Math.round(world.standing[d.id] || 0);
-  els.speed.textContent = Math.round(Math.abs(world.car.speed) * 3.2) + ' MPH';
+  const spd = Math.round(Math.abs(world.car.speed) * 3.2) + ' km/h';
+  // v32: in staged shots the radio line rides above the speed (the top stats
+  // bar is hidden by the shot-mode declutter CSS); live play keeps plain speed.
+  if (shotN >= 1 && shotN <= 4) {
+    els.speed.innerHTML = '<span style="font-size:13px;letter-spacing:2px;color:#ffd76a">RADIO: NEON 88</span><br>' + spd;
+  } else {
+    els.speed.textContent = spd;
+  }
   els.mission.innerHTML = '<b>' + missionTitle + '</b><span>' + objective + '</span><i>NEXT: ' + next + '</i>';
   els.stats.textContent = 'DAY ' + world.day + ' · ' + fmtHour(world.hour) + ' · RADIO: NEON 88 · RANK ' + world.rank;
   if (speaker) {
