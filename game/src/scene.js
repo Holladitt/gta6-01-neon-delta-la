@@ -567,10 +567,13 @@ export function createScene() {
   }
 
   // Boat at the Marina south dock.
-  // Boat: warm cream hull and a wooden mast so it reads as a boat
-  // at dusk instead of a grey box with a black slab.
+  // Boat: saturated amber hull and a wooden mast so it reads as a
+  // boat at dusk instead of a grey box with a black slab — the
+  // warm cream tried before went grey in the dusk shadow and
+  // merged with the dock, so the hull is now a warm amber that
+  // stays yellow on its shadowed side.
   const boat = new THREE.Group();
-  const hull = box(10, 3, 22, 0xf5e6c8);
+  const hull = box(10, 3, 22, 0xffd76a);
   hull.position.y = 1.2;
   boat.add(hull);
   const cabin = box(6, 3, 8, 0x1abc9c);
@@ -623,11 +626,16 @@ export function createScene() {
     playerCar.add(strut);
   }
   scene.add(playerCar);
-  // Mara on foot.
+  // Mara on foot. Red jacket and a blue backpack on her back
+  // (local +x is her rear, same as the hero car's spoiler side),
+  // so she reads as Mara from behind at a glance.
   const mara = new THREE.Group();
   const mBody = box(0.9, 1.1, 0.5, MARA.jacket);
   mBody.position.y = 1.05;
   mara.add(mBody);
+  const mPack = box(0.3, 0.8, 0.45, 0x2e86c1);
+  mPack.position.set(0.55, 1.05, 0);
+  mara.add(mPack);
   const mHead = box(0.5, 0.5, 0.5, 0xe0ac69);
   mHead.position.y = 1.9;
   mara.add(mHead);
@@ -764,7 +772,10 @@ export function syncScene(s, world, traffic, police, hour) {
   s.mara.position.set(world.player.x, 0, world.player.z);
   s.mara.rotation.y = -world.player.angle + Math.PI / 2;
   s.mara.visible = world.player.onFoot || world.shotMode === 4;
-  s.mara.scale.setScalar(world.shotMode === 4 ? 2 : 1);
+  // Mara reads LARGE in the shot frames: x2 in shot 4, x1.8 in
+  // shots 2 and 3 (the camera sits ~10 units behind her there, so
+  // she fills about a third of the frame), x1 in normal play.
+  s.mara.scale.setScalar(world.shotMode === 4 ? 2 : (world.shotMode === 2 || world.shotMode === 3) ? 1.8 : 1);
 
   // Traffic.
   for (let i = 0; i < s.trafficMeshes.length; i += 1) {
@@ -841,7 +852,7 @@ export function syncScene(s, world, traffic, police, hour) {
   // boat (hull + cabin + mast) instead of a small box on a dock.
   s.props.boat.position.set(world.boat.x, 0.4, world.boat.z);
   s.props.boat.rotation.y = -world.boat.angle + Math.PI / 2;
-  s.props.boat.scale.setScalar(world.shotMode === 4 ? 1.2 : 1);
+  s.props.boat.scale.setScalar(world.shotMode === 4 ? 1.5 : 1);
   // Mission marker.
   const curMission = world.missions ? missionById(world.missions.current) : null;
   const obj = curMission ? curMission.points : null;

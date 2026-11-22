@@ -97,12 +97,16 @@ export function applyShot(n, world, traffic, police) {
   if (n === 2) {
     // Mara LARGE, whole, centre-frame, back view, on the shop
     // centreline so the DELTA ARMS sign and the rooftop billboard
-    // read centred above her; the camera sits just behind her and
-    // looks UP at the signs while the forecourt props frame the shot.
+    // read centred above her. She faces the shop (angle PI, back
+    // to the camera); the camera sits ~10 units behind her at
+    // shoulder height, looking up at the shop mid-height — at that
+    // distance her x1.8 scale fills about a third of the frame,
+    // whole from head to boots, with the sign and the billboard
+    // both still in frame above her.
     world.hour = 10;
     world.wanted.level = 0;
     world.player.onFoot = true;
-    world.player.x = SHOP.x; world.player.z = SHOP.z + 30; world.player.angle = 0;
+    world.player.x = SHOP.x; world.player.z = SHOP.z + 30; world.player.angle = Math.PI;
     world.money = 3200; world.rp = 340; world.rankCode = 'B';
     world.shopOpen = true;
     // Parked car on the road west of the shop, in frame, clear of
@@ -114,16 +118,21 @@ export function applyShot(n, world, traffic, police) {
       const p = traffic.peds[i + 1];
       p.x = pedSpots[i][0]; p.z = pedSpots[i][1]; p.angle = 2.6;
     }
-    return { camera: { x: SHOP.x, y: 5, z: SHOP.z + 45 }, look: { x: SHOP.x, y: 7, z: SHOP.z + 25 } };
+    return { camera: { x: SHOP.x, y: 1.8, z: SHOP.z + 40 }, look: { x: SHOP.x, y: 10, z: SHOP.z } };
   }
   if (n === 3) {
-    // Pier at night, camera centred on the middle stall so all three
-    // stalls (BALLOONS, ARCADE, SNO-CONES) sit in frame. Mara large
-    // in the foreground; the mission is M7 (Inez Vargas).
+    // Pier at night, camera close behind Mara so she is LARGE,
+    // whole and centre-frame, back view, facing the stalls (angle
+    // -PI/2, back to the camera). All three stalls (BALLOONS,
+    // ARCADE, SNO-CONES) sit in frame behind her, with the ferris
+    // wheel, fireworks, palm and string lights; the mission is M7
+    // (Inez Vargas). Mara stands 10 units east of the camera and
+    // the camera sits 58 units east of the stall row, so the row's
+    // 80-unit span fits the frame with all three signs readable.
     world.hour = 22;
     world.wanted.level = 1;
     world.player.onFoot = true;
-    world.player.x = -662; world.player.z = 432; world.player.angle = Math.PI / 2;
+    world.player.x = -652; world.player.z = 432; world.player.angle = -Math.PI / 2;
     world.money = 1800; world.rp = 480; world.rankCode = 'B';
     world.missions.current = 7; world.missions.objective = 0;
     // 10 NPCs on the pier deck around the stalls.
@@ -136,27 +145,32 @@ export function applyShot(n, world, traffic, police) {
       const c = traffic.cars[i];
       c.x = -640 + i * 8; c.z = 560 + i * 6; c.angle = 0; c.speed = 0;
     }
-    return { camera: { x: -642, y: 5, z: 435 }, look: { x: -740, y: 4, z: 438 } };
+    return { camera: { x: -642, y: 1.8, z: 432 }, look: { x: -720, y: 6, z: 435 } };
   }
   // Shot 4: port at dusk, crane load in frame, boat at the south dock.
-  // The camera sits EAST of the boat, over the water, looking
-  // west-northwest: the boat is large in the centre foreground
-  // (hull + teal cabin + wooden mast), Mara is on the dock edge
-  // ahead of it (scaled up in the scene sync so she reads), the
-  // hero car is side-on beyond her, the crane and the freeway
-  // bridge close the background. The mission is M8 (Orin Beck).
+  // Mara LARGE + boat LARGE + crane all fit by DEPTH: the camera
+  // sits low on the dock looking west-northwest, so Mara is large
+  // in the right foreground (back view, whole, on the dock edge),
+  // the boat is large in the left mid-ground on the water, and the
+  // crane and the freeway bridge close the background. The hero
+  // car is side-on in the mid-ground. The mission is M8 (Orin Beck).
   world.hour = 18;
   world.wanted.level = 2;
   // The hero car sits west of Mara so she does not block it.
-  world.car.x = 495; world.car.z = 590; world.car.angle = 2.2; world.car.speed = 0;
+  world.car.x = 520; world.car.z = 595; world.car.angle = 0.4; world.car.speed = 0;
   world.player.onFoot = true;
-  // Mara west of the boat's line so the boat does not hide her.
-  world.player.x = 530; world.player.z = 618; world.player.angle = Math.PI;
+  // Mara on the dock edge, facing northwest away from the camera
+  // (back view); the camera sits southeast of her.
+  world.player.x = 546; world.player.z = 603; world.player.angle = -3 * Math.PI / 4;
   world.money = 5100; world.rp = 900; world.rankCode = 'A';
   world.missions.current = 8; world.missions.objective = 0;
   // The boat turns to a three-quarter view so the hull, the teal
   // cabin and the mast all read instead of one long grey side.
-  world.boat.x = 555; world.boat.z = 635; world.boat.angle = Math.PI / 4;
+  // Moored further west along the shore so the whole hull, cabin
+  // and mast sit fully inside the frame, left of centre — and
+  // further out into open water, so blue water shows around it
+  // and the amber hull reads against the water, not the dock.
+  world.boat.x = 470; world.boat.z = 640; world.boat.angle = Math.PI / 4;
   startRace(world.race, 'port', 42);
   const carSpots = [[420, 540], [520, 560], [360, 580], [560, 520], [580, 590]];
   for (let i = 0; i < carSpots.length; i += 1) {
@@ -168,7 +182,7 @@ export function applyShot(n, world, traffic, police) {
     const p = traffic.peds[i];
     p.x = pedSpots[i][0]; p.z = pedSpots[i][1]; p.angle = 2.2;
   }
-  return { camera: { x: 600, y: 4, z: 640 }, look: { x: 480, y: 2, z: 590 } };
+  return { camera: { x: 556, y: 2, z: 610 }, look: { x: 460, y: 3, z: 582 } };
 }
 
 export function shotFile(n) {

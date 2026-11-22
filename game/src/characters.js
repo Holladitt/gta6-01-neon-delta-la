@@ -4,7 +4,7 @@
 export const MARA = {
   name: 'Mara Solano',
   title: 'Ex-getaway driver',
-  jacket: 0x1abc9c, shirt: 0xecf0f1, pants: 0x2c3e50, hair: 0x1a1a1a,
+  jacket: 0xe74c3c, shirt: 0xecf0f1, pants: 0x2c3e50, hair: 0x1a1a1a,
   height: 1.75, speed: 6,
   story: 'Her vanished sister held proof of corruption: a mayor, a port businessman, the police.',
 };
